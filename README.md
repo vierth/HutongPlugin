@@ -15,8 +15,7 @@ The structure should look like this:
 
 ```
 MyProject/
-├── Config/
-├── Content/
+├── ...
 ├── Plugins/
 │   ├── HutongLayout/
 │   └── PlaceLabels/
