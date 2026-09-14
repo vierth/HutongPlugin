@@ -1,0 +1,28 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "Hutong Layout",
+	"Description": "Click-drag rectangles in the editor viewport to place simple siheyuan-style buildings and hutong wall blockouts.",
+	"Category": "Editor",
+	"CreatedBy": "",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "HutongLayoutEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{ "Name": "GeometryScripting", "Enabled": true },
+		{ "Name": "MeshModelingToolsetExp", "Enabled": true },
+		{ "Name": "ModelingToolsEditorMode", "Enabled": true }
+	]
+}
