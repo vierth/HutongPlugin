@@ -136,7 +136,7 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Which bay carries the front door; -1 where the type has none."))
 	int32 DoorBay = INDEX_NONE;
 
-	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Colour the outline is drawn in, which says what kind of piece this is."))
+	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Colour the outline is drawn in."))
 	FLinearColor Colour = HutongPlanColours::Building;
 
 

@@ -1,5 +1,9 @@
 #include "Misc/AutomationTest.h"
 #include "Tools/WallTool.h"
+#include "Tools/SiheyuanTool.h"
+#include "Tools/StreetRowTool.h"
+#include "Tools/HutongPresets.h"
+#include "Tools/HutongPresetDefaults.h"
 #include "Generation/HutongBuildingComponent.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
@@ -24,6 +28,15 @@ namespace
 
 	// The rows a details panel would build for this object, customizations and all: the row
 	// generator runs the same QueryCustomDetailLayout pass the mode panel's view does.
+	UHutongPresetProperties* PickerOf(UInteractiveTool* Tool)
+	{
+		for (UObject* Set : Tool->GetToolProperties())
+		{
+			if (UHutongPresetProperties* Picker = Cast<UHutongPresetProperties>(Set)) return Picker;
+		}
+		return nullptr;
+	}
+
 	TSet<FName> RowsFor(UObject* Object)
 	{
 		FPropertyEditorModule& PropertyEditor =
@@ -60,6 +73,44 @@ bool FHutongWallRolePanelTest::RunTest(const FString& Parameters)
 	// Retyping a placed run is a Details edit: the placed wall is where the role stays.
 	const TSet<FName> Placed = RowsFor(NewObject<UHutongWallBuildingComponent>());
 	TestTrue(TEXT("a placed wall keeps its role"), Placed.Contains(TEXT("Role")));
+	return true;
+}
+
+// Setup and Shutdown are the whole of what a tool does with its property cache, and neither
+// needs a tool manager, so the cache can be driven here as the editor drives it: one tool up,
+// a preset picked, the tool closed, the next tool up.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPresetPickerCacheTest, "HutongLayout.Panel.PresetPickerPerTool",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongPresetPickerCacheTest::RunTest(const FString& Parameters)
+{
+	HutongPresets::RegisterBuiltInPresets();
+
+	// The house opens on its default; the street row's picker, though it lists the same house
+	// presets, opens on its own default rather than on the house's choice.
+	UHutongSiheyuanTool* House = NewObject<UHutongSiheyuanTool>();
+	House->Setup();
+	UHutongPresetProperties* HousePicker = PickerOf(House);
+	if (!TestNotNull(TEXT("house tool has a preset picker"), HousePicker)) return false;
+	TestEqual(TEXT("house tool opens on the default preset"), HousePicker->Preset, HutongPresets::DefaultSiheyuanName());
+
+	HousePicker->Preset = TEXT("Main Hall (正房)");
+	House->Shutdown(EToolShutdownType::Completed);
+
+	UHutongStreetRowTool* Row = NewObject<UHutongStreetRowTool>();
+	Row->Setup();
+	UHutongPresetProperties* RowPicker = PickerOf(Row);
+	if (!TestNotNull(TEXT("street row has a preset picker"), RowPicker)) return false;
+	TestEqual(TEXT("street row opens on its own default, not the house's choice"), RowPicker->Preset, HutongPresets::DefaultStreetRowHouseName());
+
+	RowPicker->Preset = TEXT("Front Row (倒座房)");
+	Row->Shutdown(EToolShutdownType::Completed);
+
+	// And the house comes back with its own.
+	UHutongSiheyuanTool* HouseAgain = NewObject<UHutongSiheyuanTool>();
+	HouseAgain->Setup();
+	TestEqual(TEXT("house tool restores its own choice"), PickerOf(HouseAgain)->Preset, FString(TEXT("Main Hall (正房)")));
+	HouseAgain->Shutdown(EToolShutdownType::Completed);
 	return true;
 }
 

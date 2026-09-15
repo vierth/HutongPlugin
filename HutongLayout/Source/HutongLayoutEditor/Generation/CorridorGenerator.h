@@ -21,13 +21,13 @@ struct FHutongCorridorParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Max Walk Width", UIMin="160", UIMax="500", ClampMin="90", Units="cm", ToolTip="Largest clear walk width the dragged footprint may set, in cm."))
 	double WalkWidthMax = 300.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Bay Spacing", UIMin="120", UIMax="300", ClampMin="80", Units="cm", ToolTip="Spacing between posts along the run, in cm; sets the bay count."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Bay Spacing", UIMin="120", UIMax="300", ClampMin="80", Units="cm", ToolTip="Spacing between posts along the run, in cm."))
 	double BaySpacing = 180.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Column Diameter", UIMin="10", UIMax="30", ClampMin="5", Units="cm", ToolTip="Diameter of the posts, in cm."))
 	double ColumnDiameter = 17.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Column Taper (收分)", UIMin="0", UIMax="0.02", ClampMin="0", ClampMax="0.05", ToolTip="Column taper (收分) as the fraction of column height lost from the diameter at the head."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Column Taper (收分)", UIMin="0", UIMax="0.02", ClampMin="0", ClampMax="0.05", ToolTip="Column taper (收分) as a fraction of the column height."))
 	double ColumnTaperRatio = HutongCanon::Module::ColumnTaperRatio;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Floor Height (臺基)", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="Height of the walk platform (臺基) above the ground, in cm."))
@@ -36,7 +36,7 @@ struct FHutongCorridorParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Floor Overhang", UIMin="0", UIMax="40", ClampMin="0", Units="cm", ToolTip="How far the platform projects past the posts on each side, in cm."))
 	double FloorOverhang = 12.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Closed On One Side", ToolTip="Closes one side of the walk, omitting its posts, architrave (額枋) and frieze."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Closed On One Side", ToolTip="Closes one side of the walk."))
 	bool bClosedSide = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Builds Its Own Back Wall", EditCondition="bClosedSide", ToolTip="Builds a wall along the closed side."))
@@ -47,7 +47,7 @@ struct FHutongCorridorParams
 
 	// --- 楣子 ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(DisplayName="Has Hanging Frieze (倒掛楣子)", ToolTip="Builds a hanging frieze (倒掛楣子) under the architrave (額枋) in each bay."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(DisplayName="Has Hanging Frieze (倒掛楣子)", ToolTip="Builds a hanging frieze (倒掛楣子) under the architrave (額枋)."))
 	bool bHasFrieze = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(DisplayName="Frieze Drop", EditCondition="bHasFrieze", UIMin="15", UIMax="80", ClampMin="5", Units="cm", ToolTip="Height the frieze hangs down from the architrave (額枋), in cm."))
@@ -73,7 +73,7 @@ struct FHutongCorridorParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(UIMin="10", UIMax="90", ClampMin="0", Units="cm", ToolTip="How far the eave projects past the posts, in cm."))
 	double RoofOverhang = 42.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Gable Overhang (懸山)", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="How far the roof projects past each end of the run, in cm; 0 keeps a flush gable."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Gable Overhang (懸山)", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="Roof projection past each end of the run, in cm; 0 keeps a flush gable."))
 	double GableOverhang = 0.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(UIMin="15", UIMax="150", ClampMin="5", Units="cm", ToolTip="Height of the ridge above the eave, in cm."))
@@ -83,7 +83,7 @@ struct FHutongCorridorParams
 	double GetRoofRise() const { return FMath::Max(RoofRise, 5.0); }
 
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="How much the roof apex is rounded into a rolled ridge (捲棚) crown; 0 keeps a sharp fold."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Rounding of the roof apex into a rolled ridge (捲棚); 0 keeps the fold."))
 	double RoofApexRoll = 0.45;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Depth", UIMin="0", UIMax="20", ClampMin="0", Units="cm", ToolTip="Vertical depth of the fascia band along the eave, in cm."))
@@ -92,7 +92,7 @@ struct FHutongCorridorParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Width", UIMin="4", UIMax="30", ClampMin="1", Units="cm", ToolTip="Horizontal width of the fascia band along the eave, in cm."))
 	double EaveFasciaWidth = 11.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="14", ClampMin="0", Units="cm", ToolTip="Cross-section size of the rafter ends (椽頭) under the eave, in cm; 0 omits them."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="14", ClampMin="0", Units="cm", ToolTip="Section size of the rafter ends (椽頭), in cm; 0 omits them."))
 	double RafterEndSection = 5.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="8", UIMax="40", ClampMin="4", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))

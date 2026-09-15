@@ -21,7 +21,7 @@ struct FHutongInnerGateParams
 		DoorStones.Projection = HutongCanon::Stone::InnerGateProjectionCm;
 	}
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Constrain To Historical Size", ToolTip="Holds the footprint and eave height within the size band of an inner gate (垂花門)."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Constrain To Historical Size", ToolTip="Holds the footprint and eave height within the inner gate's (垂花門) size band."))
 	bool bConstrainToHistoricalSize = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(UIMin="240", UIMax="420", ClampMin="120", Units="cm", ToolTip="Height of the eave above the ground, in cm."))
@@ -30,7 +30,7 @@ struct FHutongInnerGateParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Floor Height (臺基)", UIMin="0", UIMax="70", ClampMin="0", Units="cm", ToolTip="Height of the platform (臺基) above the ground, in cm."))
 	double FloorHeight = 32.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Platform Overhang", UIMin="0", UIMax="80", ClampMin="0", Units="cm", ToolTip="How far the platform projects past the column line on the front and back, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Platform Overhang", UIMin="0", UIMax="80", ClampMin="0", Units="cm", ToolTip="Platform projection past the column line, front and back, in cm."))
 	double PlatformOverhang = 20.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Step Count", UIMin="0", UIMax="4", ClampMin="0", ClampMax="6", ToolTip="Number of steps (踏跺) in the flight on each face."))
@@ -47,7 +47,7 @@ struct FHutongInnerGateParams
 
 	// --- 垂蓮柱 ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hanging Posts", meta=(DisplayName="Has Hanging Posts (垂蓮柱)", ToolTip="Builds the hanging lotus posts (垂蓮柱) off the ends of the beam, front and back."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hanging Posts", meta=(DisplayName="Has Hanging Posts (垂蓮柱)", ToolTip="Builds the hanging lotus posts (垂蓮柱) off the beam ends."))
 	bool bHasHangingPosts = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hanging Posts", meta=(DisplayName="Post Drop", EditCondition="bHasHangingPosts", UIMin="30", UIMax="120", ClampMin="10", Units="cm", ToolTip="How far each hanging post drops below the beam, in cm."))
@@ -67,7 +67,7 @@ struct FHutongInnerGateParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Front", meta=(DisplayName="Has Brackets (雀替)", ToolTip="Builds a sparrow brace (雀替) in each top corner between beam and post."))
 	bool bHasBrackets = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Front", meta=(DisplayName="Bracket Reach", EditCondition="bHasBrackets", UIMin="15", UIMax="80", ClampMin="5", Units="cm", ToolTip="How far each sparrow brace (雀替) reaches along the beam from its post, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Front", meta=(DisplayName="Bracket Reach", EditCondition="bHasBrackets", UIMin="15", UIMax="80", ClampMin="5", Units="cm", ToolTip="Length of each sparrow brace (雀替) along the beam, in cm."))
 	double BracketReach = 26.0;
 
 	// --- Door ---
@@ -105,7 +105,7 @@ struct FHutongInnerGateParams
 	double RoofRise = 82.0;
 
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Rounds the roof apex into a rolled ridge (捲棚) crown; 0 keeps a sharp fold."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Rounding of the roof apex into a rolled ridge (捲棚); 0 keeps the fold."))
 	double RoofApexRoll = 0.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Has Ridge Course (正脊)", ToolTip="Builds a main ridge (正脊) course along the roof apex."))
@@ -117,7 +117,7 @@ struct FHutongInnerGateParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(EditCondition="bHasRidgeCourse", UIMin="5", UIMax="50", ClampMin="1", Units="cm", ToolTip="Width of the ridge course, in cm."))
 	double RidgeCourseWidth = 13.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="How far the ridge-end tail (蠍子尾) rises at each end of the ridge, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="Rise of the ridge-end tail (蠍子尾) at each end, in cm."))
 	double RidgeEndKick = 16.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Depth", UIMin="0", UIMax="25", ClampMin="0", Units="cm", ToolTip="Depth of the fascia board along each eave, in cm."))
@@ -126,7 +126,7 @@ struct FHutongInnerGateParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Width", UIMin="4", UIMax="30", ClampMin="1", Units="cm", ToolTip="Width of the fascia board along each eave, in cm."))
 	double EaveFasciaWidth = 13.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="18", ClampMin="0", Units="cm", ToolTip="Size of each square rafter end (椽頭) under the eave, in cm; 0 builds none."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="18", ClampMin="0", Units="cm", ToolTip="Size of each rafter end (椽頭), in cm; 0 builds none."))
 	double RafterEndSection = 7.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="10", UIMax="50", ClampMin="4", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))

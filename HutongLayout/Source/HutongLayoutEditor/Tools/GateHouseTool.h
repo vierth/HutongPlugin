@@ -17,7 +17,7 @@ public:
 	FHutongGateHouseParams Params;
 
 	// A placement decision rather than a parameter of the gate, so it lives beside the params and not in them: a placed gate has no neighbour to match.
-	UPROPERTY(EditAnywhere, Category="Gate House", meta=(DisplayName="Match Neighbouring Row", ToolTip="When the first click snaps to a placed building with an eave, the gate takes that row's depth and sets its eave a step above the row's. The frontage stays inside the style's band."))
+	UPROPERTY(EditAnywhere, Category="Gate House", meta=(DisplayName="Match Neighbouring Row", ToolTip="Takes the depth and eave of the row the first click snaps to."))
 	bool bMatchNeighbouringRow = true;
 
 	UPROPERTY(EditAnywhere, Category="Gate House", meta=(DisplayName="Ridge Above Row", EditCondition="bMatchNeighbouringRow", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="How far the gate's ridge stands above the matched row's ridge, in cm."))

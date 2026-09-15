@@ -11,7 +11,7 @@ enum class EHutongCourtWalk : uint8
 {
 	WingVerandas UMETA(DisplayName = "Front Verandas (前廊) on the Side Houses (廂房)", ToolTip="Verandas on the side houses (廂房), with no covered ring round the court."),
 
-	Corridor UMETA(DisplayName = "Ring Corridor (抄手遊廊) — the covered ring", ToolTip="A covered ring corridor (抄手遊廊) round all four sides of the inner court."),
+	Corridor UMETA(DisplayName = "Ring Corridor (抄手遊廊) — the covered ring", ToolTip="A ring corridor (抄手遊廊) round the inner court."),
 
 	None UMETA(DisplayName = "Neither", ToolTip="No verandas and no corridor."),
 };
@@ -21,9 +21,9 @@ enum class EHutongCompoundPlan : uint8
 {
 	OneCourtyard UMETA(DisplayName = "One Courtyard (一進)", ToolTip="One courtyard, with the gate at the southeast corner."),
 
-	TwoCourtyards UMETA(DisplayName = "Two Courtyards (二進)", ToolTip="An outer court behind the gate, an inner gate (垂花門), and the inner court beyond it."),
+	TwoCourtyards UMETA(DisplayName = "Two Courtyards (二進)", ToolTip="An outer court, an inner gate (垂花門) and an inner court."),
 
-	ThreeCourtyards UMETA(DisplayName = "Three Courtyards (三進)", ToolTip="Two courts plus a rear court (後院) behind the hall, closed by the rear row (後罩房)."),
+	ThreeCourtyards UMETA(DisplayName = "Three Courtyards (三進)", ToolTip="Two courts and a rear court (後院)."),
 };
 
 UENUM()
@@ -34,7 +34,7 @@ enum class EHutongCompoundPiece : uint8
 	SideHouse UMETA(ToolTip="A side house (廂房) down one side of the court."),
 	FrontRow UMETA(ToolTip="The front row (倒座房) along the street."),
 	RearRow UMETA(ToolTip="The rear row (後罩房) closing the back of the plot."),
-	Passage UMETA(ToolTip="The roof over the covered passage (過道) through to the rear court (後院)."),
+	Passage UMETA(ToolTip="The roof over the covered passage (過道)."),
 	GateLodge UMETA(ToolTip="The gate lodge (門房) between the gate and the corner."),
 	GateHouse UMETA(ToolTip="The main gate (大門)."),
 	InnerGate UMETA(ToolTip="The inner gate (垂花門) in the cross wall."),

@@ -32,13 +32,13 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="File", meta=(DisplayName="From Level", ToolTip="Level the file was exported from."))
 	FString SourceLevel;
 
-	UPROPERTY(VisibleAnywhere, Category="File", meta=(DisplayName="Contents", ToolTip="Whether the file carries each building's parameters or only the arrangement."))
+	UPROPERTY(VisibleAnywhere, Category="File", meta=(DisplayName="Contents", ToolTip="Whether the file carries parameters or only the arrangement."))
 	FString Contents;
 
-	UPROPERTY(EditAnywhere, Category="Placement", meta=(DisplayName="Outliner Folder", ToolTip="Outliner folder imported buildings are placed in; empty keeps the folder the file recorded."))
+	UPROPERTY(EditAnywhere, Category="Placement", meta=(DisplayName="Outliner Folder", ToolTip="Outliner folder imported buildings go in; empty keeps the file's."))
 	FName OutlinerFolder = TEXT("HutongImport");
 
-	UPROPERTY(EditAnywhere, Category="Placement", meta=(DisplayName="Update Matching Placements", ToolTip="Updates buildings whose id matches an imported record in place instead of adding a copy."))
+	UPROPERTY(EditAnywhere, Category="Placement", meta=(DisplayName="Update Matching Placements", ToolTip="Updates buildings whose id matches an imported record in place."))
 	bool bUpdateMatchingPlacements = true;
 
 	// Straight back to the coordinates the file recorded, with no drag.

@@ -48,7 +48,7 @@ public:
 	// will build. Pick another and the parameters are replaced where they stand: the footprint,
 	// the facing and the position are the plan's, so a rectangle drawn as a 正房 becomes a 廂房
 	// without being drawn again. Empty means the parameters have been tuned away from any preset.
-	UPROPERTY(EditAnywhere, Category="Preset", meta=(DisplayName="Type / Preset", GetOptions="GetPresetOptions", ToolTip="Preset this building's parameters are taken from; changing it rebuilds the building in place, keeping its footprint and facing."))
+	UPROPERTY(EditAnywhere, Category="Preset", meta=(DisplayName="Type / Preset", GetOptions="GetPresetOptions", ToolTip="Preset this building's parameters come from; changing it rebuilds in place."))
 	FString Preset;
 
 	UFUNCTION()
@@ -74,34 +74,34 @@ public:
 	// off the map and one put there to close a gap in a street are the same rectangle, and only
 	// the placement can say which it is. Both travel in the scene file with everything else the
 	// placement decided.
-	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Confidence", ToolTip="How far this placement is attested on the map and how far it is inferred; 5 is drawn on the map, 1 is not present in any source."))
+	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Confidence", ToolTip="How far this placement is attested on the map, 5 to 1."))
 	EHutongConfidence Confidence = EHutongConfidence::Attested;
 
-	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Notes", MultiLine=true, ToolTip="Free text about this placement: what it was read from, what is uncertain about it, what to come back to."))
+	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Notes", MultiLine=true, ToolTip="Free text about this placement."))
 	FString Notes;
 
 	UPROPERTY(EditAnywhere, Category="Appearance", meta=(ShowOnlyInnerProperties, ToolTip="Colours and materials for each surface of this building."))
 	FHutongPalette Palette;
 
-	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Detail Level", ToolTip="How much of the building's geometry is built, from massing block to full detail."))
+	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Detail Level", ToolTip="How much of the building's geometry is built."))
 	EHutongDetail DetailLevel = EHutongDetail::Near;
 
-	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Bespoke Mesh", ToolTip="Keeps a mesh of its own for this placement instead of a shared library mesh."))
+	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Bespoke Mesh", ToolTip="Keeps a mesh of its own instead of a shared library mesh."))
 	bool bBespokeMesh = false;
 
-	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Build LOD Chain", ToolTip="Bakes the cheaper detail levels below the placed one as the mesh's own LODs."))
+	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Build LOD Chain", ToolTip="Bakes the cheaper detail levels as the mesh's LODs."))
 	bool bBuildLODChain = true;
 
 	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Plan Only (outline, no geometry)", ToolTip="Draws only the footprint outline on the ground and builds no geometry."))
 	bool bPlanOnly = false;
 
-	UPROPERTY(VisibleAnywhere, Category="Identity", meta=(DisplayName="Building Id", ToolTip="Unique identifier of this placement, used to match it on scene import."))
+	UPROPERTY(VisibleAnywhere, Category="Identity", meta=(DisplayName="Building Id", ToolTip="Unique identifier of this placement."))
 	FGuid BuildingId;
 
 	// The footprint off square. The generators only ever build the rectangle; the built mesh is
 	// warped to these corners afterwards, once per LOD, in BuildLODs. Under Footprint so a
 	// layout-only export carries it, and on the base so every type has it without a line of its own.
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Corner Offsets (角偏移)", ToolTip="Moves each corner of the footprint off the rectangle so the plan can be an angled quadrilateral; the built mesh is warped to fit. Zero on all four keeps the rectangle."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Corner Offsets (角偏移)", ToolTip="Moves each footprint corner off the rectangle; zero keeps it."))
 	FHutongFootprintSkew FootprintSkew;
 
 	// The four local corners the placement actually occupies, rectangle plus offsets, from the origin anticlockwise.
@@ -253,13 +253,13 @@ public:
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(ToolTip="Runs the wall along the actor's local Y axis instead of X."))
 	bool bLengthAlongY = false;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Start Miter", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="How far the start of the run extends past the drawn rectangle to fill a corner, in cm."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Start Miter", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="How far the start of the run extends past the rectangle, in cm."))
 	double StartExtend = 0.0;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="End Miter", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="How far the end of the run extends past the drawn rectangle to fill a corner, in cm."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="End Miter", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="How far the end of the run extends past the rectangle, in cm."))
 	double EndExtend = 0.0;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Footprint Thickness", UIMin="0", ClampMin="0", Units="cm", ToolTip="Cross extent of the footprint that caps the wall's thickness, in cm; zero applies no cap."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Footprint Thickness", UIMin="0", ClampMin="0", Units="cm", ToolTip="Cross extent capping the wall's thickness, in cm; zero applies no cap."))
 	double FootprintThickness = 0.0;
 
 
@@ -624,7 +624,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Open Side Flipped", ToolTip="Turns the run end-for-end so it opens onto the other side."))
 	bool bFlipOpenSide = false;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bench Gap At", UIMin="-1", UIMax="1", ClampMin="-1", ClampMax="1", ToolTip="Where the bench breaks for a way onto the walk, as a fraction of the length; negative leaves it unbroken."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bench Gap At", UIMin="-1", UIMax="1", ClampMin="-1", ClampMax="1", ToolTip="Where the bench breaks, as a fraction of the length; negative leaves it unbroken."))
 	double BenchGapAt = -1.0;
 
 	virtual void GetPlanBays(FHutongPlanBays& Out) const override
@@ -887,7 +887,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="50", ClampMin="10", Units="cm", ToolTip="Extent of the footprint along the actor's local Y, in cm."))
 	double FootprintY = 340.0;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(ToolTip="Which side of the footprint carries the room's bay facade and the passage's doorway."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(ToolTip="Side of the footprint carrying the bay facade and the passage doorway."))
 	EHutongBaySide BaySide = EHutongBaySide::MinusY;
 
 	static void BuildEarPassageMesh(const FHutongEarPassageParams& InParams, EHutongBaySide Side,

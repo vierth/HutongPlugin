@@ -1,4 +1,5 @@
 #include "Tools/SiheyuanTool.h"
+#include "Tools/HutongPresetDefaults.h"
 #include "Generation/HutongPlanOutlineComponent.h"
 #include "Generation/SiheyuanGenerator.h"
 #include "Generation/HutongBuildingComponent.h"
@@ -52,6 +53,8 @@ void UHutongSiheyuanTool::RegisterToolSettings()
 	RegisterSettings(Presets);
 
 	RegisterSettings(Settings);
+
+	ApplyDefaultPreset(Presets, HutongPresets::DefaultSiheyuanName());
 }
 
 // The settings' params with Width and Depth filled in from the drag.

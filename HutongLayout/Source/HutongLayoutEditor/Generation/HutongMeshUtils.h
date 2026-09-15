@@ -26,6 +26,15 @@ namespace HutongMeshUtils
 		double ApexFraction = 0.5);
 
 	// Gable roof on a 舉架 section: one straight slope per 步架, creasing on the section's own breakpoints.
+	// The profile AppendCurvedGableRoof builds on: (cross, height above the eave) at every crease,
+	// front eave to wherever the far slope is cut. Anything laid along a gable edge follows this.
+	TArray<FVector2d> GableRoofProfile(
+		double Width,
+		double ApexHeight,
+		const HutongGen::FHutongRoofSection& Section,
+		int32 SlopeSegments,
+		double FarEaveTrim = 0.0);
+
 	void AppendCurvedGableRoof(
 		UE::Geometry::FDynamicMesh3& Mesh,
 		const FVector3d& BaseMin,

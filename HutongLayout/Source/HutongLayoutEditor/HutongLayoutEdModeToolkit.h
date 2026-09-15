@@ -50,7 +50,7 @@ private:
 	ECheckBoxState GetPlanOnlyState() const;
 	void OnPlanOnlyChanged(ECheckBoxState State);
 
-	// Whether laid-out buildings draw at all. Beside Lay Out Only because it is the same subject —
+	// Whether laid-out buildings draw at all. Beside Layout Only because it is the same subject —
 	// the plans — and it belongs on the tool panel rather than only on the Scene tab: the plans are
 	// hidden while working over them, which is while a tool is in hand.
 	ECheckBoxState GetShowPlansState() const;

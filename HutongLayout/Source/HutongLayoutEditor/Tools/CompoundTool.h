@@ -30,7 +30,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(ToolTip="Number of courtyards the compound is laid out with."))
 	EHutongCompoundPlan Plan = EHutongCompoundPlan::ThreeCourtyards;
 
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Gate At East End", ToolTip="Puts the main gate (大門) at the east end of the street row rather than the west."))
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Gate At East End", ToolTip="Puts the main gate (大門) at the east end of the street row."))
 	bool bGateAtEastEnd = true;
 
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Ear Rooms (耳房)", ToolTip="Adds an ear room (耳房) against each flank of the main hall (正房)."))
@@ -39,31 +39,31 @@ public:
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Wing Ear Rooms (廂耳房)", ToolTip="Adds a wing ear room (廂耳房) at the south end of each side house (廂房)."))
 	bool bHasWingEarRooms = true;
 
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Court Walk", ToolTip="What shelters the inner court: verandas on the side houses (廂房) or a ring corridor (抄手遊廊)."))
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Court Walk", ToolTip="What shelters the inner court."))
 	EHutongCourtWalk CourtWalk = EHutongCourtWalk::WingVerandas;
 
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Covered Corridor (遊廊) Walk Width", EditCondition="CourtWalk == EHutongCourtWalk::Corridor", UIMin="95", UIMax="300", ClampMin="60", Units="cm", ToolTip="Clear walk width the covered corridor (遊廊) ring is built at, in cm."))
 	double CorridorWalkWidth = HutongCanon::Compound::CorridorWalkWidthCm;
 
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Paved Path (甬路)", ToolTip="Lays a paved path (甬路) from the gate to the steps of the main hall (正房)."))
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Paved Path (甬路)", ToolTip="Lays a paved path (甬路) from the gate to the main hall (正房)."))
 	bool bHasPath = true;
 
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Water Jar (魚缸) and Flower Beds (花池)", ToolTip="Places a water jar (魚缸) on the axis and a flower bed (花池) either side of the walk."))
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Water Jar (魚缸) and Flower Beds (花池)", ToolTip="Places a water jar (魚缸) and flower beds (花池) in the court."))
 	bool bHasCourtyardFurnishing = true;
 
-	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(DisplayName="Main Gate (大門) Ridge Above Row", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="How far the ridge of the main gate (大門) stands above the street row's, in cm; zero leaves it at its own height."))
+	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(DisplayName="Main Gate (大門) Ridge Above Row", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="Height of the main gate's ridge above the street row's, in cm; zero leaves it."))
 	double GateRidgeClearance = HutongCanon::Gate::RidgeAboveRowCm;
 
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Screen Wall (影壁) and the Gate Court", ToolTip="Adds a screen wall (影壁) inside the gate, with the walled gate court it closes."))
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Screen Wall (影壁) and the Gate Court", ToolTip="Adds a screen wall (影壁) and gate court inside the gate."))
 	bool bHasScreenWall = true;
 
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Partition the Far End of the Outer Court (外院)", ToolTip="Walls off a service yard at the far end of the outer court (外院)."))
 	bool bHasOuterYard = true;
 
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Service Yard Width", EditCondition="bHasOuterYard", UIMin="250", UIMax="800", ClampMin="250", Units="cm", ToolTip="Width of the service yard partitioned off the outer court (外院), in cm."))
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Service Yard Width", EditCondition="bHasOuterYard", UIMin="250", UIMax="800", ClampMin="250", Units="cm", ToolTip="Width of the service yard off the outer court (外院), in cm."))
 	double OuterYardWidth = HutongCanon::Compound::OuterYardWidthCm;
 
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Gate Lodge (門房)", ToolTip="Adds a gate lodge (門房) carrying the street row from the gate to the corner."))
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Gate Lodge (門房)", ToolTip="Adds a gate lodge (門房) from the gate to the corner."))
 	bool bHasGateLodge = true;
 
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Gate Lodge (門房) Frontage", EditCondition="bHasGateLodge", UIMin="150", UIMax="600", ClampMin="120", Units="cm", ToolTip="Frontage of the gate lodge (門房), in cm."))
@@ -72,11 +72,11 @@ public:
 	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(DisplayName="Gap Between Buildings", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="Clear ground left between neighbouring buildings inside the plot, in cm."))
 	double Gap = 24.0;
 
-	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(DisplayName="Minimum Courtyard (w x d)", Units="cm", ToolTip="Smallest clear inner court (內院) the plan may be squeezed to, width by depth in cm."))
+	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(DisplayName="Minimum Courtyard (w x d)", Units="cm", ToolTip="Smallest clear inner court (內院), width by depth in cm."))
 	FVector2D MinCourtyard = FVector2D(HutongCanon::Compound::MinCourtyardWidthCm,
 		HutongCanon::Compound::MinCourtyardDepthCm);
 
-	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(DisplayName="Ordinary Courtyard (w x d)", Units="cm", ToolTip="Size of the inner court (內院) on an ordinary plot, width by depth in cm."))
+	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(DisplayName="Ordinary Courtyard (w x d)", Units="cm", ToolTip="Size of the inner court (內院), width by depth in cm."))
 	FVector2D Courtyard = FVector2D(HutongCanon::Compound::CourtyardWidthCm,
 		HutongCanon::Compound::CourtyardDepthCm);
 
@@ -86,12 +86,12 @@ public:
 	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(DisplayName="Ordinary Rear Court (後院) Depth", UIMin="300", UIMax="1200", ClampMin="0", Units="cm", ToolTip="Depth of the rear court (後院) on an ordinary plot, in cm."))
 	double TypicalRearCourtDepth = HutongCanon::Compound::TypicalRearCourtDepthCm;
 
-	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(DisplayName="Base Course Top (下鹼)", UIMin="60", UIMax="180", ClampMin="30", Units="cm", ToolTip="Height above the ground the base course (下鹼) tops out at round the whole perimeter, in cm."))
+	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(DisplayName="Base Course Top (下鹼)", UIMin="60", UIMax="180", ClampMin="30", Units="cm", ToolTip="Height the base course (下鹼) tops out at round the perimeter, in cm."))
 	double BaseCourseTop = 110.0;
 
 	// Its own setting for the reason CorridorWalkWidth and PassageWidth are: the screen's Length
 	// is the drag field the panel never shows, and read from there the 影壁 was 400 for ever.
-	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(DisplayName="Screen Wall (影壁) Length", UIMin="150", UIMax="1200", ClampMin="150", Units="cm", ToolTip="Length of the screen wall (影壁) inside the gate, in cm; held to the gate court it closes."))
+	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(DisplayName="Screen Wall (影壁) Length", UIMin="150", UIMax="1200", ClampMin="150", Units="cm", ToolTip="Length of the screen wall (影壁) inside the gate, in cm."))
 	double ScreenWallLength = 400.0;
 
 	UPROPERTY(EditAnywhere, Category="Courtyard|Flower Bed (花池)", meta=(DisplayName="Bed Width", UIMin="60", ClampMin="40", Units="cm", ToolTip="Width of each flower bed (花池), in cm."))
@@ -115,16 +115,16 @@ public:
 	UPROPERTY(EditAnywhere, Category="Buildings|Side House (廂房)", meta=(ToolTip="Parameters of the side houses (廂房)."))
 	FHutongSiheyuanParams SideHouse;
 
-	UPROPERTY(EditAnywhere, Category="Buildings|Front Row (倒座房)", meta=(ToolTip="Parameters of the front row (倒座房) on the street and the gate lodge (門房) built from it."))
+	UPROPERTY(EditAnywhere, Category="Buildings|Front Row (倒座房)", meta=(ToolTip="Parameters of the front row (倒座房) and the gate lodge (門房)."))
 	FHutongSiheyuanParams FrontRow;
 
-	UPROPERTY(EditAnywhere, Category="Buildings|Rear Row (後罩房)", meta=(ToolTip="Parameters of the rear row (後罩房) on a three-courtyard (三進) plan."))
+	UPROPERTY(EditAnywhere, Category="Buildings|Rear Row (後罩房)", meta=(ToolTip="Parameters of the rear row (後罩房)."))
 	FHutongSiheyuanParams RearRow;
 
-	UPROPERTY(EditAnywhere, Category="Buildings|Rear Row (後罩房)", meta=(DisplayName="Rear Court (後院) Depth", UIMin="200", UIMax="900", ClampMin="150", Units="cm", ToolTip="Smallest depth of the rear court (後院) between the back of the main hall (正房) and the front of the rear row (後罩房), in cm."))
+	UPROPERTY(EditAnywhere, Category="Buildings|Rear Row (後罩房)", meta=(DisplayName="Rear Court (後院) Depth", UIMin="200", UIMax="900", ClampMin="150", Units="cm", ToolTip="Smallest depth of the rear court (後院), in cm."))
 	double RearCourtDepth = HutongCanon::Compound::RearCourtDepthCm;
 
-	UPROPERTY(EditAnywhere, Category="Buildings|Rear Row (後罩房)", meta=(DisplayName="Covered Passage (過道) Width", UIMin="150", UIMax="400", ClampMin="120", Units="cm", ToolTip="Full width of the covered passage (過道) strip past the ear room (耳房), including the perimeter wall, in cm."))
+	UPROPERTY(EditAnywhere, Category="Buildings|Rear Row (後罩房)", meta=(DisplayName="Covered Passage (過道) Width", UIMin="150", UIMax="400", ClampMin="120", Units="cm", ToolTip="Width of the covered passage (過道) strip past the ear room, in cm."))
 	double PassageWidth = HutongCanon::Compound::PassageWidthCm;
 
 	UPROPERTY(EditAnywhere, Category="Buildings|Rear Row (後罩房)", meta=(DisplayName="Covered Passage (過道) Roof", ToolTip="Parameters of the roof over the covered passage (過道)."))

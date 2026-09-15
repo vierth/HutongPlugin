@@ -168,7 +168,7 @@ struct FHutongPalette
 	TObjectPtr<UMaterialInterface> StoneMaterial = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Materials",
-		meta = (DisplayName = "Paint Material (彩畫)", ToolTip="Material for the painted decoration (彩畫) on the beams; replaces the paint colour when set."))
+		meta = (DisplayName = "Paint Material (彩畫)", ToolTip="Material for the painted decoration (彩畫); replaces the paint colour when set."))
 	TObjectPtr<UMaterialInterface> PaintMaterial = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Materials",

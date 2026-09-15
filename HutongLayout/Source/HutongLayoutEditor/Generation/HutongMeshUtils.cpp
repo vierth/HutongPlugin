@@ -268,41 +268,20 @@ namespace HutongMeshUtils
 		}
 	}
 
-	void AppendCurvedGableRoof(
-		FDynamicMesh3& Mesh,
-		const FVector3d& BaseMin,
-		double Length,
+	TArray<FVector2d> GableRoofProfile(
 		double Width,
 		double ApexHeight,
 		const HutongGen::FHutongRoofSection& Section,
 		int32 SlopeSegments,
-		EAxis2D AlongAxis,
-		double FarEaveTrim,
-		double UVTileSize,
-		UE::Geometry::FIndex2i* OutGableFaceRange)
+		double FarEaveTrim)
 	{
-		if (OutGableFaceRange) *OutGableFaceRange = UE::Geometry::FIndex2i(0, 0);
-		if (Length <= 0.0 || Width <= 0.0 || ApexHeight <= 0.0) return;
+		TArray<FVector2d> Out;
+		if (Width <= 0.0 || ApexHeight <= 0.0) return Out;
 
 		const int32 N = FMath::Max(SlopeSegments, 1);
-		const double Z0 = BaseMin.Z;
 		const double Ridge = 0.5 * Width;
 		// Never back to the ridge, let alone past it.
 		const double Trim = FMath::Clamp(FarEaveTrim, 0.0, 0.9 * Ridge);
-		const double Built = Width - Trim;
-
-		auto ProfileZ = [&](double Cross)
-		{
-			const double D = FMath::Abs(2.0 * Cross / Width - 1.0);   // 1 at either eave, 0 at ridge
-			return Z0 + ApexHeight * Section.HeightFraction(D);
-		};
-
-		auto MakeVertex = [&](double Along, double Cross, double Z)
-		{
-			return (AlongAxis == EAxis2D::X)
-				? FVector3d(BaseMin.X + Along, BaseMin.Y + Cross, Z)
-				: FVector3d(BaseMin.X + Cross, BaseMin.Y + Along, Z);
-		};
 
 		// Sampled at the section's own breakpoints.
 		TArray<double> Cross;
@@ -352,6 +331,50 @@ namespace HutongMeshUtils
 			const TArray<double> FarD = SideDistances(Ridge - Trim);
 			for (int32 k = 1; k < FarD.Num(); ++k) Cross.Add(Ridge + FarD[k]);
 		}
+
+
+		for (double C : Cross)
+		{
+			const double D = FMath::Abs(2.0 * C / Width - 1.0);   // 1 at either eave, 0 at ridge
+			Out.Add(FVector2d(C, ApexHeight * Section.HeightFraction(D)));
+		}
+		return Out;
+	}
+
+	void AppendCurvedGableRoof(
+		FDynamicMesh3& Mesh,
+		const FVector3d& BaseMin,
+		double Length,
+		double Width,
+		double ApexHeight,
+		const HutongGen::FHutongRoofSection& Section,
+		int32 SlopeSegments,
+		EAxis2D AlongAxis,
+		double FarEaveTrim,
+		double UVTileSize,
+		UE::Geometry::FIndex2i* OutGableFaceRange)
+	{
+		if (OutGableFaceRange) *OutGableFaceRange = UE::Geometry::FIndex2i(0, 0);
+		if (Length <= 0.0 || Width <= 0.0 || ApexHeight <= 0.0) return;
+
+		const double Z0 = BaseMin.Z;
+		const TArray<FVector2d> Profile = GableRoofProfile(Width, ApexHeight, Section, SlopeSegments, FarEaveTrim);
+		if (Profile.Num() < 2) return;
+
+		auto MakeVertex = [&](double Along, double Cross, double Z)
+		{
+			return (AlongAxis == EAxis2D::X)
+				? FVector3d(BaseMin.X + Along, BaseMin.Y + Cross, Z)
+				: FVector3d(BaseMin.X + Cross, BaseMin.Y + Along, Z);
+		};
+
+		TArray<double> Cross;
+		for (const FVector2d& S : Profile) Cross.Add(S.X);
+		auto ProfileZ = [&](double C)
+		{
+			const double D = FMath::Abs(2.0 * C / Width - 1.0);
+			return Z0 + ApexHeight * Section.HeightFraction(D);
+		};
 
 		// Top chain along the profile, and a bottom chain on the base plane under it.
 		TArray<int32> TopA, TopB, BotA, BotB;   // A at Along = 0, B at Along = Length

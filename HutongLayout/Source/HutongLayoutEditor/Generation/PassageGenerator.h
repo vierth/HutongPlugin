@@ -14,7 +14,7 @@ struct FHutongPassageParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Eave Height", UIMin="180", UIMax="320", ClampMin="120", Units="cm", ToolTip="Height of the underside of the roof above the ground, in cm."))
 	double EaveHeight = 240.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Roof Rise", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="Rise of the ridge above the eave, in cm; zero uses the roof section's own rise."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Roof Rise", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="Rise of the ridge above the eave, in cm; zero derives it."))
 	double RoofRise = 0.0;
 
 	double GetEaveHeight() const { return FMath::Max(EaveHeight, 60.0); }

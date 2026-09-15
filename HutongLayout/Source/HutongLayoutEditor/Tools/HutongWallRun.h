@@ -16,6 +16,8 @@ namespace HutongWallRun
 		TArray<FVector2D> Vertices;
 		double Z = 0.0;
 		double Thickness = 0.0;
+		// What a leg continuing along a neighbour's face holds its own face back by.
+		double Setback = 0.0;
 		// The faces the two outer ends are cut on, as they stand; unset where an end is square.
 		HutongWallChain::FEndFace StartFace;
 		HutongWallChain::FEndFace EndFace;

@@ -21,18 +21,18 @@ enum class EHutongConfidence : uint8
 	// No answer recorded; not offered in the picker.
 	Unknown = 0 UMETA(Hidden),
 
-	// Nothing here on the map or in any source; placed to fill a block.
+	// Not in any source.
 	Absent = 1 UMETA(DisplayName = "1 · Not present"),
 
-	// A guess in the right family: something stood along here, and this is a plausible something.
+	// A plausible guess, not in any source.
 	Conjectural = 2 UMETA(DisplayName = "2 · Conjectural"),
 
-	// Inferred from what the block does either side of it, rather than drawn.
+	// Inferred from the surroundings.
 	Inferred = 3 UMETA(DisplayName = "3 · Inferred"),
 
-	// On the map, but its extent or what kind of building it is had to be read into it.
+	// On the map; extent or type read into it.
 	Probable = 4 UMETA(DisplayName = "4 · Probable"),
 
-	// Drawn on the map, in this place, looking like this.
+	// Drawn on the map as placed.
 	Attested = 5 UMETA(DisplayName = "5 · Attested on the map"),
 };

@@ -46,7 +46,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Preset", meta = (DisplayName = "Type / Preset", GetOptions = "GetPresetNames", ToolTip = "Existing preset to load or delete."))
 	FString Preset;
 
-	UPROPERTY(EditAnywhere, Category = "Preset", meta = (ToolTip = "Name to save the current settings under; an existing name is overwritten."))
+	UPROPERTY(EditAnywhere, Category = "Preset", meta = (ToolTip = "Name to save the current settings under."))
 	FString SaveAs;
 
 	UFUNCTION(CallInEditor, Category = "Preset", meta = (DisplayName = "Save", ToolTip = "Saves the current settings under the Save As name."))

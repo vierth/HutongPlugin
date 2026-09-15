@@ -79,6 +79,11 @@ namespace HutongGen
 			// 飛椽, the square outer course on the 檐椽's ends. Off leaves the round 檐椽 at the eave.
 			bool bFlyingRafters = true;
 
+			// 博縫 with 排山勾滴 down each 硬山 gable edge: the brick band standing proud of the
+			// 山牆 and the tile course laid on it. Zero depth turns both off; 懸山 has neither.
+			double RakeDepth = 26.0;
+			double RakeProjection = 6.0;
+
 			// 正脊. Turn ApexRoll to zero alongside it: a ridge sits on a fold, not a roll.
 			bool bHasRidgeCourse = false;
 			double RidgeCourseHeight = 0.0;

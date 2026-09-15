@@ -38,6 +38,7 @@ namespace
 		Roof.RidgeCourseHeight = P.RidgeCourseHeight;
 		Roof.RidgeCourseWidth = P.RidgeCourseWidth;
 		Roof.RidgeEndKick = P.RidgeEndKick;
+		if (!P.bHasGableRake) Roof.RakeDepth = 0.0;
 		Roof.Tile = P.RoofTile;
 		Roof.TileRowSpacing = P.TileRowSpacing;
 		return Roof;

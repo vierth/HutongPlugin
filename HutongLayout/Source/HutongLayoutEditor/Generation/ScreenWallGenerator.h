@@ -24,7 +24,7 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen", meta=(DisplayName="Plinth Projection", EditCondition="PlinthHeight > 0", UIMin="2", UIMax="30", ClampMin="0", Units="cm", ToolTip="How far the plinth stands out from the wall face on each side, in cm."))
 	double PlinthProjection = HutongCanon::Screen::PlinthProjectionCm;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen", meta=(DisplayName="Base Course Height (下鹼)", UIMin="0", UIMax="150", ClampMin="0", Units="cm", ToolTip="Height of the base course (下鹼) at the foot of the wall, above the plinth, in cm. Zero derives it so the band tops out at the canon line above the ground, the same line every piece of a frontage shares."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen", meta=(DisplayName="Base Course Height (下鹼)", UIMin="0", UIMax="150", ClampMin="0", Units="cm", ToolTip="Height of the base course (下鹼) above the plinth, in cm; zero derives it."))
 	double BaseCourseHeight = 0.0;
 
 	double GetBaseCourseHeight() const
@@ -38,7 +38,7 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Panel", meta=(DisplayName="Has Centre Panel (影壁心)", ToolTip="Adds a bordered screen panel (影壁心) to both faces of the screen."))
 	bool bHasPanel = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Panel", meta=(DisplayName="Border Width", EditCondition="bHasPanel", UIMin="0.05", UIMax="0.3", ClampMin="0.02", ClampMax="0.45", ToolTip="Width of the panel's border as a fraction of the face's shorter clear dimension."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Panel", meta=(DisplayName="Border Width", EditCondition="bHasPanel", UIMin="0.05", UIMax="0.3", ClampMin="0.02", ClampMax="0.45", ToolTip="Width of the panel's border as a fraction of the face's shorter side."))
 	double BorderFraction = 0.14;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Panel", meta=(DisplayName="Border Projection", EditCondition="bHasPanel", UIMin="1", UIMax="12", ClampMin="0", Units="cm", ToolTip="How far the panel's border stands proud of the wall face, in cm."))
@@ -60,7 +60,7 @@ struct FHutongScreenWallParams
 	double GetRoofRise() const { return FMath::Max(RoofRise, 5.0); }
 
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="How much the ridge is rounded into a rolled ridge (捲棚); zero keeps a sharp ridge."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Rounding of the ridge into a rolled ridge (捲棚); zero keeps it sharp."))
 	double RoofApexRoll = 0.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Has Ridge Course (清水脊)", ToolTip="Adds a plain tile ridge (清水脊) course along the top of the roof."))
@@ -72,7 +72,7 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge Course Width", EditCondition="bHasRidgeCourse", UIMin="8", UIMax="60", Units="cm", ToolTip="Width of the ridge course, in cm."))
 	double RidgeCourseWidth = 22.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="40", Units="cm", ToolTip="How far each end of the ridge course rises into a ridge-end tail (蠍子尾), in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="40", Units="cm", ToolTip="Rise of each ridge-end tail (蠍子尾), in cm."))
 	double RidgeEndKick = 17.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Depth", UIMin="0", UIMax="20", ClampMin="0", Units="cm", ToolTip="Vertical depth of the fascia board along the eave, in cm."))

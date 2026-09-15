@@ -11,7 +11,7 @@ enum class EHutongDetail : uint8
 {
 	Massing UMETA(DisplayName = "Block (塊)", ToolTip="Platform, one block to the eave and the plain roof, with no ornament."),
 
-	Far     UMETA(DisplayName = "Far (遠)", ToolTip="The full generator with ornament off; walls, doorways, platforms and steps stay."),
+	Far     UMETA(DisplayName = "Far (遠)", ToolTip="The full generator with ornament off."),
 
 	Near    UMETA(DisplayName = "Near (近)", ToolTip="The full building at standard detail."),
 

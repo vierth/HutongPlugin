@@ -67,3 +67,15 @@ const TArray<FString>& HutongPresets::BuiltInSiheyuanNames()
 {
 	return RegisteredSiheyuanNames;
 }
+
+const FString& HutongPresets::DefaultSiheyuanName()
+{
+	static const FString Name = TEXT("Side House (廂房)");
+	return Name;
+}
+
+const FString& HutongPresets::DefaultStreetRowHouseName()
+{
+	static const FString Name = TEXT("Front Row (倒座房)");
+	return Name;
+}

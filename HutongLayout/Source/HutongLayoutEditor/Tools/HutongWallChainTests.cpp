@@ -143,6 +143,21 @@ bool FHutongWallChainSideTest::RunTest(const FString& Parameters)
 	// A segment 13° off the face: not along it, unless it was along it a moment ago.
 	TestFalse(TEXT("13° off is not along"), SideAlongFace(FVector2D(1, 0), 13.0, -1000.0, FVector2D(0, 1), T, DrawnY));
 	TestTrue(TEXT("but stays along once decided"), SideAlongFace(FVector2D(1, 0), 13.0, -1000.0, FVector2D(0, 1), T, DrawnY, AlongFaceDegAfter));
+	// A setback holds the face inside the house's: the drawn line falls outside the wall on the
+	// side away from the house, and the built face lands the setback in from the line.
+	const double S = 3.0;
+	TestTrue(TEXT("a setback still sets a side"), SideAlongFace(FVector2D(1, 0), 0.0, -1000.0, FVector2D(0, 1), T, DrawnY, AlongFaceDeg, S));
+	TestTrue(TEXT("the drawn line is the setback outside the y = 0 face"), FMath::IsNearlyEqual(DrawnY, -S));
+	{
+		TArray<FSegment> Segments;
+		FVector2D C[4];
+		TestTrue(TEXT("the run builds off the set-back line"), Build({ FVector2D(0, 0), FVector2D(500, 0) }, T, DrawnY, FEndFace(), FEndFace(), Segments));
+		Corners(Segments[0], T, C);
+		TestTrue(TEXT("the outer face is the setback inside the house's face"), FMath::IsNearlyEqual(C[0].Y, S, 1.0e-6) && FMath::IsNearlyEqual(C[1].Y, S, 1.0e-6));
+		TestTrue(TEXT("the body is on the house's side"), FMath::IsNearlyEqual(C[2].Y, S + T, 1.0e-6));
+	}
+	TestTrue(TEXT("run the other way with a setback"), SideAlongFace(FVector2D(-1, 0), 0.0, -1000.0, FVector2D(0, 1), T, DrawnY, AlongFaceDeg, S));
+	TestTrue(TEXT("the drawn line is the setback outside the y = T face"), FMath::IsNearlyEqual(DrawnY, T + S));
 	return true;
 }
 

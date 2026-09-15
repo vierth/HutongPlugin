@@ -27,11 +27,11 @@ public:
 	UPROPERTY(EditAnywhere, Category="Calibration", meta=(DisplayName="Known Real Distance", UIMin="0", ClampMin="0", Units="cm", ToolTip="True length of the measured span, in cm, for calibration."))
 	double KnownRealDistanceCm = 0.0;
 
-	UPROPERTY(VisibleAnywhere, Category="Calibration", meta=(DisplayName="Scale Correction", ToolTip="Known real distance divided by the measured distance; one means true scale."))
+	UPROPERTY(VisibleAnywhere, Category="Calibration", meta=(DisplayName="Scale Correction", ToolTip="Known distance divided by measured distance; one is true scale."))
 	double ScaleCorrection = 0.0;
 
 	// Multiplies the selected actor's scale by the correction, keeping the first clicked point fixed so the calibration does not slide the map out from under the measurement that produced it.
-	UFUNCTION(CallInEditor, Category="Calibration", meta=(DisplayName="Apply Scale To Selected", ToolTip="Multiplies the selected actor's scale by the correction, keeping the first clicked point fixed."))
+	UFUNCTION(CallInEditor, Category="Calibration", meta=(DisplayName="Apply Scale To Selected", ToolTip="Multiplies the selected actor's scale by the correction."))
 	void ApplyScaleToSelected();
 
 	// Set by the tool so the button knows what it is scaling about.

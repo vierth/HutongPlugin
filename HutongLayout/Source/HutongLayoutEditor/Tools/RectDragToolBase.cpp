@@ -180,12 +180,27 @@ void URectDragToolBase::StampDetail(UHutongBuildingComponent* Building) const
 	}
 }
 
+// The property cache is keyed by set class, and every preset picker is the one class: with no
+// identifier of its own, the house's choice was restored onto the street row's picker. The other
+// sets are shared on purpose — a detail level or a palette is the sitting's, not a type's.
+FString URectDragToolBase::CacheIdentifierFor(const UInteractiveToolPropertySet* PropertySet) const
+{
+	return PropertySet->IsA<UHutongPresetProperties>() ? GetClass()->GetName() : FString();
+}
+
+void URectDragToolBase::ApplyDefaultPreset(UHutongPresetProperties* Picker, const FString& Name)
+{
+	if (!Picker || !Picker->Preset.IsEmpty()) return;
+	Picker->Preset = Name;
+	Picker->LoadSelectedPreset();
+}
+
 void URectDragToolBase::RegisterSettings(UInteractiveToolPropertySet* PropertySet, bool bPersist)
 {
 	if (!PropertySet) return;
 	if (bPersist)
 	{
-		PropertySet->RestoreProperties(this);
+		PropertySet->RestoreProperties(this, CacheIdentifierFor(PropertySet));
 		RegisteredSettings.Add(PropertySet);
 	}
 	// Noticed here rather than assigned by each tool: every tool that has a preset picker registers
@@ -232,7 +247,7 @@ void URectDragToolBase::Shutdown(EToolShutdownType ShutdownType)
 {
 	for (const TObjectPtr<UInteractiveToolPropertySet>& Set : RegisteredSettings)
 	{
-		if (Set) Set->SaveProperties(this);
+		if (Set) Set->SaveProperties(this, CacheIdentifierFor(Set));
 	}
 	UInteractiveTool::Shutdown(ShutdownType);
 }
@@ -2192,7 +2207,7 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 			const FVector2D Dir = (K > 0 ? Vertices[K] - Vertices[K - 1] : Vertices[1] - Vertices[0]).GetSafeNormal();
 			double DrawnY = 0.0;
 			const double Tolerance = bEditRunSideOn ? HutongWallChain::AlongFaceDegAfter : HutongWallChain::AlongFaceDeg;
-			bEditRunSideOn = HutongWallChain::SideAlongFace(Dir, SnapForSide.EdgeYawDeg, SnapForSide.EdgeYaw2Deg, SnapForSide.Inward, EditRun.Thickness, DrawnY, Tolerance);
+			bEditRunSideOn = HutongWallChain::SideAlongFace(Dir, SnapForSide.EdgeYawDeg, SnapForSide.EdgeYaw2Deg, SnapForSide.Inward, EditRun.Thickness, DrawnY, Tolerance, EditRun.Setback);
 			if (bEditRunSideOn)
 			{
 				const FVector2D Shift = FVector2D(-Dir.Y, Dir.X) * (0.5 * EditRun.Thickness - DrawnY);

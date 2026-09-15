@@ -31,6 +31,9 @@ namespace HutongGen
 
 		bool IsAlongX(EBaySide Side);
 
+		// The other side of the same axis.
+		inline EBaySide Opposite(EBaySide Side) { return (EBaySide)((uint8)Side ^ 2); }
+
 		struct FEdge
 		{
 			bool      bAlongX;

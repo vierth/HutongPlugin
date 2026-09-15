@@ -24,7 +24,7 @@ struct FHutongPaifangParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(ToolTip="Number of bays and columns the paifang has."))
 	EHutongPaifangBays BayCount = EHutongPaifangBays::Three;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(DisplayName="Has Roofs (牌樓)", ToolTip="Adds a tiled roof over each bay, making it a roofed bay (樓); off leaves a plain stone archway."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(DisplayName="Has Roofs (牌樓)", ToolTip="Adds a tiled roof over each bay (樓)."))
 	bool bHasRoofs = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(DisplayName="Columns Through Roof (衝天式)", ToolTip="Runs the columns up past the roofs rather than stopping them beneath."))
@@ -39,29 +39,29 @@ struct FHutongPaifangParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(DisplayName="Side Bay / Central Bay", UIMin="0.4", UIMax="1.0", ClampMin="0.3", ClampMax="1", ToolTip="Width of each side bay as a fraction of the central bay's width."))
 	double SideBayWidthRatio = 0.65;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(DisplayName="Side Bay Drop", UIMin="0", UIMax="0.4", ClampMin="0", ClampMax="0.6", ToolTip="How far the side bays' lintels sit below the central one, as a fraction of the height."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(DisplayName="Side Bay Drop", UIMin="0", UIMax="0.4", ClampMin="0", ClampMax="0.6", ToolTip="Drop of the side bays' lintels below the central one, as a fraction of the height."))
 	double SideBayDrop = 0.17;
 
 	// --- Lintels ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(DisplayName="Architrave Depth", UIMin="20", UIMax="150", ClampMin="8", Units="cm", ToolTip="Vertical depth of the architrave (額枋) beam under each bay's roof, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(DisplayName="Architrave Depth", UIMin="20", UIMax="150", ClampMin="8", Units="cm", ToolTip="Depth of the architrave (額枋) beam, in cm."))
 	double ArchitraveDepth = 62.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(DisplayName="Architrave Thickness", UIMin="10", UIMax="80", ClampMin="5", Units="cm", ToolTip="Thickness of the architrave (額枋) beam from front to back, in cm."))
 	double ArchitraveThickness = 32.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(DisplayName="Has Lower Architrave", ToolTip="Adds a second, shallower lower architrave (小額枋) beam below the main one."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(DisplayName="Has Lower Architrave", ToolTip="Adds a lower architrave (小額枋) below the main one."))
 	bool bHasLowerArchitrave = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(DisplayName="Panel Gap", EditCondition="bHasLowerArchitrave", UIMin="20", UIMax="150", ClampMin="5", Units="cm", ToolTip="Clear gap between the upper and lower architraves, filled by the fretwork panel (花板), in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(DisplayName="Panel Gap", EditCondition="bHasLowerArchitrave", UIMin="20", UIMax="150", ClampMin="5", Units="cm", ToolTip="Clear gap between the upper and lower architraves, in cm."))
 	double PanelGap = 55.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(DisplayName="Has Plaque (匾額)", EditCondition="bHasLowerArchitrave", ToolTip="Adds an inscribed name plaque (匾額) in the central bay between the two beams."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(DisplayName="Has Plaque (匾額)", EditCondition="bHasLowerArchitrave", ToolTip="Adds a name plaque (匾額) in the central bay."))
 	bool bHasPlaque = true;
 
 	// --- Base ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Base", meta=(DisplayName="Plinth Height (夾杆石)", UIMin="0", UIMax="250", ClampMin="0", Units="cm", ToolTip="Height of the post clamp stones (夾杆石) at the foot of each column, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Base", meta=(DisplayName="Plinth Height (夾杆石)", UIMin="0", UIMax="250", ClampMin="0", Units="cm", ToolTip="Height of the post clamp stones (夾杆石), in cm."))
 	double PlinthHeight = 120.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Base", meta=(DisplayName="Plinth Spread", UIMin="0", UIMax="80", ClampMin="0", Units="cm", ToolTip="How far each plinth extends beyond its column on every side, in cm."))
@@ -85,7 +85,7 @@ struct FHutongPaifangParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Eave Fascia Depth", EditCondition="bHasRoofs", UIMin="0", UIMax="30", Units="cm", ToolTip="Vertical depth of the fascia board along each eave, in cm."))
 	double EaveFasciaDepth = 9.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Corner Flare Rise (翼角)", EditCondition="bHasRoofs", UIMin="0", UIMax="90", ClampMin="0", Units="cm", ToolTip="How far each roof corner lifts upward into its upturned corner (翼角), in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Corner Flare Rise (翼角)", EditCondition="bHasRoofs", UIMin="0", UIMax="90", ClampMin="0", Units="cm", ToolTip="Lift of each roof corner into its upturned corner (翼角), in cm."))
 	double RoofFlareRise = 32.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Corner Flare Run", EditCondition="bHasRoofs", UIMin="0", UIMax="70", ClampMin="0", Units="cm", ToolTip="How far each roof corner sweeps outward along its diagonal, in cm."))

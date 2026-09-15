@@ -188,6 +188,8 @@ namespace HutongGen
 		Roof.RidgeEndKick = P.RidgeEndKick;
 
 		// Spanning the full depth, front beam line to back beam line.
+		// A 垂花門's ends are wooden 博風板 work, not a brick rake.
+		Roof.RakeDepth = 0.0;
 		Shell::AppendGableRoof(Mesh, W, D, Eave, Roof);
 	}
 }

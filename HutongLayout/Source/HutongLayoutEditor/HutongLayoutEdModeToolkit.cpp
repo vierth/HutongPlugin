@@ -407,10 +407,10 @@ TSharedRef<SWidget> FHutongLayoutEdModeToolkit::MakePlanRow() const
 				.IsChecked(this, &FHutongLayoutEdModeToolkit::GetPlanOnlyState)
 				.OnCheckStateChanged(Self, &FHutongLayoutEdModeToolkit::OnPlanOnlyChanged)
 				.ToolTipText(LOCTEXT("PlanOnlyTip",
-					"Place footprint outlines instead of buildings. Generate Geometry builds them all afterwards."))
+					"Places new buildings as footprint outlines with no geometry."))
 				[
 					SNew(STextBlock)
-					.Text(LOCTEXT("PlanOnly", "Lay out only (outlines, no geometry)"))
+					.Text(LOCTEXT("PlanOnly", "Layout only (outlines, no geometry)"))
 					.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
 					.AutoWrapText(true)
 				]
@@ -423,9 +423,7 @@ TSharedRef<SWidget> FHutongLayoutEdModeToolkit::MakePlanRow() const
 				.IsChecked(this, &FHutongLayoutEdModeToolkit::GetShowPlansState)
 				.OnCheckStateChanged(Self, &FHutongLayoutEdModeToolkit::OnShowPlansChanged)
 				.ToolTipText(LOCTEXT("ShowPlansTip",
-					"Draw the footprint of every laid-out building. Off hides them all and stops "
-					"them taking clicks, which is what to do while drawing Place Labels regions "
-					"over the same ground. Nothing placed is changed."))
+					"Draws the footprint outline of every laid-out building."))
 				[
 					SNew(STextBlock)
 					.Text(LOCTEXT("ShowPlans", "Show plan outlines"))
@@ -440,7 +438,7 @@ TSharedRef<SWidget> FHutongLayoutEdModeToolkit::MakePlanRow() const
 				.HAlign(HAlign_Center)
 				.Text(LOCTEXT("Generate", "Generate Geometry"))
 				.ToolTipText(LOCTEXT("GenerateTip",
-					"Build every laid-out building in the loaded region. Buildings already built are left alone."))
+					"Builds every laid-out building in the loaded region."))
 				.OnClicked(Self, &FHutongLayoutEdModeToolkit::OnGenerateClicked)
 			]
 		];

@@ -95,6 +95,13 @@ public:
 			}
 			return true;
 		}
+		if (Key == EKeys::F)
+		{
+			// Taken only mid-placement, so the viewport keeps F for focusing the selection.
+			if (!Tool->IsPlacingActive() || InKeyEvent.IsRepeat()) return false;
+			Tool->FlipFacing();
+			return true;
+		}
 		if (Key == EKeys::G)
 		{
 			// Hold G on the click that ends a wall segment: that segment gets the gate. Taken

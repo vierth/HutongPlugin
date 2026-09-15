@@ -11,7 +11,7 @@ class UHutongGalleryToolProperties : public UInteractiveToolPropertySet
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, Category="Gallery", meta=(DisplayName="Include Variants", ToolTip="Lays out every variant of each type rather than one representative of each."))
+	UPROPERTY(EditAnywhere, Category="Gallery", meta=(DisplayName="Include Variants", ToolTip="Lays out every variant of each type."))
 	bool bIncludeVariants = true;
 
 	UPROPERTY(EditAnywhere, Category="Gallery", meta=(DisplayName="Spacing", UIMin="200", UIMax="1500", ClampMin="50", Units="cm", ToolTip="Clear ground between one footprint and the next, in cm."))
@@ -32,7 +32,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Contents", meta=(DisplayName="Gates: Main Gate (大門), Inner Gate (垂花門)", ToolTip="Includes the gate house and the inner gate."))
 	bool bGates = true;
 
-	UPROPERTY(EditAnywhere, Category="Contents", meta=(DisplayName="Courtyard Pieces (遊廊, 影壁, 甬路, 花池, 魚缸)", ToolTip="Includes the covered corridor (遊廊), screen wall (影壁), paved path (甬路), flower bed (花池) and water jar (魚缸)."))
+	UPROPERTY(EditAnywhere, Category="Contents", meta=(DisplayName="Courtyard Pieces (遊廊, 影壁, 甬路, 花池, 魚缸)", ToolTip="Includes the garden types."))
 	bool bCourtyard = true;
 
 	UPROPERTY(EditAnywhere, Category="Contents", meta=(DisplayName="Street: Shopfront (鋪面房), Memorial Arch (牌坊)", ToolTip="Includes the shopfront and the paifang."))

@@ -1,4 +1,5 @@
 #include "Generation/HutongShell.h"
+#include "Algo/Reverse.h"
 #include "Generation/HutongMeshUtils.h"
 #include "Generation/HutongPalette.h"
 
@@ -407,6 +408,62 @@ namespace HutongGen
 			if (G <= 0.0 && GableFaces.B > GableFaces.A)
 			{
 				SetMaterialIDForTriangleRange(Mesh, GableFaces.A, GableFaces.B, MatSlot_Body);
+			}
+
+			// 博縫 and 排山勾滴: one brick band and one tile course swept down each gable edge,
+			// following the creases the roof itself has. Buried a few centimetres into the 山牆 so
+			// no face of either lies on the gable plane or the slope.
+			const double RakeD = FMath::Max(Roof.RakeDepth, 0.0);
+			const double RakeP = FMath::Max(Roof.RakeProjection, 0.0);
+			if (G <= 0.0 && RakeD > 0.0 && RakeP > 0.0)
+			{
+				const TArray<FVector2d> Profile = GableRoofProfile(Nominal, Rise, Roof.Section, Roof.SlopeSegments, Nominal - Built);
+				if (Profile.Num() >= 2)
+				{
+					constexpr double Bury = 4.0;
+					// The band's top sits a little under the slope, the tiles straddle it.
+					const TArray<FVector2d> Brick = {
+						FVector2d(-Bury, -RakeD), FVector2d(RakeP, -RakeD),
+						FVector2d(RakeP, -1.0), FVector2d(-Bury, -1.0) };
+					const double TileTop = FMath::Min(7.0, 0.3 * FMath::Max(Roof.RidgeCourseHeight, 7.0));
+					const TArray<FVector2d> Tile = {
+						FVector2d(-Bury, -2.0), FVector2d(RakeP + 3.0, -2.0),
+						FVector2d(RakeP + 3.0, TileTop), FVector2d(-Bury, TileTop) };
+
+					// Stations along the rake with local Z the tangent and local Y the slope's upward
+					// normal; local X then falls outward across the gable when the sweep runs front to
+					// back on the -X gable and back to front on the +X one.
+					auto Stations = [&](double GableX, bool bReverse)
+					{
+						TArray<FVector> Points;
+						for (const FVector2d& S : Profile) Points.Add(FVector(GableX, -O + S.X, Eave + S.Y));
+						if (bReverse) Algo::Reverse(Points);
+						TArray<FTransform> Out;
+						for (int32 i = 0; i < Points.Num(); ++i)
+						{
+							const FVector Prev = Points[FMath::Max(i - 1, 0)];
+							const FVector Next = Points[FMath::Min(i + 1, Points.Num() - 1)];
+							const FVector T = (Next - Prev).GetSafeNormal();
+							// Normal to the slope in the plane of the rake, pointing up.
+							FVector Up(0.0, -T.Z, T.Y);
+							if (Up.Z < 0.0) Up = -Up;
+							Out.Add(FTransform(FRotationMatrix::MakeFromZY(T, Up).ToQuat(), Points[i]));
+						}
+						return Out;
+					};
+					const TArray<FTransform> Left = Stations(GX0, false);
+					const TArray<FTransform> Right = Stations(GX1, true);
+
+					const int32 BrickFirstTri = Mesh.MaxTriangleID();
+					AppendSweptProfile(Mesh, Brick, Left);
+					AppendSweptProfile(Mesh, Brick, Right);
+					SetMaterialIDForTrianglesFrom(Mesh, BrickFirstTri, MatSlot_Body);
+
+					const int32 TileFirstTri = Mesh.MaxTriangleID();
+					AppendSweptProfile(Mesh, Tile, Left);
+					AppendSweptProfile(Mesh, Tile, Right);
+					SetMaterialIDForTrianglesFrom(Mesh, TileFirstTri, MatSlot_Roof);
+				}
 			}
 
 			// 椽頭 last and tagged separately.

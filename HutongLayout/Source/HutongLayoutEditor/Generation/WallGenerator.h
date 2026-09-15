@@ -12,7 +12,7 @@ UENUM(BlueprintType)
 enum class EHutongWallRole : uint8
 {
 	Perimeter UMETA(DisplayName = "Perimeter Wall (院牆) onto the Lane", ToolTip = "A boundary wall facing the lane: tall, thick and blank."),
-	Courtyard UMETA(DisplayName = "Partition Wall (隔牆) inside the Compound", ToolTip = "A dividing wall inside the compound: lower and thinner, and able to carry openings."),
+	Courtyard UMETA(DisplayName = "Partition Wall (隔牆) inside the Compound", ToolTip = "A dividing wall inside the compound."),
 };
 
 UENUM(BlueprintType)
@@ -20,7 +20,7 @@ enum class EHutongWallDoorway : uint8
 {
 	None      UMETA(DisplayName = "None", ToolTip = "No garden doorway."),
 
-	Rect      UMETA(DisplayName = "Plain Square-Headed Doorway (隨牆門)", ToolTip = "A plain square-headed opening with the wall cap running straight over it."),
+	Rect      UMETA(DisplayName = "Plain Square-Headed Doorway (隨牆門)", ToolTip = "A plain square-headed opening."),
 
 	Moon      UMETA(DisplayName = "Moon Gate (月亮門)", ToolTip = "A full circular opening whose width equals its height."),
 
@@ -49,22 +49,22 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(DisplayName="Garden Doorway", ToolTip="Shape of the garden doorway cut through the wall, if any."))
 	EHutongWallDoorway Doorway = EHutongWallDoorway::None;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(DisplayName="Decorative Windows (什錦窗)", ToolTip="Adds a row of shaped decorative window (什錦窗) openings along the wall."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(DisplayName="Decorative Windows (什錦窗)", ToolTip="Adds a row of decorative windows (什錦窗) along the wall."))
 	bool bHasWindows = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Role", ToolTip="What the wall is for: a boundary wall onto the lane or a dividing wall inside the compound."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Role", ToolTip="Role of the wall."))
 	EHutongWallRole Role = EHutongWallRole::Perimeter;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Derive From Role", ToolTip="Takes height, thickness and cap from the role; off unlocks the fields below."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Derive From Role", ToolTip="Takes height, thickness and cap from the role."))
 	bool bDeriveFromRole = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(EditCondition="!bDeriveFromRole", UIMin="30", UIMax="600", ClampMin="10", Units="cm", ToolTip="Height of the wall body from the ground to the underside of the cap, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(EditCondition="!bDeriveFromRole", UIMin="30", UIMax="600", ClampMin="10", Units="cm", ToolTip="Height of the wall body to the underside of the cap, in cm."))
 	double Height = HutongCanon::Wall::PerimeterHeightCm;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(EditCondition="!bDeriveFromRole", UIMin="5", UIMax="120", ClampMin="1", Units="cm", ToolTip="Thickness of the wall across the run, in cm."))
 	double Thickness = HutongCanon::Wall::PerimeterThicknessCm;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Base Course Height", UIMin="0", UIMax="300", Units="cm", ToolTip="Height of the proud lower course (下鹼) from the ground, in cm. Zero derives it: a perimeter wall's band tops out at the canon line every piece of a frontage shares, a courtyard wall's at a third of its height. A projection of zero leaves the wall flush."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Base Course Height", UIMin="0", UIMax="300", Units="cm", ToolTip="Height of the base course (下鹼) from the ground, in cm; zero derives it."))
 	double BaseCourseHeight = 0.0;
 
 	double GetBaseCourseHeight() const
@@ -77,13 +77,18 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Base Course Projection", UIMin="0", UIMax="15", Units="cm", ToolTip="How far the base course stands proud of each wall face, in cm."))
 	double BaseCourseProjection = 3.0;
 
+	// How far a run continuing along a neighbour's face holds its own face inside that face:
+	// its 下鹼 then stands flush with the house and the body a shadow line behind it, so the
+	// two read as two pieces and the cap dies into a step rather than into mid-plane.
+	double GetAbuttingSetback() const { return FMath::Max(BaseCourseProjection, 0.0); }
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(EditCondition="!bDeriveFromRole", UIMin="0", UIMax="40", Units="cm", ToolTip="How far the top cornice course projects past each wall face, in cm."))
 	double CapOverhang = 9.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(DisplayName="Cap Corbel Courses", EditCondition="!bDeriveFromRole", UIMin="1", UIMax="4", ClampMin="1", ClampMax="8", ToolTip="Number of brick courses stepping out under the tiled cap."))
 	int32 CapCorbelCourses = 3;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(DisplayName="Cap Cornice Height", UIMin="0", UIMax="40", Units="cm", ToolTip="Total height of the corbelled cornice, in cm, shared evenly between its courses."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(DisplayName="Cap Cornice Height", UIMin="0", UIMax="40", Units="cm", ToolTip="Total height of the corbelled cornice, in cm."))
 	double CapSlabHeight = 16.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(UIMin="0", UIMax="40", Units="cm", ToolTip="Rise of the tiled cap above the cornice, in cm; zero gives a flat top."))
@@ -119,7 +124,7 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Window Details", meta=(DisplayName="Outline Steps", EditCondition="bHasWindows", UIMin="4", UIMax="20", ClampMin="2", ClampMax="32", ToolTip="Number of masonry rows used to step round each window's outline."))
 	int32 WindowOutlineSteps = 10;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(EditCondition="Doorway != EHutongWallDoorway::None", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Where the doorway sits along the run, 0 at the start of the drag to 1 at the end."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(EditCondition="Doorway != EHutongWallDoorway::None", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Where the doorway sits along the run, 0 to 1."))
 	double DoorwayPosition = 0.5;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(DisplayName="Doorway Width", EditCondition="Doorway != EHutongWallDoorway::None && Doorway != EHutongWallDoorway::Moon", UIMin="80", UIMax="220", ClampMin="60", Units="cm", ToolTip="Clear width of the garden doorway, in cm."))
@@ -140,10 +145,10 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(DisplayName="Outline Steps", EditCondition="Doorway != EHutongWallDoorway::None", UIMin="6", UIMax="32", ClampMin="3", ClampMax="48", ToolTip="Number of masonry rows used to step round the doorway's outline."))
 	int32 DoorwayOutlineSteps = 16;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(DisplayName="Hanging-Flower Dressing (垂花)", EditCondition="Doorway != EHutongWallDoorway::None", ToolTip="Dresses the doorway with a beam, a fretwork panel (花板) band and hanging lotus posts (垂蓮柱) on both faces."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(DisplayName="Hanging-Flower Dressing (垂花)", EditCondition="Doorway != EHutongWallDoorway::None", ToolTip="Dresses the doorway with a beam, fretwork band (花板) and hanging posts (垂蓮柱)."))
 	bool bDoorwayChuihua = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(DisplayName="Hanging-Flower Dressing (垂花) Projection", EditCondition="Doorway != EHutongWallDoorway::None && bDoorwayChuihua", UIMin="4", UIMax="20", ClampMin="1", Units="cm", ToolTip="How far the dressing's beam and band stand proud of each wall face, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(DisplayName="Hanging-Flower Dressing (垂花) Projection", EditCondition="Doorway != EHutongWallDoorway::None && bDoorwayChuihua", UIMin="4", UIMax="20", ClampMin="1", Units="cm", ToolTip="Projection of the dressing's beam and band from each wall face, in cm."))
 	double DoorwayDressProjection = 9.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(DisplayName="Hanging Lotus Post (垂蓮柱) Drop", EditCondition="Doorway != EHutongWallDoorway::None && bDoorwayChuihua", UIMin="20", UIMax="70", ClampMin="10", Units="cm", ToolTip="How far each hanging lotus post (垂蓮柱) drops below the beam, in cm."))
@@ -152,7 +157,7 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(DisplayName="Hanging Lotus Post (垂蓮柱) Diameter", EditCondition="Doorway != EHutongWallDoorway::None && bDoorwayChuihua", UIMin="8", UIMax="22", ClampMin="4", Units="cm", ToolTip="Diameter of each hanging lotus post (垂蓮柱), in cm."))
 	double DoorwayPostDiameter = 13.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate Details", meta=(EditCondition="bHasGate", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Where the gate sits along the run, 0 at the start of the drag to 1 at the end."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate Details", meta=(EditCondition="bHasGate", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Where the gate sits along the run, 0 to 1."))
 	double GatePosition = 0.5;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate Details", meta=(EditCondition="bHasGate", UIMin="80", UIMax="300", ClampMin="40", Units="cm", ToolTip="Clear width of the gate opening, in cm."))
@@ -164,7 +169,7 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate Details", meta=(DisplayName="Gate Roof Rise", EditCondition="bHasGate", UIMin="0", UIMax="150", ClampMin="0", Units="cm", ToolTip="How far the gate's hood rises above the wall cap, in cm."))
 	double GateRise = 45.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate Details", meta=(DisplayName="Gate Pier Wing", EditCondition="bHasGate", UIMin="0", UIMax="150", ClampMin="0", Units="cm", ToolTip="How far the raised gate pier extends past the opening on each side, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate Details", meta=(DisplayName="Gate Pier Wing", EditCondition="bHasGate", UIMin="0", UIMax="150", ClampMin="0", Units="cm", ToolTip="Extent of the gate pier past the opening on each side, in cm."))
 	double GateWingWidth = 40.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate Details", meta=(DisplayName="Gate Leaves Open", EditCondition="bHasGate", ToolTip="Builds the gate leaves swung open rather than shut."))
@@ -182,7 +187,7 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate Details", meta=(DisplayName="Door Pegs (門簪)", EditCondition="bHasGate", UIMin="0", UIMax="4", ClampMin="0", ClampMax="6", ToolTip="Number of door pegs (門簪) through the head above the gate leaves."))
 	int32 GatePegCount = 2;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate Details", meta=(DisplayName="Has Door Piers (門垛)", EditCondition="bHasGate", ToolTip="Adds door pier (門垛) brick pilasters either side of the gate, proud of both faces."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate Details", meta=(DisplayName="Has Door Piers (門垛)", EditCondition="bHasGate", ToolTip="Adds door pier (門垛) pilasters either side of the gate."))
 	bool bHasDoorPiers = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate Details", meta=(DisplayName="Door Pier Width", EditCondition="bHasGate && bHasDoorPiers", UIMin="15", UIMax="80", ClampMin="5", Units="cm", ToolTip="Width of each door pier along the run, in cm."))

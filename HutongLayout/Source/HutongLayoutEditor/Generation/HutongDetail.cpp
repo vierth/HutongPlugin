@@ -417,6 +417,7 @@ void AppendBlock(FDynamicMesh3& Mesh, const FBlock& B)
 		Roof.bFlyingRafters = false;
 		Roof.Tile = EHutongRoofTile::He;
 		Roof.bHasRidgeCourse = false;
+		Roof.RakeDepth = 0.0;
 		Shell::AppendGableRoof(Mesh, W, D, Eave, Roof);
 	}
 	else

@@ -54,10 +54,10 @@ struct FHutongStoreyParams
 
 	// --- The shop below ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Opening Head / Story", UIMin="0.6", UIMax="0.92", ClampMin="0.3", ClampMax="0.95", ToolTip="Height of the shopfront opening's head as a fraction of the lower story's height."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Opening Head / Story", UIMin="0.6", UIMax="0.92", ClampMin="0.3", ClampMax="0.95", ToolTip="Height of the shopfront opening's head as a fraction of the lower story."))
 	double OpeningTopRatio = 0.82;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Open Bays", UIMin="0", UIMax="5", ClampMin="0", ClampMax="12", ToolTip="Number of bays left open, counted outward from the middle; zero boards up the whole front."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Open Bays", UIMin="0", UIMax="5", ClampMin="0", ClampMax="12", ToolTip="Number of bays left open, counted outward from the middle."))
 	int32 OpenBayCount = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Board Width", UIMin="15", UIMax="45", ClampMin="8", Units="cm", ToolTip="Width of each board of the board doors (排板門), in cm."))
@@ -77,7 +77,7 @@ struct FHutongStoreyParams
 
 	// --- 腰檐 and the gallery ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(DisplayName="Has Skirt Roof (腰檐)", ToolTip="Adds the tiled skirt roof (腰檐) that marks the story line across the front."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(DisplayName="Has Skirt Roof (腰檐)", ToolTip="Adds the tiled skirt roof (腰檐) at the story line."))
 	bool bHasSkirtRoof = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(DisplayName="Skirt Projection", EditCondition="bHasSkirtRoof", UIMin="30", UIMax="140", ClampMin="10", Units="cm", ToolTip="How far the skirt roof (腰檐) projects in front of the facade, in cm."))
@@ -101,7 +101,7 @@ struct FHutongStoreyParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(DisplayName="Rail Height", EditCondition="bHasGallery", UIMin="70", UIMax="120", ClampMin="40", Units="cm", ToolTip="Height of the railing above the gallery deck, in cm."))
 	double RailHeight = 92.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(DisplayName="Baluster Spacing", EditCondition="bHasGallery", UIMin="12", UIMax="60", ClampMin="6", Units="cm", ToolTip="Spacing between the railing's balusters, in cm; the cost knob of the gallery."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(DisplayName="Baluster Spacing", EditCondition="bHasGallery", UIMin="12", UIMax="60", ClampMin="6", Units="cm", ToolTip="Spacing between the railing's balusters, in cm."))
 	double BalusterSpacing = 26.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(DisplayName="Baluster Section", EditCondition="bHasGallery", UIMin="3", UIMax="12", ClampMin="1", Units="cm", ToolTip="Section of each baluster and rail member, in cm."))
@@ -135,7 +135,7 @@ struct FHutongStoreyParams
 
 	// --- Shell ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Base Course Height (下鹼)", UIMin="0", UIMax="150", ClampMin="0", Units="cm", ToolTip="Height of the base course (下鹼) at the foot of the walls, above the floor, in cm. Zero derives it so the band tops out at the canon line above the ground, the same line every piece of a frontage shares."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Base Course Height (下鹼)", UIMin="0", UIMax="150", ClampMin="0", Units="cm", ToolTip="Height of the base course (下鹼) above the floor, in cm; zero derives it."))
 	double BaseCourseHeight = 0.0;
 
 	double GetBaseCourseHeight() const
@@ -154,7 +154,7 @@ struct FHutongStoreyParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Row Spacing (壟)", UIMin="12", UIMax="60", ClampMin="6", Units="cm", ToolTip="Spacing between tile rows across the roof, in cm."))
 	double TileRowSpacing = HutongGen::RoofTile::DefaultRowSpacing;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rear Eave (後檐)", ToolTip="What stands behind the building, which sets how the rear eave is finished."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rear Eave (後檐)", ToolTip="What stands behind the building."))
 	EHutongRearEave RearEave = EHutongRearEave::Lane;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Front Roof Overhang", UIMin="20", UIMax="160", ClampMin="0", Units="cm", ToolTip="How far the front eave overhangs the facade, in cm."))
@@ -168,7 +168,7 @@ struct FHutongStoreyParams
 
 	double GetRoofRise() const { return FMath::Max(RoofRise, 10.0); }
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="How much the ridge is rounded into a rolled ridge (捲棚); zero keeps a sharp ridge."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Rounding of the ridge into a rolled ridge (捲棚); zero keeps it sharp."))
 	double RoofApexRoll = 0.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Has Ridge Course (清水脊)", ToolTip="Adds a plain tile ridge (清水脊) course along the top of the roof."))
@@ -180,7 +180,7 @@ struct FHutongStoreyParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge Course Width", EditCondition="bHasRidgeCourse", UIMin="10", UIMax="90", Units="cm", ToolTip="Width of the ridge course, in cm."))
 	double RidgeCourseWidth = 20.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="60", Units="cm", ToolTip="How far each end of the ridge course rises into a ridge-end tail (蠍子尾), in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="60", Units="cm", ToolTip="Rise of each ridge-end tail (蠍子尾), in cm."))
 	double RidgeEndKick = 30.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Depth", UIMin="0", UIMax="25", ClampMin="0", Units="cm", ToolTip="Vertical depth of the fascia board along the eave, in cm."))

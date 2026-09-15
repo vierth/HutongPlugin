@@ -29,6 +29,8 @@ namespace HutongGen
 		Roof.Tile = EHutongRoofTile::He;
 
 		// AppendGableRoof owns its own material tagging, so the passage cannot come out brick.
+		// The roof bears into a wall at each side: no 山牆, no rake.
+		Roof.RakeDepth = 0.0;
 		Shell::AppendGableRoof(Mesh, Run, Span, Eave, Roof);
 	}
 }

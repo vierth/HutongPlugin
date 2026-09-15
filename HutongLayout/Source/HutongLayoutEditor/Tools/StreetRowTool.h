@@ -30,10 +30,10 @@ public:
 	UPROPERTY(EditAnywhere, Category="Row", meta=(ToolTip="What the bays that are not gates are built as."))
 	EHutongStreetRowKind Kind = EHutongStreetRowKind::Houses;
 
-	UPROPERTY(EditAnywhere, Category="Row", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Forces the number of bays the row is divided into; zero derives it from the length and the building's bay width limits."))
+	UPROPERTY(EditAnywhere, Category="Row", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Forces the number of bays; zero derives it from the length."))
 	int32 BayCountOverride = 0;
 
-	UPROPERTY(EditAnywhere, Category="Row", meta=(DisplayName="Gate (大門) Ridge Above Row", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="How far the ridge of each gate stands above the row's ridge, in cm; zero leaves the gate at its own height."))
+	UPROPERTY(EditAnywhere, Category="Row", meta=(DisplayName="Gate (大門) Ridge Above Row", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="Height of each gate's ridge above the row's, in cm; zero leaves it."))
 	double GateRidgeClearance = HutongCanon::Gate::RidgeAboveRowCm;
 
 	UPROPERTY(EditAnywhere, Category="Buildings|House (房)", meta=(ToolTip="Parameters of the houses (房) built on the ordinary bays."))
@@ -42,13 +42,13 @@ public:
 	UPROPERTY(EditAnywhere, Category="Buildings|Shop (鋪面房)", meta=(ToolTip="Parameters of the shops (鋪面房) built on the ordinary bays."))
 	FHutongShopfrontParams Shop;
 
-	UPROPERTY(EditAnywhere, Category="Buildings|Gate (大門)", meta=(ToolTip="Parameters of the gate house (大門) built on each gate bay. Its footprint is the bay's, whatever the style's band says."))
+	UPROPERTY(EditAnywhere, Category="Buildings|Gate (大門)", meta=(ToolTip="Parameters of the gate house (大門) on each gate bay."))
 	FHutongGateHouseParams Gate;
 };
 
 // A street row from one drag: houses or shops along it, with a gate house on the bays picked
-// for one. The buildings and the gates face independently, since a gate to a courtyard behind
-// a row of shops looks the way the shops look, and one beside houses often does not.
+// for one. The gates face the buildings' way unless F turns them round, since a gate to a
+// courtyard behind a row of shops looks the way the shops look, and one beside houses often does not.
 UCLASS()
 class UHutongStreetRowTool : public URectDragToolBase
 {
@@ -63,6 +63,8 @@ public:
 	virtual void Render(IToolsContextRenderAPI* RenderAPI) override;
 	virtual TArray<FText> GetToolHelpLines() const override;
 	virtual void CancelPlacement() override;
+	virtual void FlipFacing() override;
+	virtual FText GetKeyHintText() const override;
 
 protected:
 	virtual void RegisterToolSettings() override;
@@ -78,7 +80,7 @@ protected:
 	virtual void OnPlacementHover(const FVector& HitWorld) override;
 
 	// The clicks after the rectangle, in order.
-	enum class EExtra : uint8 { BuildingsFace, GateBays, GateFaces };
+	enum class EExtra : uint8 { BuildingsFace, GateBays };
 	EExtra Extra = EExtra::BuildingsFace;
 
 	// The run is the longer extent; the facades are the two sides across it.
@@ -100,7 +102,12 @@ protected:
 	TObjectPtr<UHutongPresetProperties> HousePresets;
 
 	HutongGen::EBaySide BuildingSide = HutongGen::EBaySide::MinusY;
-	HutongGen::EBaySide GateSide = HutongGen::EBaySide::MinusY;
+	// Relative to the buildings' side, so a hover that moves that side carries the gates with it.
+	bool bGatesFaceBack = false;
+	HutongGen::EBaySide GateSide() const
+	{
+		return bGatesFaceBack ? HutongGen::BaySide::Opposite(BuildingSide) : BuildingSide;
+	}
 	TSet<int32> GateBays;
 	int32 HoverBay = INDEX_NONE;
 };

@@ -26,7 +26,7 @@ struct FHutongFootprintSkew
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(DisplayName="Mode (方式)", ToolTip="Ends only: only the zone at that end of the run changes, the end cut on the bias or pushed across, and the body stays as built. Whole footprint: the four corners may move anywhere and the whole plan becomes that quadrilateral."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(DisplayName="Mode (方式)", ToolTip="Which part of the footprint the corner offsets move."))
 	EHutongSkewMode Mode = EHutongSkewMode::Ends;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(DisplayName="Corner at Origin (原點角)", Units="cm", ToolTip="Offset of the corner at the actor's origin, in local X and Y, in cm."))

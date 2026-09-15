@@ -20,28 +20,28 @@ struct FHutongEarPassageParams
 
 	FHutongEarPassageParams();
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Room", meta=(DisplayName="Room (耳房)", ToolTip="The ear room itself: the house generator's parameters, at the 耳房 preset by default."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Room", meta=(DisplayName="Room (耳房)", ToolTip="The ear room's house parameters."))
 	FHutongSiheyuanParams Room;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Passage Width (過道)", UIMin="120", UIMax="400", ClampMin="80", Units="cm", ToolTip="Clear width of the way through, wall face to wall face, in cm. Widened to what the closing wall's doorway needs when that is more."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Passage Width (過道)", UIMin="120", UIMax="400", ClampMin="80", Units="cm", ToolTip="Clear width of the passage, wall face to wall face, in cm."))
 	double PassageWidth = 240.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Passage At Far End", ToolTip="Puts the passage at the far end of the frontage instead of the origin end. [ and ] swap it while placing."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Passage At Far End", ToolTip="Puts the passage at the far end of the frontage."))
 	bool bPassageAtFarEnd = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Roof (過道頂)", ToolTip="The roof over the passage, bearing into the wall on one side and the room's gable on the other; its eave is where the closing wall's top is held."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Roof (過道頂)", ToolTip="The roof over the passage."))
 	FHutongPassageParams Passage;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Has Outer Wall", ToolTip="Builds the wall the passage runs along on its outer side. Off when the building stands against a wall already there."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Has Outer Wall", ToolTip="Builds the wall along the passage's outer side."))
 	bool bHasOuterWall = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Outer Wall", EditCondition="bHasOuterWall", ToolTip="The wall along the passage's outer side, the full depth of the building."))
 	FHutongWallParams OuterWall;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Close The Front (隔牆)", ToolTip="A wall across the front of the passage, its top held at the roof's eave, with the doorway it is given through it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Close The Front (隔牆)", ToolTip="The wall across the front of the passage and its doorway."))
 	bool bHasClosingWall = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Closing Wall", EditCondition="bHasClosingWall", ToolTip="The wall closing the passage's front. Its doorway and where it sits along the run are its own; its height follows the roof's eave; none stops the way through."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Closing Wall", EditCondition="bHasClosingWall", ToolTip="The wall closing the passage's front."))
 	FHutongWallParams ClosingWall;
 
 	// Set by the tool from the footprint; not user-editable.

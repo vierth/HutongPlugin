@@ -51,8 +51,12 @@ namespace HutongWallChain
 	// ToleranceDeg is how far off the segment an edge may run and still count; a caller that
 	// decided "along" last frame passes the wider WithinDegAfter, so a segment near the limit does
 	// not flip the whole run half a thickness sideways with every pixel of mouse movement.
+	// Setback holds the outer face that far inside the neighbour's face — the drawn line then
+	// lies outside the wall, at -Setback or Thickness + Setback — so the run reads as a piece
+	// set against the house rather than the same slab continued.
 	inline constexpr double AlongFaceDeg = 10.0;
 	inline constexpr double AlongFaceDegAfter = 16.0;
 	bool SideAlongFace(const FVector2D& SegmentDir, double EdgeYawDeg, double EdgeYaw2Deg,
-		const FVector2D& Inward, double Thickness, double& OutDrawnY, double ToleranceDeg = AlongFaceDeg);
+		const FVector2D& Inward, double Thickness, double& OutDrawnY, double ToleranceDeg = AlongFaceDeg,
+		double Setback = 0.0);
 }

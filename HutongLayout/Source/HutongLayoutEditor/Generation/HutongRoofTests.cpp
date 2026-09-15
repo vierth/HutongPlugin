@@ -807,6 +807,52 @@ bool FHutongRidgeTailTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// 博縫 and 排山勾滴 stand a few centimetres proud of each 山牆 and hug the roof edge from eave to
+// ridge, so the gable reads as a brick face with a rim rather than a slab.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongGableRakeTest,
+	"HutongLayout.Roofs.GableRake",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongGableRakeTest::RunTest(const FString& Parameters)
+{
+	FHutongSiheyuanParams P;
+	P.Width = 900.0; P.Depth = 450.0;
+	P.bHasRidgeCourse = false;   // the 蠍子尾 also reaches past the gable; keep it out of the measure
+
+	UE::Geometry::FDynamicMesh3 With, Without;
+	HutongGen::BuildSiheyuan(With, P);
+	FHutongSiheyuanParams Plain = P;
+	Plain.bHasGableRake = false;
+	HutongGen::BuildSiheyuan(Without, Plain);
+
+	const double Eave = P.GetEaveHeight();
+	const double Apex = Eave + P.GetRoofRise();
+	double MinX = BIG_NUMBER, MaxX = -BIG_NUMBER;
+	int32 Proud = 0, OffTheRake = 0;
+	for (int32 vid : With.VertexIndicesItr())
+	{
+		const FVector3d V = With.GetVertex(vid);
+		MinX = FMath::Min(MinX, V.X);
+		MaxX = FMath::Max(MaxX, V.X);
+		// Past the 下鹼's own 3 cm projection.
+		if (V.X < -3.5 || V.X > P.Width + 3.5)
+		{
+			++Proud;
+			if (V.Z < Eave - 40.0 || V.Z > Apex + 12.0) ++OffTheRake;
+		}
+	}
+	TestTrue(TEXT("the rake adds triangles"), With.TriangleCount() > Without.TriangleCount());
+	TestTrue(FString::Printf(TEXT("it stands proud of both gables (%.0f .. %.0f)"), MinX, MaxX - P.Width),
+		MinX < -3.0 && MinX > -15.0 && MaxX - P.Width > 3.0 && MaxX - P.Width < 15.0);
+	TestTrue(TEXT("something is out past the gable"), Proud > 0);
+	TestEqual(TEXT("everything past the gable hugs the roof edge"), OffTheRake, 0);
+
+	double PlainMinX = BIG_NUMBER;
+	for (int32 vid : Without.VertexIndicesItr()) PlainMinX = FMath::Min(PlainMinX, Without.GetVertex(vid).X);
+	TestTrue(TEXT("off, the gable is flush again"), PlainMinX > -3.5);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRoofUVTest,
 	"HutongLayout.Roofs.UVs",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

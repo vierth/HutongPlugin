@@ -17,4 +17,11 @@ namespace HutongPresets
 
 	// The names RegisterBuiltInPresets registered for the siheyuan, in the order it added them.
 	const TArray<FString>& BuiltInSiheyuanNames();
+
+	// The house the tool opens on when no preset has been picked yet: the side house, two to
+	// every courtyard and so the most numerous roof on a 1750 hutong.
+	const FString& DefaultSiheyuanName();
+
+	// The house a street row opens on: the front row, the one that lines the lane.
+	const FString& DefaultStreetRowHouseName();
 }

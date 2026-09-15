@@ -15,13 +15,13 @@
 UENUM()
 enum class EHutongGateStyle : uint8
 {
-	Guangliang UMETA(DisplayName = "Wide-Hall Gate (廣亮大門)", ToolTip="Door plane on the centre column (中柱) line, giving the deepest recess in front of the door."),
+	Guangliang UMETA(DisplayName = "Wide-Hall Gate (廣亮大門)", ToolTip="Door plane on the centre column (中柱) line."),
 
-	Jinzhu UMETA(DisplayName = "Inner-Column Gate (金柱大門)", ToolTip="Door plane on the front inner column (前金柱) line, giving a shallower recess in front of the door."),
+	Jinzhu UMETA(DisplayName = "Inner-Column Gate (金柱大門)", ToolTip="Door plane on the front inner column (前金柱) line."),
 
 	Manzi UMETA(DisplayName = "Flush Gate (蠻子門)", ToolTip="Door plane flush with the eave column (檐柱) line, with no recess."),
 
-	Ruyi UMETA(DisplayName = "Ruyi Gate (如意門)", ToolTip="Door plane at the eave column (檐柱) line, the bay filled with brick and a narrow doorway under a hood."),
+	Ruyi UMETA(DisplayName = "Ruyi Gate (如意門)", ToolTip="Door plane at the eave column (檐柱) line, under a hood."),
 };
 
 USTRUCT(BlueprintType)
@@ -29,10 +29,10 @@ struct FHutongGateHouseParams
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(ToolTip="Which of the four courtyard gate styles to build; sets where the door plane sits."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(ToolTip="Which gate style to build."))
 	EHutongGateStyle Style = EHutongGateStyle::Ruyi;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Constrain To Historical Size", ToolTip="Clamps the footprint and eave height to the size band of the chosen style."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Constrain To Historical Size", ToolTip="Clamps the footprint and eave height to the style's size band."))
 	bool bConstrainToHistoricalSize = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(UIMin="200", UIMax="600", ClampMin="80", Units="cm", ToolTip="Height of the eave above the ground, in cm."))
@@ -53,7 +53,7 @@ struct FHutongGateHouseParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(UIMin="15", UIMax="80", ClampMin="5", Units="cm", ToolTip="Depth of each step tread, in cm."))
 	double StepTread = 32.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Column Height in Diameters", UIMin="8", UIMax="14", ClampMin="4", ClampMax="30", ToolTip="Column height expressed in column diameters; sets the column diameter."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Column Height in Diameters", UIMin="8", UIMax="14", ClampMin="4", ClampMax="30", ToolTip="Column height in column diameters."))
 	double ColumnHeightInDiameters = HutongCanon::Module::ColumnHeightInDiameters;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Apron Paving (散水)", ShowOnlyInnerProperties, ToolTip="Settings for the apron paving (散水) band round the foot of the gate."))
@@ -93,7 +93,7 @@ struct FHutongGateHouseParams
 
 	// --- 如意門 only ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(DisplayName="Hood Courses (門頭)", EditCondition="Style == EHutongGateStyle::Ruyi", UIMin="0", UIMax="5", ClampMin="0", ClampMax="8", ToolTip="Number of corbelled brick courses in the door head (門頭) hood over a ruyi gate (如意門) doorway."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(DisplayName="Hood Courses (門頭)", EditCondition="Style == EHutongGateStyle::Ruyi", UIMin="0", UIMax="5", ClampMin="0", ClampMax="8", ToolTip="Number of corbelled courses in the door head (門頭) hood."))
 	int32 HoodCourses = 3;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(DisplayName="Hood Projection", EditCondition="Style == EHutongGateStyle::Ruyi", UIMin="0", UIMax="40", ClampMin="0", Units="cm", ToolTip="How far the door head (門頭) hood projects from the wall face, in cm."))
@@ -101,7 +101,7 @@ struct FHutongGateHouseParams
 
 	// --- Shell ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Base Course Height", UIMin="0", UIMax="200", Units="cm", ToolTip="Height of the base course (下鹼) above the floor, in cm. Zero derives it so the band tops out at the canon line above the ground, the same line every piece of a frontage shares."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Base Course Height", UIMin="0", UIMax="200", Units="cm", ToolTip="Height of the base course (下鹼) above the floor, in cm; zero derives it."))
 	double BaseCourseHeight = 0.0;
 
 	double GetBaseCourseHeight() const
@@ -118,7 +118,7 @@ struct FHutongGateHouseParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Chitou Projection", EditCondition="bHasChitou", UIMin="0", UIMax="60", Units="cm", ToolTip="How far each gable pier (墀頭) projects forward of the wall, in cm."))
 	double ChitouProjection = 14.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Chitou Corbel Courses", EditCondition="bHasChitou", UIMin="0", UIMax="6", ClampMin="0", ClampMax="10", ToolTip="Number of corbel courses stepping out at the top of each gable pier (墀頭)."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Chitou Corbel Courses", EditCondition="bHasChitou", UIMin="0", UIMax="6", ClampMin="0", ClampMax="10", ToolTip="Number of corbel courses at the top of each gable pier (墀頭)."))
 	int32 ChitouCorbelSteps = 3;
 
 	// --- Roof ---
@@ -128,11 +128,11 @@ struct FHutongGateHouseParams
 
 	// No rear overhang of its own: a gate fronts the lane and opens onto the courtyard, so its rear eave is a front eave.
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Rise", UIMin="0", UIMax="300", ClampMin="0", Units="cm", ToolTip="Height of the ridge above the eave, in cm; zero takes the rise the roof section (舉架) gives over the gate's depth."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Rise", UIMin="0", UIMax="300", ClampMin="0", Units="cm", ToolTip="Height of the ridge above the eave, in cm; zero derives it."))
 	double RoofRise = 0.0;
 
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="How much the roof apex is rounded into a rolled ridge (捲棚) crown; 0 keeps a sharp fold."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Rounding of the roof apex into a rolled ridge (捲棚); 0 keeps the fold."))
 	double RoofApexRoll = 0.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Has Ridge Course (正脊)", ToolTip="Builds a main ridge (正脊) course along the roof apex."))
@@ -153,16 +153,16 @@ struct FHutongGateHouseParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Width", UIMin="4", UIMax="40", Units="cm", ToolTip="Horizontal width of the fascia band along the eave, in cm."))
 	double EaveFasciaWidth = 13.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Row Spacing (壟)", UIMin="12", UIMax="60", ClampMin="6", Units="cm", ToolTip="Spacing of tile rows (壟) across the roof, in cm; sets the eave cap (勾頭) pitch and tile UV scale."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Row Spacing (壟)", UIMin="12", UIMax="60", ClampMin="6", Units="cm", ToolTip="Spacing of tile rows (壟) across the roof, in cm."))
 	double TileRowSpacing = HutongGen::RoofTile::DefaultRowSpacing;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="20", ClampMin="0", Units="cm", ToolTip="Cross-section size of the rafter ends (椽頭) under the eave, in cm; 0 omits them."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="20", ClampMin="0", Units="cm", ToolTip="Section size of the rafter ends (椽頭), in cm; 0 omits them."))
 	double RafterEndSection = 7.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="10", UIMax="60", ClampMin="5", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))
 	double RafterEndSpacing = 22.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Column Taper (收分)", UIMin="0", UIMax="0.02", ClampMin="0", ClampMax="0.05", ToolTip="Column taper (收分) as the fraction of column height lost from the diameter at the head."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Column Taper (收分)", UIMin="0", UIMax="0.02", ClampMin="0", ClampMax="0.05", ToolTip="Column taper (收分) as a fraction of the column height."))
 	double ColumnTaperRatio = HutongCanon::Module::ColumnTaperRatio;
 
 	// Set by the tool from the drag rect; not user-editable.

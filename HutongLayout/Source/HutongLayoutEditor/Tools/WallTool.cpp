@@ -142,7 +142,8 @@ double UHutongWallTool::GetDrawnY() const
 		// the face, or the run would jump sideways with every pixel.
 		const bool bCursor = bIsDragging && k >= Last - 1;
 		const double Tolerance = (bCursor && bCursorSideOn) ? HutongWallChain::AlongFaceDegAfter : HutongWallChain::AlongFaceDeg;
-		const bool bAlong = HutongWallChain::SideAlongFace(D, Yaw[k], Yaw2[k], Inward[k], T, DrawnY, Tolerance);
+		const bool bAlong = HutongWallChain::SideAlongFace(D, Yaw[k], Yaw2[k], Inward[k], T, DrawnY, Tolerance,
+			Settings->Params.GetAbuttingSetback());
 		if (bCursor) bCursorSideOn = bAlong;
 		if (bAlong) return DrawnY;
 	}

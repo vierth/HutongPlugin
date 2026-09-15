@@ -17,7 +17,7 @@ struct FHutongSiheyuanParams
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Derive From Canonical Proportions", ToolTip="Derives platform, column, opening and roof dimensions from the column height and diameter."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Derive From Canonical Proportions", ToolTip="Derives dimensions from the column height and diameter."))
 	bool bDeriveProportions = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Column Height in Diameters (柱高/柱徑)", EditCondition="bDeriveProportions", UIMin="8", UIMax="14", ClampMin="4", ClampMax="30", ToolTip="Column height as a multiple of the column diameter."))
@@ -29,10 +29,10 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Front Eave Overhang / Column Height (上檐出)", EditCondition="bDeriveProportions", UIMin="0.15", UIMax="0.45", ClampMin="0", ClampMax="1", ToolTip="Front roof overhang as a fraction of the column height."))
 	double EaveOverhangRatio = HutongCanon::Module::EaveOverhangRatio;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rear Eave (後檐)", ToolTip="What the back of the building faces; sets whether the rear eave overhangs."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rear Eave (後檐)", ToolTip="What the back of the building faces."))
 	EHutongRearEave RearEave = EHutongRearEave::Lane;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Rear Eave Overhang / Column Height (封護檐)", EditCondition="bDeriveProportions && RearEave == EHutongRearEave::Lane", UIMin="0", UIMax="0.1", ClampMin="0", ClampMax="1", ToolTip="Rear roof overhang as a fraction of the column height when the back faces a lane."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Rear Eave Overhang / Column Height (封護檐)", EditCondition="bDeriveProportions && RearEave == EHutongRearEave::Lane", UIMin="0", UIMax="0.1", ClampMin="0", ClampMax="1", ToolTip="Rear roof overhang as a fraction of the column height."))
 	double RearEaveOverhangRatio = HutongCanon::Module::LaneEaveOverhangRatio;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Has Front Veranda (前廊)", ToolTip="Sets the facade back behind a front colonnade to form a veranda (前廊)."))
@@ -44,10 +44,10 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Column Height / Central Bay", EditCondition="bDeriveProportions && bDeriveEaveFromBays", UIMin="0.65", UIMax="1.0", ClampMin="0.4", ClampMax="1.5", ToolTip="Column height as a fraction of the central bay width."))
 	double ColumnHeightPerBay = HutongCanon::Module::ColumnHeightPerCentralBay;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Minimum Column Height (柱高)", EditCondition="bDeriveProportions && bDeriveEaveFromBays", UIMin="180", UIMax="300", ClampMin="100", Units="cm", ToolTip="Lowest column height allowed when it is derived from the bay width, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Minimum Column Height (柱高)", EditCondition="bDeriveProportions && bDeriveEaveFromBays", UIMin="180", UIMax="300", ClampMin="100", Units="cm", ToolTip="Lowest column height when derived from the bay width, in cm."))
 	double MinColumnHeight = HutongCanon::Module::MinColumnHeightCm;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Purlins (檁數)", ToolTip="Number of purlins across the roof section; sets the building's depth."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Purlins (檁數)", ToolTip="Number of purlins across the roof section."))
 	EHutongPurlins Purlins = EHutongPurlins::Five;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Step Run (步架)", UIMin="90", UIMax="200", ClampMin="40", Units="cm", ToolTip="Horizontal run of one purlin bay (步架), in cm."))
@@ -62,13 +62,13 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Sill Height Above Floor (檻牆)", EditCondition="bDeriveProportions", UIMin="60", UIMax="120", ClampMin="20", Units="cm", ToolTip="Height of the window sill above the interior floor, in cm."))
 	double SillHeightAboveFloor = HutongCanon::Openings::SillHeightAboveFloorCm;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Transom Band (橫披窗)", EditCondition="bDeriveProportions", UIMin="0", UIMax="0.3", ClampMin="0", ClampMax="0.5", ToolTip="Share of the opening height below the architrave taken by the transom band."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Transom Band (橫披窗)", EditCondition="bDeriveProportions", UIMin="0", UIMax="0.3", ClampMin="0", ClampMax="0.5", ToolTip="Share of the opening height taken by the transom band."))
 	double TransomBandFraction = HutongCanon::Openings::TransomBandFraction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Layout", meta=(DisplayName="Suggested Frontage (面闊)", UIMin="0", UIMax="2000", ClampMin="0", Units="cm", ToolTip="Frontage the drag snaps to, in cm; zero leaves the drag free."))
 	double SuggestedFrontage = 0.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Layout", meta=(DisplayName="Suggested Depth (進深)", UIMin="0", UIMax="1200", ClampMin="0", Units="cm", ToolTip="Depth the drag snaps to, in cm; zero derives it from the purlins and step run."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Layout", meta=(DisplayName="Suggested Depth (進深)", UIMin="0", UIMax="1200", ClampMin="0", Units="cm", ToolTip="Depth the drag snaps to, in cm; zero derives it."))
 	double SuggestedDepth = 0.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Layout", meta=(DisplayName="Snap To Suggested", EditCondition="SuggestedFrontage > 0 || SuggestedDepth > 0", ToolTip="Snaps the dragged footprint to the suggested frontage and depth."))
@@ -147,11 +147,11 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Front Roof Overhang", EditCondition="!bDeriveProportions", UIMin="0", UIMax="200", Units="cm", ToolTip="How far the roof projects past the facade, in cm."))
 	double RoofOverhang = 60.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rear Roof Overhang", EditCondition="!bDeriveProportions && RearEave == EHutongRearEave::Lane", UIMin="0", UIMax="60", Units="cm", ToolTip="How far the roof projects past the back wall when the back faces a lane, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rear Roof Overhang", EditCondition="!bDeriveProportions && RearEave == EHutongRearEave::Lane", UIMin="0", UIMax="60", Units="cm", ToolTip="Roof projection past the back wall when the back faces a lane, in cm."))
 	double RearRoofOverhang = 0.0;
 
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Fraction of each half-span rounded into a rolled crown at the apex; zero keeps a sharp fold."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Fraction of each half-span rounded into a rolled crown; zero keeps the fold."))
 	double RoofApexRoll = 0.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Segments", UIMin="1", UIMax="12", ClampMin="1", ClampMax="16", ToolTip="Number of facets used to round each slope's apex roll."))
@@ -163,13 +163,13 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Width", UIMin="4", UIMax="40", Units="cm", ToolTip="How far back from the eave edge the fascia runs, in cm."))
 	double EaveFasciaWidth = 12.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="20", ClampMin="0", Units="cm", ToolTip="Side length of the square rafter ends under the eave, in cm; zero removes them."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="20", ClampMin="0", Units="cm", ToolTip="Side length of the square rafter ends, in cm; zero removes them."))
 	double RafterEndSection = 7.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="10", UIMax="60", ClampMin="5", Units="cm", ToolTip="Distance between rafter ends along the eave, in cm."))
 	double RafterEndSpacing = 24.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Flying Rafters (飛椽)", EditCondition="RafterEndSection > 0", ToolTip="Adds a course of square flying rafters (飛椽) over the round eave rafters."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Flying Rafters (飛椽)", EditCondition="RafterEndSection > 0", ToolTip="Adds square flying rafters (飛椽) over the eave rafters."))
 	bool bHasFlyingRafters = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Tile (瓦作)", ToolTip="Tile type laid on the roof."))
@@ -177,6 +177,9 @@ struct FHutongSiheyuanParams
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Row Spacing (壟)", UIMin="12", UIMax="60", ClampMin="6", Units="cm", ToolTip="Width of one tile row (壟) along the eave, in cm."))
 	double TileRowSpacing = HutongGen::RoofTile::DefaultRowSpacing;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Gable Rake (博縫排山)", ToolTip="Adds the brick band (博縫) and tile course (排山勾滴) along each gable edge."))
+	bool bHasGableRake = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Has Ridge Course (清水脊)", ToolTip="Adds a tile ridge course (清水脊) along the roof apex."))
 	bool bHasRidgeCourse = true;
@@ -187,7 +190,7 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge Course Width", EditCondition="bHasRidgeCourse", UIMin="10", UIMax="60", Units="cm", ToolTip="Thickness of the ridge course across the roof, in cm."))
 	double RidgeCourseWidth = 20.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="80", Units="cm", ToolTip="How far each ridge end rises as it curls past the gable, in cm; zero squares it off."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="80", Units="cm", ToolTip="Rise of each ridge end past the gable, in cm; zero squares it."))
 	double RidgeEndKick = 32.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(UIMin="10", UIMax="80", Units="cm", ToolTip="Thickness of the side and rear walls, in cm."))
@@ -218,7 +221,7 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Veranda Depth", EditCondition="bHasFrontVeranda && !bDeriveProportions", UIMin="60", UIMax="250", ClampMin="0", Units="cm", ToolTip="Depth of the front veranda, in cm."))
 	double VerandaDepth = 110.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Derive Column Diameter", EditCondition="!bDeriveProportions", ToolTip="Derives the column diameter from the column height instead of using a fixed value."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Derive Column Diameter", EditCondition="!bDeriveProportions", ToolTip="Derives the column diameter from the column height."))
 	bool bDeriveColumnDiameter = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Column Diameter Ratio", EditCondition="!bDeriveProportions && bDeriveColumnDiameter", UIMin="0.04", UIMax="0.16", ClampMin="0.01", ClampMax="0.5", ToolTip="Column diameter as a fraction of the column height."))
@@ -227,7 +230,7 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(EditCondition="!bDeriveProportions && !bDeriveColumnDiameter", UIMin="10", UIMax="160", ClampMin="2", Units="cm", ToolTip="Diameter of the columns, in cm."))
 	double ColumnDiameter = 30.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Column Taper (收分)", UIMin="0", UIMax="0.02", ClampMin="0", ClampMax="0.05", ToolTip="How much each column narrows toward its head, as a fraction of the column height."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Column Taper (收分)", UIMin="0", UIMax="0.02", ClampMin="0", ClampMax="0.05", ToolTip="Column taper as a fraction of the column height."))
 	double ColumnTaperRatio = HutongCanon::Module::ColumnTaperRatio;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(EditCondition="!bDeriveProportions", UIMin="0", UIMax="120", Units="cm", ToolTip="Height of the platform (臺基) above the ground, in cm."))
@@ -242,7 +245,7 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(UIMin="15", UIMax="80", ClampMin="5", Units="cm", ToolTip="Depth of each step tread, in cm."))
 	double StepTread = 30.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Has Gable Pier (墀頭)", ToolTip="Adds a corbelled brick pier (墀頭) at the front corner of each gable wall."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Has Gable Pier (墀頭)", ToolTip="Adds a corbelled brick pier (墀頭) at each gable's front corner."))
 	bool bHasChitou = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Chitou Projection", EditCondition="bHasChitou", UIMin="0", UIMax="60", Units="cm", ToolTip="How far each chitou projects forward of the facade, in cm."))
@@ -251,7 +254,7 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Chitou Corbel Courses", EditCondition="bHasChitou", UIMin="0", UIMax="6", ClampMin="0", ClampMax="10", ToolTip="Number of corbel courses stepping out at the top of each chitou."))
 	int32 ChitouCorbelSteps = 3;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Base Course Height", UIMin="0", UIMax="200", Units="cm", ToolTip="Height of the base course (下鹼) above the platform, in cm. Zero derives it so the band tops out at the canon line above the ground, the same line every piece of a frontage shares."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Base Course Height", UIMin="0", UIMax="200", Units="cm", ToolTip="Height of the base course (下鹼) above the platform, in cm; zero derives it."))
 	double BaseCourseHeight = 0.0;
 
 	double GetBaseCourseHeight() const
@@ -265,7 +268,7 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(EditCondition="!bDeriveProportions", UIMin="100", UIMax="400", Units="cm", ToolTip="Height of the underside of the door lintel above the ground, in cm."))
 	double DoorTopHeight = 270.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(EditCondition="!bDeriveProportions", UIMin="0", UIMax="250", Units="cm", ToolTip="Height of the top of the knee wall under the windows above the ground, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(EditCondition="!bDeriveProportions", UIMin="0", UIMax="250", Units="cm", ToolTip="Height of the knee wall top under the windows, in cm."))
 	double WindowSillHeight = 105.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(EditCondition="!bDeriveProportions", UIMin="50", UIMax="400", Units="cm", ToolTip="Height of the window head above the ground, in cm."))
@@ -298,7 +301,7 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(DisplayName="Has Front Door", ToolTip="Opens a door bay in the facade."))
 	bool bHasFrontDoorCenter = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(DisplayName="Door Bay", EditCondition="bHasFrontDoorCenter", UIMin="-1", UIMax="8", ClampMin="-1", ClampMax="31", ToolTip="Which bay holds the door, counted from the facade's origin end; -1 centres it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(DisplayName="Door Bay", EditCondition="bHasFrontDoorCenter", UIMin="-1", UIMax="8", ClampMin="-1", ClampMax="31", ToolTip="Which bay holds the door, from the origin end; -1 centres it."))
 	int32 DoorBayIndex = -1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(DisplayName="Has Door Frame (抱框)", EditCondition="bHasFrontDoorCenter", ToolTip="Adds jambs, a threshold, leaves and a transom to the door bay."))

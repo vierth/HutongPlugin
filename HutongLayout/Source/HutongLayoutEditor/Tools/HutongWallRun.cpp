@@ -94,6 +94,7 @@ namespace HutongWallRun
 		}
 
 		Out.Thickness = T;
+		Out.Setback = Seed->Params.GetAbuttingSetback();
 		Out.Z = Seed->GetOwner()->GetActorLocation().Z;
 		FVector2D S, E;
 		LegEnds(Legs[0], S, E);

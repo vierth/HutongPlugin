@@ -15,13 +15,13 @@ struct FHutongApronParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Apron", meta=(DisplayName="Derive Width From Eave", EditCondition="bEnabled", ToolTip="Derives the apron's width from the roof overhang."))
 	bool bDeriveWidth = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Apron", meta=(DisplayName="Reach Past Drip Line", EditCondition="bEnabled && bDeriveWidth", UIMin="0", UIMax="0.4", ClampMin="0", ClampMax="1", ToolTip="How far the apron reaches past the drip line, as a fraction of the roof overhang."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Apron", meta=(DisplayName="Reach Past Drip Line", EditCondition="bEnabled && bDeriveWidth", UIMin="0", UIMax="0.4", ClampMin="0", ClampMax="1", ToolTip="Reach of the apron past the drip line, as a fraction of the overhang."))
 	double DripMargin = 0.12;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Apron", meta=(DisplayName="Apron Width", EditCondition="bEnabled && !bDeriveWidth", UIMin="30", UIMax="140", ClampMin="10", Units="cm", ToolTip="Width of the apron, in cm."))
 	double Width = 62.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Apron", meta=(DisplayName="Height At The Wall", EditCondition="bEnabled", UIMin="3", UIMax="15", ClampMin="1", Units="cm", ToolTip="Height of the apron where it meets the wall, in cm; it falls to nothing at its outer edge."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Apron", meta=(DisplayName="Height At The Wall", EditCondition="bEnabled", UIMin="3", UIMax="15", ClampMin="1", Units="cm", ToolTip="Height of the apron at the wall, in cm."))
 	double Thickness = 6.0;
 
 	// The band this roof overhang asks for. Pass the building's own eave projection.

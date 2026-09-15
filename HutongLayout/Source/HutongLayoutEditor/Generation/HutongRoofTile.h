@@ -9,7 +9,7 @@ enum class EHutongRoofTile : uint8
 {
 	He      UMETA(DisplayName = "Flat Tiles (合瓦) — commoner", ToolTip="Flat tiles laid alternately hollow-up and hollow-down, with a flat eave course."),
 
-	Tong    UMETA(DisplayName = "Tube Tiles (筒瓦) — rank", ToolTip="Half-round tiles over the joints, ending at the eave in round eave caps (勾頭)."),
+	Tong    UMETA(DisplayName = "Tube Tiles (筒瓦) — rank", ToolTip="Half-round tiles with round eave caps (勾頭)."),
 };
 
 namespace HutongGen

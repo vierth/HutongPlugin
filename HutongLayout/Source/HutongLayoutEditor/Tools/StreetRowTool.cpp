@@ -41,6 +41,8 @@ void UHutongStreetRowTool::RegisterToolSettings()
 		GET_MEMBER_NAME_CHECKED(UHutongStreetRowToolProperties, House));
 	HousePresets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
 	RegisterSettings(HousePresets);
+
+	ApplyDefaultPreset(HousePresets, HutongPresets::DefaultStreetRowHouseName());
 }
 
 bool UHutongStreetRowTool::IsRunAlongX() const
@@ -117,6 +119,7 @@ void UHutongStreetRowTool::OnPlacementStarted(const FVector& HitWorld)
 	Extra = EExtra::BuildingsFace;
 	GateBays.Reset();
 	HoverBay = INDEX_NONE;
+	bGatesFaceBack = false;
 	if (Settings)
 	{
 		Settings->BayCountOverride = 0;
@@ -132,7 +135,7 @@ bool UHutongStreetRowTool::OnRectCommitted(const FVector& HitWorld)
 	{
 		BuildingSide = SideUnder(GCurrentLevelEditingViewportClient->GetViewLocation());
 	}
-	GateSide = BuildingSide;
+	bGatesFaceBack = false;
 	return false;
 }
 
@@ -143,7 +146,6 @@ void UHutongStreetRowTool::OnPlacementHover(const FVector& HitWorld)
 	{
 	case EExtra::BuildingsFace: BuildingSide = SideUnder(HitWorld); break;
 	case EExtra::GateBays:      HoverBay = BayUnder(HitWorld); break;
-	case EExtra::GateFaces:     GateSide = SideUnder(HitWorld); break;
 	}
 }
 
@@ -153,7 +155,6 @@ bool UHutongStreetRowTool::OnExtraStageClicked(const FVector& HitWorld)
 	{
 	case EExtra::BuildingsFace:
 		BuildingSide = SideUnder(HitWorld);
-		GateSide = BuildingSide;
 		Extra = EExtra::GateBays;
 		HoverBay = BayUnder(HitWorld);
 		return false;
@@ -166,18 +167,16 @@ bool UHutongStreetRowTool::OnExtraStageClicked(const FVector& HitWorld)
 			if (GateBays.Contains(Bay)) GateBays.Remove(Bay); else GateBays.Add(Bay);
 			return false;
 		}
-		// A click off the row is done picking. No gates means nothing left to ask.
-		if (GateBays.Num() == 0) return true;
-		Extra = EExtra::GateFaces;
-		GateSide = SideUnder(HitWorld);
-		return false;
-	}
-
-	case EExtra::GateFaces:
-		GateSide = SideUnder(HitWorld);
+		// A click off the row builds; the gates face as the ticks show.
 		return true;
 	}
+	}
 	return true;
+}
+
+void UHutongStreetRowTool::FlipFacing()
+{
+	if (bRectCommitted) bGatesFaceBack = !bGatesFaceBack;
 }
 
 void UHutongStreetRowTool::CancelPlacement()
@@ -186,6 +185,7 @@ void UHutongStreetRowTool::CancelPlacement()
 	Extra = EExtra::BuildingsFace;
 	GateBays.Reset();
 	HoverBay = INDEX_NONE;
+	bGatesFaceBack = false;
 }
 
 void UHutongStreetRowTool::AdjustBracketValue(int32 Delta, bool /*bFine*/, bool /*bCoarse*/)
@@ -246,7 +246,6 @@ TArray<FText> UHutongStreetRowTool::GetStageNames() const
 	TArray<FText> Names = Super::GetStageNames();
 	Names.Add(LOCTEXT("StageBuildingsFace", "Buildings face"));
 	Names.Add(LOCTEXT("StageGateBays", "Gate bays"));
-	Names.Add(LOCTEXT("StageGateFaces", "Gates face"));
 	return Names;
 }
 
@@ -256,8 +255,7 @@ int32 UHutongStreetRowTool::GetStageIndex() const
 	switch (Extra)
 	{
 	case EExtra::BuildingsFace: return 2;
-	case EExtra::GateBays:      return 3;
-	default:                    return 4;
+	default:                    return 3;
 	}
 }
 
@@ -269,13 +267,10 @@ FText UHutongStreetRowTool::GetStagePromptText() const
 	case EExtra::BuildingsFace:
 		return LOCTEXT("PromptBuildingsFace",
 			"Move to the side the buildings face (green ticks), then click to set it.");
-	case EExtra::GateBays:
-		return LOCTEXT("PromptGateBays",
-			"Click a bay to make it a gate, click it again to take the gate away. [ and ] slide the gates. "
-			"Click off the row when the gates are placed.");
 	default:
-		return LOCTEXT("PromptGateFaces",
-			"Move to the side the gates face (orange ticks), which need not be the buildings' side, then click to build the row.");
+		return LOCTEXT("PromptGateBays",
+			"Click a bay to make it a gate, click it again to take the gate away. [ and ] slide the gates, "
+			"F turns them to face the other way (orange ticks). Click off the row to build.");
 	}
 }
 
@@ -293,11 +288,16 @@ FString UHutongStreetRowTool::GetPlacementDetail() const
 		Gates.IsEmpty() ? TEXT("none") : *Gates);
 }
 
+FText UHutongStreetRowTool::GetKeyHintText() const
+{
+	return FText::Format(LOCTEXT("KeyHint", "[ ] bays, slide gates · F flip gates · {0}"), Super::GetKeyHintText());
+}
+
 TArray<FText> UHutongStreetRowTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines.Insert(LOCTEXT("HelpRow",
-		"After the footprint: pick the side the buildings face, click the bays that are gates, then pick the side the gates face. "
+		"After the footprint: pick the side the buildings face, then click the bays that are gates; F turns the gates to face the other way. "
 		"Each run of ordinary bays is one house or shop and each gate bay is one gate house, all separate and editable."), 1);
 	Lines.Insert(LOCTEXT("HelpBays",
 		"The bays are equal divisions of the length, from the building's own bay width limits; [ and ] change the count before the gates are picked and slide the gates after."), 2);
@@ -374,10 +374,7 @@ void UHutongStreetRowTool::Render(IToolsContextRenderAPI* RenderAPI)
 		}
 	};
 	Ticks(BuildingSide, Green, 0.0, L, N);
-	if (Extra == EExtra::GateFaces || GateBays.Num() > 0)
-	{
-		for (int32 Bay : GateBays) Ticks(GateSide, GateFill, Bay * W, (Bay + 1) * W, 2);
-	}
+	for (int32 Bay : GateBays) Ticks(GateSide(), GateFill, Bay * W, (Bay + 1) * W, 2);
 }
 
 void UHutongStreetRowTool::SpawnFinalActor()
@@ -428,7 +425,7 @@ void UHutongStreetRowTool::SpawnFinalActor()
 		PieceRect(P.From, P.To, PMinX, PMinY, PMaxX, PMaxY);
 		const double SX = PMaxX - PMinX;
 		const double SY = PMaxY - PMinY;
-		const HutongGen::EBaySide Side = bGate ? GateSide : BuildingSide;
+		const HutongGen::EBaySide Side = bGate ? GateSide() : BuildingSide;
 
 		auto BuildAt = [&](FDynamicMesh3& Mesh, EHutongDetail Level)
 		{

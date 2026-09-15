@@ -31,7 +31,7 @@ struct FHutongPavilionParams
 
 	// --- 楣子 ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(DisplayName="Has Hanging Frieze (倒掛楣子)", ToolTip="Builds a lattice hanging frieze (倒掛楣子) below the lintel on each side."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(DisplayName="Has Hanging Frieze (倒掛楣子)", ToolTip="Builds a hanging frieze (倒掛楣子) below the lintel on each side."))
 	bool bHasFrieze = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(DisplayName="Frieze Drop", EditCondition="bHasFrieze", UIMin="15", UIMax="80", ClampMin="5", Units="cm", ToolTip="How far the hanging frieze drops below the lintel, in cm."))
@@ -57,37 +57,37 @@ struct FHutongPavilionParams
 
 	// --- Roof ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Type", ToolTip="Which roof form the pavilion carries: pyramidal (攢尖), hipped (廡殿) or hip-and-gable (歇山)."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Type", ToolTip="Roof form of the pavilion."))
 	EHutongRoofType RoofType = EHutongRoofType::Cuanjian;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="0.6", ClampMin="0", ClampMax="1", ToolTip="Rounds the roof apex into a rolled ridge (捲棚) crown; 0 keeps a sharp apex."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="0.6", ClampMin="0", ClampMax="1", ToolTip="Rounding of the roof apex into a rolled ridge (捲棚); 0 keeps it sharp."))
 	double RoofApexRoll = 0.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Gable Inset (收山, 歇山)", EditCondition="RoofType == EHutongRoofType::Xieshan", UIMin="40", UIMax="160", ClampMin="5", Units="cm", ToolTip="How far in from each end the gable face (山花) stands on a hip-and-gable roof (歇山), in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Gable Inset (收山, 歇山)", EditCondition="RoofType == EHutongRoofType::Xieshan", UIMin="40", UIMax="160", ClampMin="5", Units="cm", ToolTip="How far in from each end the gable face (山花) stands, in cm."))
 	double ShouInset = HutongCanon::Roof::PavilionShouInsetCm;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge Course Height (歇山)", EditCondition="RoofType == EHutongRoofType::Xieshan && RoofApexRoll <= 0", UIMin="0", UIMax="40", ClampMin="0", Units="cm", ToolTip="Height of the ridge courses along the main ridge (正脊), gable ridges (垂脊) and corner ridges (戧脊) on a hip-and-gable roof (歇山), in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge Course Height (歇山)", EditCondition="RoofType == EHutongRoofType::Xieshan && RoofApexRoll <= 0", UIMin="0", UIMax="40", ClampMin="0", Units="cm", ToolTip="Height of the ridge courses on a hip-and-gable roof (歇山), in cm."))
 	double RidgeCourseHeight = 17.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge Course Width (歇山)", EditCondition="RoofType == EHutongRoofType::Xieshan && RoofApexRoll <= 0", UIMin="0", UIMax="30", ClampMin="0", Units="cm", ToolTip="Width of the ridge courses on a hip-and-gable roof (歇山), in cm."))
 	double RidgeCourseWidth = 12.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Bargeboard Depth (博風板, 歇山)", EditCondition="RoofType == EHutongRoofType::Xieshan", UIMin="0", UIMax="45", ClampMin="0", Units="cm", ToolTip="Depth of the bargeboard (博風板) down each gable rake on a hip-and-gable roof (歇山), in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Bargeboard Depth (博風板, 歇山)", EditCondition="RoofType == EHutongRoofType::Xieshan", UIMin="0", UIMax="45", ClampMin="0", Units="cm", ToolTip="Depth of the bargeboard (博風板) down each gable rake, in cm."))
 	double BargeBoardDepth = 24.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Bargeboard Thickness (博風板, 歇山)", EditCondition="RoofType == EHutongRoofType::Xieshan", UIMin="0", UIMax="15", ClampMin="0", Units="cm", ToolTip="Thickness of the bargeboard (博風板) on a hip-and-gable roof (歇山), in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Bargeboard Thickness (博風板, 歇山)", EditCondition="RoofType == EHutongRoofType::Xieshan", UIMin="0", UIMax="15", ClampMin="0", Units="cm", ToolTip="Thickness of the bargeboard (博風板), in cm."))
 	double BargeBoardThickness = 5.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Tile (瓦作)", ToolTip="Which tile the roof is laid in: flat tiles (合瓦) or tube tiles (筒瓦)."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Tile (瓦作)", ToolTip="Tile the roof is laid in."))
 	EHutongRoofTile RoofTile = EHutongRoofTile::He;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Row Spacing (壟)", UIMin="12", UIMax="60", ClampMin="6", Units="cm", ToolTip="Spacing between tile rows (壟) along the eave, in cm; sets the eave cap (勾頭) pitch and the roof UV scale."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Row Spacing (壟)", UIMin="12", UIMax="60", ClampMin="6", Units="cm", ToolTip="Spacing between tile rows (壟) along the eave, in cm."))
 	double TileRowSpacing = HutongGen::RoofTile::DefaultRowSpacing;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(UIMin="30", UIMax="150", ClampMin="0", Units="cm", ToolTip="How far the eave projects past the column line, in cm."))
 	double RoofOverhang = 72.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(UIMin="0", UIMax="250", ClampMin="0", Units="cm", ToolTip="Height of the ridge above the eave, in cm; zero takes the rise the roof section (舉架) gives over the pavilion's depth."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(UIMin="0", UIMax="250", ClampMin="0", Units="cm", ToolTip="Height of the ridge above the eave, in cm; zero derives it."))
 	double RoofRise = 0.0;
 
 	// The figures the roof is built with, read by generator, massing block, preview and ridge
@@ -105,19 +105,19 @@ struct FHutongPavilionParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Slope Steps (舉架)", ToolTip="Number of roof pitch steps (舉架) between the eave and the apex."))
 	EHutongPurlins Purlins = EHutongPurlins::Five;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Corner Flare Rise (翼角)", UIMin="0", UIMax="100", ClampMin="0", Units="cm", ToolTip="How far each roof corner lifts above the eave line into its upturned corner (翼角), in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Corner Flare Rise (翼角)", UIMin="0", UIMax="100", ClampMin="0", Units="cm", ToolTip="Lift of each roof corner into its upturned corner (翼角), in cm."))
 	double RoofFlareRise = 42.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Corner Flare Run", UIMin="0", UIMax="80", ClampMin="0", Units="cm", ToolTip="How far each roof corner pushes outward along its diagonal into its upturned corner (翼角), in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Corner Flare Run", UIMin="0", UIMax="80", ClampMin="0", Units="cm", ToolTip="Outward push of each roof corner into its upturned corner (翼角), in cm."))
 	double RoofFlareRun = 30.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Depth", UIMin="0", UIMax="25", ClampMin="0", Units="cm", ToolTip="Depth of the fascia board along the eave, in cm."))
 	double EaveFasciaDepth = 9.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Eave Segments", UIMin="2", UIMax="16", ClampMin="2", ClampMax="32", ToolTip="Number of mesh segments along each eave; higher is smoother and heavier."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Eave Segments", UIMin="2", UIMax="16", ClampMin="2", ClampMax="32", ToolTip="Number of mesh segments along each eave."))
 	int32 RoofEaveSegments = 7;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Slope Segments", UIMin="1", UIMax="8", ClampMin="1", ClampMax="16", ToolTip="Number of mesh segments up each roof slope; higher is smoother and heavier."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Slope Segments", UIMin="1", UIMax="8", ClampMin="1", ClampMax="16", ToolTip="Number of mesh segments up each roof slope."))
 	int32 RoofSlopeSegments = 4;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Has Finial (寶頂)", EditCondition="RoofType == EHutongRoofType::Cuanjian", ToolTip="Builds a roof finial (寶頂) at the apex of a pyramidal roof (攢尖)."))

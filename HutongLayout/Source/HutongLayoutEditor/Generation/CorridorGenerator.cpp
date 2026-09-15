@@ -140,6 +140,8 @@ namespace HutongGen
 		// The roof spans column line to column line.
 		const double RoofSpan = (WallT > 0.0) ? (BackY + WallT - OpenY) : (BackY - OpenY);
 		const int32 RoofFirstVert = Mesh.MaxVertexID();
+		// An open colonnade whose ends bear into what it runs along: no 山牆, no rake.
+		Roof.RakeDepth = 0.0;
 		Shell::AppendGableRoof(Mesh, L, RoofSpan, Eave, Roof);
 		TransformVerticesFrom(Mesh, RoofFirstVert,
 			FTransform(FQuat::Identity, FVector(0.0, OpenY, 0.0)));

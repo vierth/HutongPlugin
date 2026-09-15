@@ -38,7 +38,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Detail Level", ToolTip="How much detail new placements are built with."))
 	EHutongDetail Level = EHutongDetail::Near;
 
-	UPROPERTY(EditAnywhere, AdvancedDisplay, Category="Detail", meta=(DisplayName="Bespoke Mesh", ToolTip="Marks new placements as carrying a bespoke mesh rather than a shared one."))
+	UPROPERTY(EditAnywhere, AdvancedDisplay, Category="Detail", meta=(DisplayName="Bespoke Mesh", ToolTip="Marks new placements as carrying a bespoke mesh."))
 	bool bBespokeMesh = false;
 
 	UPROPERTY(EditAnywhere, AdvancedDisplay, Category="Detail", meta=(DisplayName="Build LOD Chain", ToolTip="Also bakes every cheaper detail level as an LOD of each new placement."))
@@ -54,10 +54,10 @@ class UHutongMetadataProperties : public UInteractiveToolPropertySet
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Confidence", ToolTip="How far new placements are attested on the map and how far inferred; 5 is drawn on the map, 1 is not present in any source."))
+	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Confidence", ToolTip="Confidence stamped on new placements, 5 to 1."))
 	EHutongConfidence Confidence = EHutongConfidence::Attested;
 
-	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Notes", MultiLine=true, ToolTip="Free text stamped onto each new placement: what it was read from, what is uncertain about it."))
+	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Notes", MultiLine=true, ToolTip="Free text stamped onto each new placement."))
 	FString Notes;
 };
 
@@ -70,26 +70,26 @@ public:
 	// daylight between two footprints is invisible until something is walked down. What is
 	// irritating is not position snapping but the *rotation* changing under the cursor, and that is
 	// its own switch below. The key suppresses this one placement by placement.
-	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Snap To Placed Buildings", ToolTip="Snaps placements to the footprints of buildings already placed. On by default; the snap key suppresses it one placement at a time, and turning this off inverts what that key does."))
+	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Snap To Placed Buildings", ToolTip="Snaps placements to placed footprints."))
 	bool bEnabled = true;
 
-	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Snap Radius", EditCondition="bEnabled", UIMin="10", UIMax="200", ClampMin="1", Units="cm", ToolTip="Distance within which the cursor snaps to a placed footprint, in world cm."))
+	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Snap Radius", EditCondition="bEnabled", UIMin="10", UIMax="200", ClampMin="1", Units="cm", ToolTip="Distance within which the cursor snaps to a placed footprint, in cm."))
 	double Radius = 55.0;
 
 	// **Off by default, and the one part of snapping that is.** It is both halves of turning a
 	// placement: the anchor taking the bearing of the building it snapped to, and hold-R pulling
 	// onto a neighbour's line or a quarter turn off it. A position that jumps to a corner is the
 	// corner you aimed at; a yaw that jumps is the building turning itself while you watch.
-	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Adopt Neighbour Angle", EditCondition="bEnabled", ToolTip="Turns the placement onto a neighbour's line: when the anchor snaps to one, and while holding R to rotate. Off by default; position snapping is unaffected."))
+	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Adopt Neighbour Angle", EditCondition="bEnabled", ToolTip="Rotates the placement onto a neighbour's line when snapped."))
 	bool bAdoptAngle = false;
 
-	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Snap Lane To Street Module (胡同/小街/大街)", EditCondition="bEnabled", ToolTip="Pulls the run onto a standard street width — lane (胡同), minor street (小街) or avenue (大街) — when it is already close to one."))
+	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Snap Lane To Street Module (胡同/小街/大街)", EditCondition="bEnabled", ToolTip="Snaps the run to a standard street width."))
 	bool bSnapLaneWidth = true;
 
-	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Lane Snap Tolerance", EditCondition="bEnabled && bSnapLaneWidth", UIMin="5", UIMax="100", ClampMin="1", Units="cm", ToolTip="How far off a standard lane width the run may be and still snap to it, in cm."))
+	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Lane Snap Tolerance", EditCondition="bEnabled && bSnapLaneWidth", UIMin="5", UIMax="100", ClampMin="1", Units="cm", ToolTip="Tolerance for snapping to a standard lane width, in cm."))
 	double LaneToleranceCm = 30.0;
 
-	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Angle Tolerance", EditCondition="bEnabled && bAdoptAngle", UIMin="1", UIMax="25", ClampMin="0", Units="deg", ToolTip="How close a rotation must come to a neighbour's line, or a quarter turn off it, to snap, in degrees."))
+	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Angle Tolerance", EditCondition="bEnabled && bAdoptAngle", UIMin="1", UIMax="25", ClampMin="0", Units="deg", ToolTip="Angle within which a rotation snaps to a neighbour's line, in degrees."))
 	double AngleToleranceDeg = 7.0;
 };
 
@@ -160,6 +160,9 @@ public:
 
 	// [ and ] during placement.
 	virtual void AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse) {}
+
+	// F during placement: turns round whatever second facing the tool has (the street row's gates).
+	virtual void FlipFacing() {}
 
 	// - and = adjust the tool's primary height by DeltaCm.
 	virtual void AdjustHeight(double DeltaCm) {}
@@ -394,7 +397,7 @@ protected:
 	// Copies both detail fields onto a freshly created component.
 	void StampDetail(class UHutongBuildingComponent* Building) const;
 
-	// The mode's "lay out only" setting.
+	// The mode's "layout only" setting.
 	static bool IsPlanOnly();
 
 	// Returns LOCAL-frame bounds (offsets from StartWorld in the placement-yaw frame).
@@ -474,6 +477,13 @@ protected:
 	// and StampDetail is the one place that has to read it.
 	UPROPERTY()
 	TObjectPtr<class UHutongPresetProperties> PresetSettings;
+
+	// The cache a set saves to and restores from: a preset picker's is this tool's own.
+	FString CacheIdentifierFor(const UInteractiveToolPropertySet* PropertySet) const;
+
+	// Puts the picker on Name and loads it when nothing has been picked yet. After both the picker
+	// and its params set are registered: the params restore would overwrite a preset loaded before it.
+	void ApplyDefaultPreset(class UHutongPresetProperties* Picker, const FString& Name);
 
 	// Applies the snap to a ground hit, and remembers what it landed on so Render can mark it and the anchor can adopt its angle.
 	FVector ApplySnap(const FVector& World, bool bIsAnchor);

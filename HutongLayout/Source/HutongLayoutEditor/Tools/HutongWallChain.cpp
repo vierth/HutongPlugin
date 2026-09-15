@@ -25,7 +25,7 @@ namespace HutongWallChain
 	}
 
 	bool SideAlongFace(const FVector2D& SegmentDir, double EdgeYawDeg, double EdgeYaw2Deg,
-		const FVector2D& Inward, double Thickness, double& OutDrawnY, double ToleranceDeg)
+		const FVector2D& Inward, double Thickness, double& OutDrawnY, double ToleranceDeg, double Setback)
 	{
 		const FVector2D D = SegmentDir.GetSafeNormal();
 		if (D.IsNearlyZero() || Inward.IsNearlyZero()) return false;
@@ -45,7 +45,8 @@ namespace HutongWallChain
 		FVector2D Perp(-Edge.Y, Edge.X);
 		if (FVector2D::DotProduct(Perp, Inward) < 0.0) Perp = -Perp;
 		const FVector2D Left = LeftOf(D);
-		OutDrawnY = FVector2D::DotProduct(Left, Perp) > 0.0 ? 0.0 : Thickness;
+		const double S = FMath::Max(Setback, 0.0);
+		OutDrawnY = FVector2D::DotProduct(Left, Perp) > 0.0 ? -S : Thickness + S;
 		return true;
 	}
 
