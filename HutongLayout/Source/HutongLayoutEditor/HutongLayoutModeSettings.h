@@ -43,6 +43,12 @@ public:
 	UFUNCTION(CallInEditor, Category = "Plan", meta = (DisplayName = "Generate Geometry (selection)", ToolTip = "Builds full geometry for the selected laid-out buildings."))
 	void GenerateSelectedGeometry();
 
+	UFUNCTION(CallInEditor, Category = "Plan", meta = (DisplayName = "Revert To Layout (loaded)", ToolTip = "Removes the geometry of every loaded built building, leaving its outline."))
+	void RevertLoadedToLayout();
+
+	UFUNCTION(CallInEditor, Category = "Plan", meta = (DisplayName = "Revert To Layout (selection)", ToolTip = "Removes the geometry of the selected built buildings, leaving their outlines."))
+	void RevertSelectedToLayout();
+
 	// Nothing about the placement changes: every building is built again from the parameters it is already carrying.
 	UFUNCTION(CallInEditor, Category = "Selection", meta = (DisplayName = "Rebuild Selection", ToolTip = "Re-bakes each selected building from the parameters it carries."))
 	void RebuildSelection();

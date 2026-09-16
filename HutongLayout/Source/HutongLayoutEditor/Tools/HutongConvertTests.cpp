@@ -259,4 +259,60 @@ bool FHutongPlanOutlineUniqueTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// A built building goes back to the layout it was drawn as: the mesh comes off, the outline goes on,
+// the parameters stay put, so generating it again gives the same building. An already laid-out one
+// is left alone and not counted.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRevertToPlanTest, "HutongLayout.Detail.RevertToPlan",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongRevertToPlanTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
+	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
+
+	const FVector2D Footprint(1120.0, 640.0);
+	UHutongBuildingComponent* Built = Place(World, UHutongShopfrontBuildingComponent::StaticClass(),
+		Footprint, FTransform::Identity, TEXT("Revert"));
+	UHutongBuildingComponent* Plan = Place(World, UHutongShopfrontBuildingComponent::StaticClass(),
+		Footprint, FTransform::Identity, TEXT("RevertPlan"));
+	if (!TestNotNull(TEXT("the built shopfront places"), Built)
+		|| !TestNotNull(TEXT("the laid-out shopfront places"), Plan))
+	{
+		World->DestroyWorld(false);
+		return false;
+	}
+	Plan->bPlanOnly = true;
+	Plan->Rebuild();
+
+	auto HasMesh = [](const UHutongBuildingComponent* B)
+	{
+		const AStaticMeshActor* SMA = Cast<AStaticMeshActor>(B->GetOwner());
+		return SMA && SMA->GetStaticMeshComponent() && SMA->GetStaticMeshComponent()->GetStaticMesh() != nullptr;
+	};
+	auto OutlineCount = [](const UHutongBuildingComponent* B)
+	{
+		TArray<UHutongPlanOutlineComponent*> Found;
+		B->GetOwner()->GetComponents(Found);
+		return Found.Num();
+	};
+
+	TestTrue(TEXT("the built one starts with a mesh"), HasMesh(Built));
+	TestEqual(TEXT("and no outline"), OutlineCount(Built), 0);
+
+	const int32 Reverted = HutongDetailOps::RevertToPlan({ Built, Plan });
+	TestEqual(TEXT("only the built one is reverted"), Reverted, 1);
+	TestTrue(TEXT("it is laid out now"), Built->bPlanOnly);
+	TestFalse(TEXT("its mesh is gone"), HasMesh(Built));
+	TestEqual(TEXT("it draws one outline"), OutlineCount(Built), 1);
+	TestEqual(TEXT("the footprint is kept"), Built->GetFootprintSize().X, Footprint.X);
+
+	const int32 Generated = HutongDetailOps::GeneratePlanned({ Built });
+	TestEqual(TEXT("generating brings it back"), Generated, 1);
+	TestTrue(TEXT("with a mesh"), HasMesh(Built));
+	TestEqual(TEXT("and no outline"), OutlineCount(Built), 0);
+
+	World->DestroyWorld(false);
+	return true;
+}
+
 #endif

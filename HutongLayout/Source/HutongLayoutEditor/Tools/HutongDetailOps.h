@@ -24,6 +24,10 @@ namespace HutongDetailOps
 	// Builds every plan-only building in the list.
 	int32 GeneratePlanned(const TArray<UHutongBuildingComponent*>& Buildings);
 
+	// Takes the geometry off every built building in the list, leaving its footprint outline; the
+	// parameters stay on the component, so Generate builds the same building again.
+	int32 RevertToPlan(const TArray<UHutongBuildingComponent*>& Buildings);
+
 	// One thing a placed building can be turned into. A class with variants in it contributes one
 	// target per variant, since 院牆 and 隔牆 are two answers to "what is this run" and not one
 	// answer plus an edit.

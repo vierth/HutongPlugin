@@ -246,6 +246,20 @@ void UHutongLayoutModeSettings::GenerateSelectedGeometry()
 	RefreshCounts();
 }
 
+void UHutongLayoutModeSettings::RevertLoadedToLayout()
+{
+	const int32 Reverted = HutongDetailOps::RevertToPlan(HutongDetailOps::CollectLoaded(EditorWorld()));
+	UE_LOG(LogTemp, Display, TEXT("Hutong: %d loaded building(s) reverted to layout."), Reverted);
+	RefreshCounts();
+}
+
+void UHutongLayoutModeSettings::RevertSelectedToLayout()
+{
+	const int32 Reverted = HutongDetailOps::RevertToPlan(HutongDetailOps::CollectSelected());
+	UE_LOG(LogTemp, Display, TEXT("Hutong: %d selected building(s) reverted to layout."), Reverted);
+	RefreshCounts();
+}
+
 void UHutongLayoutModeSettings::RebuildSelection()
 {
 	const int32 Changed = HutongDetailOps::Rebuild(HutongDetailOps::CollectSelected());

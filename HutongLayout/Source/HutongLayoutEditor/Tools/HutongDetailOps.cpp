@@ -151,6 +151,36 @@ int32 GeneratePlanned(const TArray<UHutongBuildingComponent*>& Buildings)
 	return Work.Num();
 }
 
+int32 RevertToPlan(const TArray<UHutongBuildingComponent*>& Buildings)
+{
+	TArray<UHutongBuildingComponent*> Work;
+	Work.Reserve(Buildings.Num());
+	for (UHutongBuildingComponent* B : Buildings)
+	{
+		if (B && !B->bPlanOnly) Work.Add(B);
+	}
+	if (Work.Num() == 0) return 0;
+
+	const FScopedTransaction Transaction(LOCTEXT("RevertToPlan", "Revert Hutong Buildings To Layout"));
+
+	FScopedSlowTask Task((float)Work.Num(), LOCTEXT("Reverting", "Reverting to layout…"));
+	Task.MakeDialog();
+
+	for (UHutongBuildingComponent* B : Work)
+	{
+		const AActor* Owner = B->GetOwner();
+		Task.EnterProgressFrame(1.0f,
+			FText::FromString(Owner ? Owner->GetActorNameOrLabel() : TEXT("building")));
+
+		B->Modify();
+		B->bPlanOnly = true;
+		B->Rebuild();
+		B->ApplyPlacementAttachments();
+	}
+	HutongSnap::Invalidate();
+	return Work.Num();
+}
+
 const TArray<FConvertTarget>& ConvertTargets()
 {
 	// Built once by walking the component classes: a fifteenth type joins the list by existing.
