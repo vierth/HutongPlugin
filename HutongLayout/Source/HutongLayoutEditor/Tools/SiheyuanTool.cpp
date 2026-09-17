@@ -31,14 +31,14 @@ void UHutongSiheyuanTool::GetEffectiveRectBounds(
 	if (!Settings || !SnappingActive()) return;
 
 	// One end of each extent is the anchor, so the far end is the one that moves.
-	auto Snap = [&](double& Lo, double& Hi)
+	auto SnapSide = [&](double& Lo, double& Hi)
 	{
 		const double Want = Settings->Params.SnapExtent(Hi - Lo);
 		if (Hi > 0.0) Hi = Lo + Want;
 		else          Lo = Hi - Want;
 	};
-	Snap(OutMinX, OutMaxX);
-	Snap(OutMinY, OutMaxY);
+	SnapSide(OutMinX, OutMaxX);
+	SnapSide(OutMinY, OutMaxY);
 }
 
 void UHutongSiheyuanTool::RegisterToolSettings()

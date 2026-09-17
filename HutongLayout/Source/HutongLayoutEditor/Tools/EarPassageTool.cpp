@@ -30,14 +30,14 @@ void UHutongEarPassageTool::GetEffectiveRectBounds(
 	if (!P.Room.bSnapToSuggested) return;
 
 	// The suggested frontage is the room's plus the passage's strip; the depth the room's own.
-	auto Snap = [&](double& Lo, double& Hi)
+	auto SnapSide = [&](double& Lo, double& Hi)
 	{
 		const double Want = P.Room.SnapExtent(FMath::Abs(Hi - Lo), P.GetStripWidth());
 		if (Hi > 0.0) Hi = Lo + Want;
 		else          Lo = Hi - Want;
 	};
-	Snap(OutMinX, OutMaxX);
-	Snap(OutMinY, OutMaxY);
+	SnapSide(OutMinX, OutMaxX);
+	SnapSide(OutMinY, OutMaxY);
 }
 
 void UHutongEarPassageTool::RegisterToolSettings()
