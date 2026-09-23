@@ -23,6 +23,7 @@
 #include "Tools/PathTool.h"
 #include "Tools/FlowerBedTool.h"
 #include "Tools/WaterJarTool.h"
+#include "Tools/FrameTool.h"
 #include "Tools/PavilionTool.h"
 #include "Tools/ShopfrontTool.h"
 #include "Tools/StoreyTool.h"
@@ -60,7 +61,16 @@ public:
 		const FKey Key = InKeyEvent.GetKey();
 		if (Key == EKeys::Escape)
 		{
-			Tool->CancelPlacement();
+			// What is in hand goes first: a half-drawn rect or a plan edit. With nothing in hand the
+			// tool itself is put down, so the preview stops following the cursor.
+			if (Tool->IsPlacingActive() || Tool->IsEditingPlan())
+			{
+				Tool->CancelPlacement();
+			}
+			else if (Owner.IsValid())
+			{
+				Owner->PutToolDown();
+			}
 			return false;
 		}
 		if (Key == EKeys::Hyphen || Key == EKeys::Equals)
@@ -199,6 +209,8 @@ void UHutongLayoutEdMode::Enter()
 		NewObject<UHutongPavilionToolBuilder>(this));
 	RegisterTool(Commands.BeginHallTool, TEXT("HutongHallTool"),
 		NewObject<UHutongHallToolBuilder>(this));
+	RegisterTool(Commands.BeginFrameTool, TEXT("HutongFrameTool"),
+		NewObject<UHutongFrameToolBuilder>(this));
 	RegisterTool(Commands.BeginPathTool, TEXT("HutongPathTool"),
 		NewObject<UHutongPathToolBuilder>(this));
 	RegisterTool(Commands.BeginFlowerBedTool, TEXT("HutongFlowerBedTool"),
@@ -274,7 +286,7 @@ TMap<FName, TArray<TSharedPtr<FUICommandInfo>>> UHutongLayoutEdMode::GetModeComm
 	Result.Add(FName("Buildings"),
 		{ Commands.BeginSiheyuanTool, Commands.BeginEarPassageTool, Commands.BeginShopfrontTool,
 		  Commands.BeginStoreyTool, Commands.BeginHallTool, Commands.BeginPavilionTool,
-		  Commands.BeginStreetRowTool, Commands.BeginCompoundTool });
+		  Commands.BeginFrameTool, Commands.BeginStreetRowTool, Commands.BeginCompoundTool });
 	Result.Add(FName("Gates"),
 		{ Commands.BeginGateHouseTool, Commands.BeginInnerGateTool,
 		  Commands.BeginPaifangTool, Commands.BeginScreenWallTool });
@@ -359,6 +371,24 @@ FName UHutongLayoutEdMode::PaletteOfTool(const FString& ToolIdentifier) const
 	return NAME_None;
 }
 
+void UHutongLayoutEdMode::PutToolDown()
+{
+	UInteractiveToolManager* Manager = GetToolManager();
+	if (!Manager || !Manager->HasActiveTool(EToolSide::Left)) return;
+
+	// Next tick, never inside the key event: the tool being shut down is the one that would be
+	// handling it. The same reason FollowSelection defers.
+	if (!GEditor) return;
+	GEditor->GetTimerManager()->SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		UInteractiveToolManager* TM = GetToolManager();
+		if (TM && TM->HasActiveTool(EToolSide::Left))
+		{
+			TM->DeactivateTool(EToolSide::Left, EToolShutdownType::Cancel);
+		}
+	}));
+}
+
 FString UHutongLayoutEdMode::ToolIdentifierFor(const UHutongBuildingComponent* Building)
 {
 	if (!Building) return FString();
@@ -381,6 +411,7 @@ FString UHutongLayoutEdMode::ToolIdentifierFor(const UHutongBuildingComponent* B
 		{ UHutongPathBuildingComponent::StaticClass(),       TEXT("HutongPathTool") },
 		{ UHutongFlowerBedBuildingComponent::StaticClass(),  TEXT("HutongFlowerBedTool") },
 		{ UHutongWaterJarBuildingComponent::StaticClass(),   TEXT("HutongWaterJarTool") },
+		{ UHutongFrameBuildingComponent::StaticClass(),      TEXT("HutongFrameTool") },
 	};
 	for (const UClass* Class = Building->GetClass(); Class; Class = Class->GetSuperClass())
 	{

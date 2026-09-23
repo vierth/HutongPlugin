@@ -747,3 +747,30 @@ void UHutongWaterJarBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutong
 {
 	BuildWaterJarMesh(Params, OutMesh, Level);
 }
+
+// --- 構架 ---
+
+void UHutongFrameBuildingComponent::BuildFrameMesh(const FHutongFrameParams& InParams,
+	EHutongBaySide Side, int32 InBayCountOverride, double SizeX, double SizeY, FDynamicMesh3& OutMesh,
+	EHutongDetail Detail)
+{
+	const bool bAlongX = HutongGen::BaySide::IsAlongX(Side);
+	FHutongFrameParams P = InParams;
+	P.House.Width = bAlongX ? SizeX : SizeY;
+	P.House.Depth = bAlongX ? SizeY : SizeX;
+	P.House.BayCountOverride = InBayCountOverride;
+	HutongGen::Detail::Apply(Detail, P);
+	HutongGen::BuildFrame(OutMesh, P);
+
+	// Built with its front on -Y, as the house is; turned onto the chosen side.
+	if (Side == EHutongBaySide::MinusY) return;
+	for (int32 vid : OutMesh.VertexIndicesItr())
+	{
+		OutMesh.SetVertex(vid, HutongGen::BaySide::RotateVertex(Side, OutMesh.GetVertex(vid), SizeX, SizeY));
+	}
+}
+
+void UHutongFrameBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDetail Level) const
+{
+	BuildFrameMesh(Params, BaySide, BayCountOverride, FootprintX, FootprintY, OutMesh, Level);
+}

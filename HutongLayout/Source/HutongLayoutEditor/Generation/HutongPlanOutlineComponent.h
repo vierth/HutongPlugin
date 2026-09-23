@@ -21,6 +21,8 @@ namespace HutongPlanColours
 	inline const FLinearColor Storey(1.00f, 0.55f, 0.15f, 1.0f);     // 樓
 	inline const FLinearColor Hall(0.78f, 0.55f, 1.00f, 1.0f);       // 殿
 	inline const FLinearColor Pavilion(0.62f, 0.68f, 1.00f, 1.0f);   // 亭
+	// 構架: the house's yellow gone to bare timber.
+	inline const FLinearColor Frame(0.80f, 0.62f, 0.40f, 1.0f);      // 構架
 	// 耳房 with its 過道: the house's yellow pulled toward the passage's green.
 	inline const FLinearColor EarPassage(0.88f, 0.90f, 0.35f, 1.0f); // 耳房過道
 
@@ -57,6 +59,12 @@ struct FHutongPlanBays
 	TArray<double> Boundaries;
 	// The bay the front door is in, as an index into the spans between boundaries.
 	int32 DoorBay = INDEX_NONE;
+	// Column lines across the depth, in footprint coordinates: a column stands at every boundary on
+	// every row. Empty where the type does not say, and nothing is drawn.
+	TArray<double> ColumnRows;
+	double ColumnRadius = 0.0;
+	// 柱頂石: the side of the square base stone under each column.
+	double FootingSize = 0.0;
 };
 
 namespace HutongGen::PlanBays
@@ -71,6 +79,11 @@ namespace HutongGen::PlanBays
 		{
 			const FVector3d V = BaySide::RotateVertex(Side, FVector3d(T, 0.0, 0.0), SizeX, SizeY);
 			T = bAlongX ? V.X : V.Y;
+		}
+		for (double& R : Bays.ColumnRows)
+		{
+			const FVector3d V = BaySide::RotateVertex(Side, FVector3d(0.0, R, 0.0), SizeX, SizeY);
+			R = bAlongX ? V.Y : V.X;
 		}
 		if (Bays.Boundaries.Num() >= 2 && Bays.Boundaries[0] > Bays.Boundaries.Last())
 		{
@@ -135,6 +148,15 @@ public:
 
 	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Which bay carries the front door; -1 where the type has none."))
 	int32 DoorBay = INDEX_NONE;
+
+	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Column lines across the depth, in cm; a column stands at every bay boundary on each."))
+	TArray<double> ColumnRows;
+
+	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Radius of the columns drawn on the plan, in cm."))
+	double ColumnRadius = 0.0;
+
+	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Side of the square base stone (柱頂石) under each column, in cm."))
+	double FootingSize = 0.0;
 
 	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Colour the outline is drawn in."))
 	FLinearColor Colour = HutongPlanColours::Building;

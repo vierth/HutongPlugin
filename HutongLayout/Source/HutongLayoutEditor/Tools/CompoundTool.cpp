@@ -8,6 +8,7 @@
 #include "ToolContextInterfaces.h"
 #include "SceneManagement.h"
 #include "Misc/ScopedSlowTask.h"
+#include "Misc/ScopeExit.h"
 
 using UE::Geometry::FDynamicMesh3;
 
@@ -22,6 +23,7 @@ namespace
 		{
 		case EHutongCompoundPiece::MainHall:   return LOCTEXT("PieceMainHall", "Main Hall (正房)");
 		case EHutongCompoundPiece::EarRoom:    return LOCTEXT("PieceEarRoom", "Ear Room (耳房)");
+		case EHutongCompoundPiece::EarPassage: return LOCTEXT("PieceEarPassage", "Ear Room With Passage (耳房過道)");
 		case EHutongCompoundPiece::SideHouse:  return LOCTEXT("PieceSideHouse", "Side House (廂房)");
 		case EHutongCompoundPiece::FrontRow:   return LOCTEXT("PieceFrontRow", "Front Row (倒座房)");
 		case EHutongCompoundPiece::RearRow:    return LOCTEXT("PieceRearRow", "Rear Row (後罩房)");
@@ -52,11 +54,35 @@ namespace
 	// Ridge height above the plot, which is what actually reads along a street front.
 }
 
+// 耳房過道: the ear room of this court with the way through to the 後院 cut through it, at whichever
+// end of its frontage the plot boundary is.
+FHutongEarPassageParams HutongCompound::CourtEarPassage(const FHutongSiheyuanParams& Room,
+	const FHutongPassageParams& Roof, double PassageWidth, bool bAtFarEnd)
+{
+	FHutongEarPassageParams P;
+	P.Room = Room;
+	P.Passage = Roof;
+	P.PassageWidth = FMath::Max(PassageWidth, 120.0);
+	P.bPassageAtFarEnd = bAtFarEnd;
+	return P;
+}
+
+FHutongSiheyuanParams HutongCompound::Subordinate(const FHutongSiheyuanParams& Base, double MaxEave)
+{
+	FHutongSiheyuanParams P = Base;
+	if (MaxEave <= 0.0 || P.GetEaveHeight() <= MaxEave) return P;
+	// Taken off the bay rule rather than clamped inside it: every figure above the eave — 額枋, 中檻,
+	// sill — is a fraction of it, and they must all come down together.
+	P.bDeriveEaveFromBays = false;
+	P.EaveHeight = MaxEave;
+	return P;
+}
+
 // The 廂房 the compound builds, which is the panel's preset plus whatever the court's walk asks of it.
 FHutongSiheyuanParams HutongCompound::CourtWing(const FHutongSiheyuanParams& Base, EHutongCourtWalk Walk)
 {
-	FHutongSiheyuanParams P = Base;
-	if (Walk != EHutongCourtWalk::WingVerandas || P.bHasFrontVeranda)
+	FHutongSiheyuanParams P = OnCourtWalk(Base, Walk);
+	if ((Walk != EHutongCourtWalk::WingVerandas && Walk != EHutongCourtWalk::Linked) || P.bHasFrontVeranda)
 	{
 		return P;
 	}
@@ -68,6 +94,13 @@ FHutongSiheyuanParams HutongCompound::CourtWing(const FHutongSiheyuanParams& Bas
 	{
 		P.StepRun = Rooms / 5.0;
 	}
+	return P;
+}
+
+FHutongSiheyuanParams HutongCompound::OnCourtWalk(const FHutongSiheyuanParams& Base, EHutongCourtWalk Walk)
+{
+	FHutongSiheyuanParams P = Base;
+	P.bHasVerandaEndDoorways = (Walk == EHutongCourtWalk::Linked);
 	return P;
 }
 
@@ -87,6 +120,7 @@ UHutongCompoundToolProperties::UHutongCompoundToolProperties()
 	// Seeded from the canon's own house table, which is what the built-in presets are made from,
 	// so a compound's 正房 and a hand-placed one are the same building.
 	MainHall = HutongPresets::MakeHouse(HutongCanon::House::MainHall);
+	SmallMainHall = HutongPresets::MakeHouse(HutongCanon::House::MainHallSmall);
 	EarRoom = HutongPresets::MakeHouse(HutongCanon::House::EarRoom);
 	SideHouse = HutongPresets::MakeHouse(HutongCanon::House::SideHouse);
 	FrontRow = HutongPresets::MakeHouse(HutongCanon::House::FrontRow);
@@ -102,6 +136,41 @@ UHutongCompoundToolProperties::UHutongCompoundToolProperties()
 	GateHouse.StepCount = 2;
 
 	// The wall's height and thickness come from its role now.
+	ApplyCourtSize();
+}
+
+void UHutongCompoundToolProperties::ApplyCourtSize()
+{
+	if (PlotSize == EHutongCompoundSize::Custom) return;
+
+	// 院落寬大, 房子也隨之高大: the court's own figures for the three buildings its width decides.
+	// Both halls are seeded — which of them is built is still the plot's answer (MainHallFor).
+	const HutongCanon::Courtyard::FSize& S = HutongPresets::CourtSize(PlotSize);
+	MainHall = HutongPresets::MakeCourtHall(S, /*bRearVeranda*/ true);
+	SmallMainHall = HutongPresets::MakeCourtHall(S, /*bRearVeranda*/ false);
+	EarRoom = HutongPresets::MakeCourtEarRoom(S);
+	SideHouse = HutongPresets::MakeCourtWing(S);
+	// 廂房進深 5.5 m 含外廊 in a 大型 court, 3.5-4 m 無外廊 in a 小型 one: the walk is part of the size.
+	CourtWalk = S.bWingVeranda ? EHutongCourtWalk::WingVerandas : EHutongCourtWalk::None;
+
+	// 院當寬度: what the plot's width leaves between the two 廂房 once the walls and gaps are off it.
+	// Left as a figure rather than derived at layout time so the panel shows the court being built.
+	const double Wing = HutongCompound::CourtWing(SideHouse, CourtWalk).GetSuggestedDepth();
+	const double Court = FMath::Max(
+		S.PlotWidthCm - 2.0 * (Wing + HutongCanon::Wall::PerimeterThicknessCm + Gap), 300.0);
+	Courtyard.X = Court;
+	MinCourtyard.X = 0.92 * Court;
+}
+
+void UHutongCompoundToolProperties::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	// Only the size itself reseeds the buildings; editing one of them afterwards must stick.
+	const FName Changed = PropertyChangedEvent.GetPropertyName();
+	if (Changed == GET_MEMBER_NAME_CHECKED(UHutongCompoundToolProperties, PlotSize))
+	{
+		ApplyCourtSize();
+	}
 }
 
 UInteractiveTool* UHutongCompoundToolBuilder::BuildTool(const FToolBuilderState& SceneState) const
@@ -124,10 +193,17 @@ void UHutongCompoundTool::RegisterToolSettings()
 
 void UHutongCompoundTool::PlotSizeForCursor(const FVector2D& LocalCursor, double& OutW, double& OutD) const
 {
-	const HutongGen::FCompoundInput In = MakeInput(1.0, 1.0);
 	double MinW, MinD, WantW, WantD;
-	In.GetMinimumPlot(MinW, MinD);
-	In.GetSuggestedPlot(WantW, WantD);
+	MakeInput(1.0, 1.0).GetMinimumPlot(MinW, MinD);
+	GetSuggestedPlot(WantW, WantD);
+
+	// A stamped size is not dragged: the width is the court's own, the depth what this plan wants on it.
+	if (Settings && Settings->PlotSize != EHutongCompoundSize::Custom)
+	{
+		OutW = FMath::Max(HutongPresets::CourtSize(Settings->PlotSize).PlotWidthCm, MinW);
+		OutD = FMath::Max(WantD, MinD);
+		return;
+	}
 
 	// The southeast corner is the anchor and the cursor is the northwest one.
 	constexpr double SnapBand = 50.0;
@@ -172,15 +248,21 @@ void UHutongCompoundTool::OnPlacementHover(const FVector& HitWorld)
 
 FText UHutongCompoundTool::GetStagePromptText() const
 {
+	const bool bStamped = Settings && Settings->PlotSize != EHutongCompoundSize::Custom;
 	if (!bIsDragging)
 	{
 		const FText Plan = GetPlanEditPromptText();
 		if (!Plan.IsEmpty()) return Plan;
-		return LOCTEXT("PromptSECorner",
-			"Click the ground to set the southeast corner (巽位), where the gate goes. The plan shown is the ordinary plot.");
+		return bStamped
+			? LOCTEXT("PromptSECornerStamped",
+				"Click the ground to set the southeast corner (巽位), where the gate goes. The plot is stamped at the chosen size; pick Custom to drag one.")
+			: LOCTEXT("PromptSECorner",
+				"Click the ground to set the southeast corner (巽位), where the gate goes. The plan shown is the ordinary plot.");
 	}
-	return LOCTEXT("PromptSize",
-		"Move northwest to size the plot, then click to lay it out. It will not go below the smallest plot these settings can be spaced on. Esc to cancel.");
+	return bStamped
+		? LOCTEXT("PromptStamped", "Click to lay the plot out at its stamped size. Hold R to turn it, Esc to cancel.")
+		: LOCTEXT("PromptSize",
+			"Move northwest to size the plot, then click to lay it out. It will not go below the smallest plot these settings can be spaced on. Esc to cancel.");
 }
 
 TArray<FText> UHutongCompoundTool::GetStageNames() const
@@ -207,7 +289,41 @@ HutongGen::FCompoundInput UHutongCompoundTool::MakeInput(double SizeX, double Si
 	return MakeInputFrom(Settings, SizeX, SizeY);
 }
 
+void UHutongCompoundTool::GetSuggestedPlot(double& OutW, double& OutD) const
+{
+	OutW = OutD = 0.0;
+	if (!Settings) return;
+	MakeInputWithHall(Settings, Settings->MainHall, 1.0, 1.0).GetSuggestedPlot(OutW, OutD);
+}
+
+const FHutongSiheyuanParams& UHutongCompoundTool::MainHallFor(const UHutongCompoundToolProperties* S, double SizeX, double SizeY)
+{
+	// A stamped court knows its own answer: 七檁前後廊 in a 大型 court, 前廊後無廊 in the smaller two
+	// (四合院建築及其構造 p.85). Only a dragged plot has to be measured.
+	if (S->PlotSize != EHutongCompoundSize::Custom)
+	{
+		return HutongPresets::CourtSize(S->PlotSize).bHallRearVeranda ? S->MainHall : S->SmallMainHall;
+	}
+
+	double MinW, MinD;
+	MakeInputWithHall(S, S->MainHall, 1.0, 1.0).GetMinimumPlot(MinW, MinD);
+	return (SizeX >= MinW - 1.0 && SizeY >= MinD - 1.0) ? S->MainHall : S->SmallMainHall;
+}
+
 HutongGen::FCompoundInput UHutongCompoundTool::MakeInputFrom(const UHutongCompoundToolProperties* Settings, double SizeX, double SizeY)
+{
+	if (!Settings)
+	{
+		HutongGen::FCompoundInput In;
+		In.Width = SizeX;
+		In.Depth = SizeY;
+		return In;
+	}
+	return MakeInputWithHall(Settings, MainHallFor(Settings, SizeX, SizeY), SizeX, SizeY);
+}
+
+HutongGen::FCompoundInput UHutongCompoundTool::MakeInputWithHall(const UHutongCompoundToolProperties* Settings,
+	const FHutongSiheyuanParams& Hall, double SizeX, double SizeY)
 {
 	HutongGen::FCompoundInput In;
 	In.Width = SizeX;
@@ -224,12 +340,12 @@ HutongGen::FCompoundInput UHutongCompoundTool::MakeInputFrom(const UHutongCompou
 	In.OuterYardWidth = FMath::Max(Settings->OuterYardWidth, 250.0);
 
 	// Depths come from the buildings' own suggested footprints.
-	In.HallDepth = FMath::Max(Settings->MainHall.GetSuggestedDepth(), 200.0);
+	In.HallDepth = FMath::Max(Hall.GetSuggestedDepth(), 200.0);
 	// The wing as it will actually be built.
 	In.WingDepth = FMath::Max(
 		HutongCompound::CourtWing(Settings->SideHouse, Settings->CourtWalk).GetSuggestedDepth(), 200.0);
 	// 正房三間兩耳: the hall is its own frontage in the middle, the 耳房 fill the ends, and their depth comes from their own 檁數 like everyone else's.
-	In.HallFrontage = FMath::Max(Settings->MainHall.SuggestedFrontage, 400.0);
+	In.HallFrontage = FMath::Max(Hall.SuggestedFrontage, 400.0);
 	In.EarRoomDepth = FMath::Max(Settings->EarRoom.GetSuggestedDepth(), 150.0);
 	In.bHasEarRooms = Settings->bHasEarRooms;
 	In.MinEarRoomFrontage = FMath::Max(1.05 * Settings->EarRoom.MinBayWidth, 150.0);
@@ -244,7 +360,10 @@ HutongGen::FCompoundInput UHutongCompoundTool::MakeInputFrom(const UHutongCompou
 
 	const FHutongGateHouseParams::FSizeRange GR = Settings->GateHouse.GetSizeRange();
 	In.GateFrontage = (GR.FrontageMax > 0.0) ? 0.5 * (GR.FrontageMin + GR.FrontageMax) : 360.0;
-	In.GateDepth = (GR.DepthMax > 0.0) ? 0.5 * (GR.DepthMin + GR.DepthMax) : 320.0;
+	// 進深 is the row's: a 大門 is one bay of the street face, not a porch in front of it. The style's
+	// band sizes a gate standing alone, which inside a row left it 60 cm shallow, its roof a box out
+	// over the lane.
+	In.GateDepth = In.FrontRowDepth;
 
 	const FHutongInnerGateParams::FSizeRange IR = Settings->InnerGate.GetSizeRange();
 	In.InnerGateFrontage = (IR.FrontageMax > 0.0) ? 0.5 * (IR.FrontageMin + IR.FrontageMax) : 330.0;
@@ -299,6 +418,7 @@ static FString SlotNameBase(EHutongCompoundPiece Piece)
 	{
 	case EHutongCompoundPiece::MainHall: return TEXT("Hutong_Zhengfang");
 	case EHutongCompoundPiece::EarRoom: return TEXT("Hutong_Erfang");
+	case EHutongCompoundPiece::EarPassage: return TEXT("Hutong_Erfang_Guodao");
 	case EHutongCompoundPiece::SideHouse: return TEXT("Hutong_Xiangfang");
 	case EHutongCompoundPiece::FrontRow: return TEXT("Hutong_Daozuofang");
 	case EHutongCompoundPiece::RearRow: return TEXT("Hutong_Houzhaofang");
@@ -330,6 +450,10 @@ AStaticMeshActor* UHutongCompoundTool::SpawnSlot(UWorld* World, const FHutongCom
 	const double Cross = bAlongY ? SX : SY;   // across it
 
 	const FString NameBase = SlotNameBase(Slot.Piece);
+	const FHutongSiheyuanParams* Hall = PlacedMainHall ? PlacedMainHall : &Settings->MainHall;
+	// 耳房 are the hall's ears: held under its eave however wide the slot the plot leaves them.
+	const double EarCap = (HallEaveZ > 0.0)
+		? HallEaveZ - HutongCanon::Compound::EarRoomBelowHallCm : 0.0;
 
 	// Perimeter courses lined up before anything is built.
 	auto Aligned = [&](const FHutongSiheyuanParams& From)
@@ -361,6 +485,16 @@ AStaticMeshActor* UHutongCompoundTool::SpawnSlot(UWorld* World, const FHutongCom
 		return Pass;
 	};
 
+	// 耳房過道: the ear room of this flank with the way through cut through it, at the end of its
+	// frontage the plot boundary is on.
+	auto EarPassageFor = [&]() -> FHutongEarPassageParams
+	{
+		const FHutongSiheyuanParams Room = HutongCompound::Subordinate(
+			Aligned(HutongCompound::CourtRow(Settings->EarRoom, Settings->Plan, Slot.Facing)), EarCap);
+		return HutongCompound::CourtEarPassage(Room, PassageRoof(), Settings->PassageWidth,
+			/*bAtFarEnd*/ Slot.Min.X > 1.0);
+	};
+
 	// The compound owns the doorways for the same reason it owns the roles.
 	HutongGen::ApplySlotDoorway(WallP, Slot, Run);
 	// Only the perimeter is aligned. BaseCourseTop exists so the band runs unbroken round the *outside* of the plot.
@@ -375,13 +509,19 @@ AStaticMeshActor* UHutongCompoundTool::SpawnSlot(UWorld* World, const FHutongCom
 		{
 		case EHutongCompoundPiece::MainHall:
 			UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(
-				Aligned(HutongCompound::CourtRow(Settings->MainHall, Settings->Plan, Slot.Facing)),
+				Aligned(HutongCompound::OnCourtWalk(
+					HutongCompound::CourtRow(*Hall, Settings->Plan, Slot.Facing), Settings->CourtWalk)),
 				Slot.Facing, 0, SX, SY, Mesh, Level);
 			break;
 		case EHutongCompoundPiece::EarRoom:
 			UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(
-				Aligned(HutongCompound::CourtRow(Settings->EarRoom, Settings->Plan, Slot.Facing)),
+				HutongCompound::Subordinate(
+					Aligned(HutongCompound::CourtRow(Settings->EarRoom, Settings->Plan, Slot.Facing)), EarCap),
 				Slot.Facing, 0, SX, SY, Mesh, Level);
+			break;
+		case EHutongCompoundPiece::EarPassage:
+			UHutongEarPassageBuildingComponent::BuildEarPassageMesh(
+				EarPassageFor(), Slot.Facing, SX, SY, Mesh, Level);
 			break;
 		case EHutongCompoundPiece::SideHouse:
 			UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(
@@ -481,13 +621,23 @@ AStaticMeshActor* UHutongCompoundTool::SpawnSlot(UWorld* World, const FHutongCom
 		// The 門房 falls through to the 倒座房's parameters.
 		B->Params = Aligned(
 			(Slot.Piece == EHutongCompoundPiece::MainHall)
-				? HutongCompound::CourtRow(Settings->MainHall, Settings->Plan, Slot.Facing)
+				? HutongCompound::OnCourtWalk(
+					HutongCompound::CourtRow(*Hall, Settings->Plan, Slot.Facing), Settings->CourtWalk)
 			: (Slot.Piece == EHutongCompoundPiece::EarRoom)
 				? HutongCompound::CourtRow(Settings->EarRoom, Settings->Plan, Slot.Facing)
 			: (Slot.Piece == EHutongCompoundPiece::SideHouse)
 				? HutongCompound::CourtWing(Settings->SideHouse, Settings->CourtWalk)
 			: (Slot.Piece == EHutongCompoundPiece::RearRow)   ? Settings->RearRow
 			                                                  : Settings->FrontRow);
+		if (Slot.Piece == EHutongCompoundPiece::EarRoom) B->Params = HutongCompound::Subordinate(B->Params, EarCap);
+		B->FootprintX = SX; B->FootprintY = SY; B->BaySide = Slot.Facing;
+		Building = B;
+		break;
+	}
+	case EHutongCompoundPiece::EarPassage:
+	{
+		UHutongEarPassageBuildingComponent* B = NewObject<UHutongEarPassageBuildingComponent>(Actor);
+		B->Params = EarPassageFor();
 		B->FootprintX = SX; B->FootprintY = SY; B->BaySide = Slot.Facing;
 		Building = B;
 		break;
@@ -592,6 +742,23 @@ AStaticMeshActor* UHutongCompoundTool::SpawnSlot(UWorld* World, const FHutongCom
 	return Actor;
 }
 
+void UHutongCompoundTool::ResolveHallEave(const TArray<FHutongCompoundSlot>& Slots,
+	double SizeX, double SizeY) const
+{
+	HallEaveZ = 0.0;
+	if (!Settings) return;
+	for (const FHutongCompoundSlot& S : Slots)
+	{
+		if (S.Piece != EHutongCompoundPiece::MainHall) continue;
+		FHutongSiheyuanParams P = HutongCompound::CourtRow(
+			MainHallFor(Settings, SizeX, SizeY), Settings->Plan, S.Facing);
+		const bool bAlongX = HutongGen::BaySide::IsAlongX(S.Facing);
+		P.Width = bAlongX ? S.Size.X : S.Size.Y;
+		P.Depth = bAlongX ? S.Size.Y : S.Size.X;
+		HallEaveZ = P.GetEaveHeight();
+	}
+}
+
 void UHutongCompoundTool::ResolveStreetRowRidge(const TArray<FHutongCompoundSlot>& Slots) const
 {
 	StreetRowRidgeZ = 0.0;
@@ -626,6 +793,9 @@ void UHutongCompoundTool::SpawnFinalActor()
 
 	// Before anything is spawned: the 大門's own height depends on how tall its neighbours came out.
 	ResolveStreetRowRidge(Slots);
+	ResolveHallEave(Slots, SizeX, SizeY);
+	PlacedMainHall = &MainHallFor(Settings, SizeX, SizeY);
+	ON_SCOPE_EXIT { PlacedMainHall = nullptr; };
 
 	UWorld* World = GetToolManager()->GetContextQueriesAPI()->GetCurrentEditingWorld();
 
@@ -675,7 +845,7 @@ void UHutongCompoundTool::DrawPlan(FPrimitiveDrawInterface* PDI, const FVector& 
 
 	// The ordinary plot, ghosted from the same corner where the drag has not reached it.
 	double WantW, WantD;
-	MakeInput(1.0, 1.0).GetSuggestedPlot(WantW, WantD);
+	GetSuggestedPlot(WantW, WantD);
 	if (FMath::Abs(WantW - SizeX) > 1.0 || FMath::Abs(WantD - SizeY) > 1.0)
 	{
 		const FLinearColor Ghost(0.45f, 0.8f, 1.0f, 1.0f);
@@ -707,7 +877,7 @@ void UHutongCompoundTool::RenderIdlePreview(FPrimitiveDrawInterface* PDI, const 
 	double W, D;
 	PlotSizeForCursor(FVector2D::ZeroVector, W, D);
 	double WantW, WantD;
-	MakeInput(1.0, 1.0).GetSuggestedPlot(WantW, WantD);
+	GetSuggestedPlot(WantW, WantD);
 	DrawPlan(PDI, CursorGround, FMath::Max(W, WantW), FMath::Max(D, WantD));
 }
 
@@ -734,10 +904,16 @@ FString UHutongCompoundTool::GetPlacementDetail() const
 	MakeInput(1.0, 1.0).GetMinimumPlot(MinW, MinD);
 	const bool bAtFloor = (MaxX - MinX <= MinW + 1.0) || (MaxY - MinY <= MinD + 1.0);
 
+	const TCHAR* SizeName =
+		(Settings->PlotSize == EHutongCompoundSize::Small)  ? TEXT("small (小型)") :
+		(Settings->PlotSize == EHutongCompoundSize::Medium) ? TEXT("medium (中型)") :
+		(Settings->PlotSize == EHutongCompoundSize::Large)  ? TEXT("large (大型)") : TEXT("custom");
+
 	const TCHAR* PlanName = TEXT("One Courtyard (一進)");
 	if (Settings->Plan == EHutongCompoundPlan::TwoCourtyards) PlanName = TEXT("Two Courtyards (二進)");
 	else if (Settings->Plan == EHutongCompoundPlan::ThreeCourtyards) PlanName = TEXT("Three Courtyards (三進)");
-	return FString::Printf(TEXT("%s · %d buildings%s"),
+	return FString::Printf(TEXT("%s · %s · %d buildings%s"),
+		SizeName,
 		PlanName,
 		Slots.Num(),
 		bAtFloor ? *FString::Printf(TEXT(" · at minimum %.0f x %.0f"), MinW, MinD) : TEXT(""));
@@ -774,11 +950,13 @@ void UHutongCompoundTool::AdjustHeight(double DeltaCm)
 		P.bDeriveEaveFromBays = false;
 	};
 	TakeManualControl(Settings->MainHall, EHutongCompoundPiece::MainHall);
+	TakeManualControl(Settings->SmallMainHall, EHutongCompoundPiece::MainHall);
 	TakeManualControl(Settings->SideHouse, EHutongCompoundPiece::SideHouse);
 	TakeManualControl(Settings->FrontRow, EHutongCompoundPiece::FrontRow);
 
 	auto Bump = [DeltaCm](double& V, double Lo, double Hi) { V = FMath::Clamp(V + DeltaCm, Lo, Hi); };
 	Bump(Settings->MainHall.EaveHeight, Settings->MainHall.GetMinEaveHeight(), 520.0);
+	Bump(Settings->SmallMainHall.EaveHeight, Settings->SmallMainHall.GetMinEaveHeight(), 520.0);
 	Bump(Settings->SideHouse.EaveHeight, Settings->SideHouse.GetMinEaveHeight(),
 		FMath::Max(Settings->MainHall.EaveHeight - 15.0, Settings->SideHouse.GetMinEaveHeight()));
 	Bump(Settings->FrontRow.EaveHeight, Settings->FrontRow.GetMinEaveHeight(),

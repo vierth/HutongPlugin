@@ -38,7 +38,7 @@ namespace HutongGen::Ridge
 
 	inline double Gate(const FHutongGateHouseParams& P, double Depth)
 	{
-		return P.GetEaveHeight() + P.GetRoofRise(Depth) * Crown(P.GetPurlins(), 0.5 * Depth, P.RoofOverhang, P.RoofApexRoll);
+		return P.GetEaveHeight() + P.GetRoofRise(Depth) * Crown(P.GetPurlins(), 0.5 * Depth, P.GetRoofOverhang(), P.RoofApexRoll);
 	}
 
 	// Both build their roof over Params.Depth with five purlins.

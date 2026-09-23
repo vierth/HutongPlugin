@@ -17,6 +17,7 @@
 #include "Generation/PassageGenerator.h"
 #include "Generation/FlowerBedGenerator.h"
 #include "Generation/WaterJarGenerator.h"
+#include "Generation/FrameGenerator.h"
 #include "Generation/PavilionGenerator.h"
 #include "Generation/ScreenWallGenerator.h"
 #include "Generation/ShopfrontGenerator.h"
@@ -419,6 +420,17 @@ public:
 		const double ColR = P.GetColumnRadius();
 		for (int32 i = 0; i <= N; ++i) Out.Boundaries.Add(P.GetBayBoundary(i, N, P.Width, ColR));
 		if (P.bHasFrontDoorCenter) Out.DoorBay = P.GetDoorBayIndex(N);
+
+		// The generator's rows: 檐柱 on the front edge, the facade's line a 廊步 in under a 前廊,
+		// the rear 金柱 a 廊步 inside the 後檐柱, which stand in the back wall on the far edge.
+		double FY, RY;
+		P.GetBuiltVerandaDepths(P.Depth, FMath::Clamp(P.WallThickness, 1.0, FMath::Min(P.Width, P.Depth) * 0.2), FY, RY);
+		if (FY > 0.0) Out.ColumnRows.Add(0.0);
+		Out.ColumnRows.Add(FY);
+		if (RY > 0.0) Out.ColumnRows.Add(P.Depth - RY);
+		Out.ColumnRows.Add(P.Depth);
+		Out.ColumnRadius = ColR;
+		Out.FootingSize = HutongCanon::Frame::BaseStoneSide * 2.0 * ColR;
 		HutongGen::PlanBays::OntoFacade(Out, BaySide, FootprintX, FootprintY);
 	}
 
@@ -1149,6 +1161,89 @@ public:
 	{
 		const double S = Params.GetFootprint();
 		return FVector2D(S, S);
+	}
+
+protected:
+	virtual void BuildMesh(UE::Geometry::FDynamicMesh3& OutMesh, EHutongDetail Level) const override;
+};
+
+// 構架: a house's frame alone, for showing how it is built.
+UCLASS(ClassGroup=Hutong, meta=(BlueprintSpawnableComponent, DisplayName="Hutong Timber Frame", PrioritizeCategories="Preset Footprint"))
+class UHutongFrameBuildingComponent : public UHutongBuildingComponent
+{
+	GENERATED_BODY()
+
+public:
+	virtual FText GetTypeLabel() const override
+	{
+		return NSLOCTEXT("Hutong", "TypeFrame", "timber frame (構架)");
+	}
+
+	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Frame; }
+
+	UPROPERTY(EditAnywhere, Category="Frame", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the timber frame generator."))
+	FHutongFrameParams Params;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="50", ClampMin="10", Units="cm", ToolTip="Extent of the footprint along the actor's local X, in cm."))
+	double FootprintX = 1060.0;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="50", ClampMin="10", Units="cm", ToolTip="Extent of the footprint along the actor's local Y, in cm."))
+	double FootprintY = 700.0;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(ToolTip="Which side of the footprint is the front of the frame."))
+	EHutongBaySide BaySide = EHutongBaySide::MinusY;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Forces the number of bays; zero derives it from the bay width limits."))
+	int32 BayCountOverride = 0;
+
+	// The house inside the params with the footprint filled in, which every derived figure hangs off.
+	FHutongSiheyuanParams HouseForFootprint() const
+	{
+		FHutongSiheyuanParams H = Params.House;
+		const bool bAlongX = HutongGen::BaySide::IsAlongX(BaySide);
+		H.Width = bAlongX ? FootprintX : FootprintY;
+		H.Depth = bAlongX ? FootprintY : FootprintX;
+		H.BayCountOverride = BayCountOverride;
+		return H;
+	}
+
+	virtual double GetEaveHeight() const override { return HouseForFootprint().GetEaveHeight(); }
+	virtual double GetRidgeHeight() const override
+	{
+		const HutongGen::FrameLayout::FLayout L = HutongGen::FrameLayout::Make(HouseForFootprint());
+		return L.PurlinTop(L.Ridge());
+	}
+
+	static void BuildFrameMesh(const FHutongFrameParams& InParams, EHutongBaySide Side,
+		int32 InBayCountOverride, double SizeX, double SizeY, UE::Geometry::FDynamicMesh3& OutMesh,
+		EHutongDetail Detail = EHutongDetail::Near);
+
+	virtual bool GetFacade(EHutongBaySide& OutSide) const override { OutSide = BaySide; return true; }
+	virtual bool SetFacade(EHutongBaySide Side) override { BaySide = Side; return true; }
+
+	virtual void GetPlanBays(FHutongPlanBays& Out) const override
+	{
+		const FHutongSiheyuanParams H = HouseForFootprint();
+		const int32 N = H.GetBayCount();
+		const double ColR = H.GetColumnRadius();
+		for (int32 i = 0; i <= N; ++i) Out.Boundaries.Add(H.GetBayBoundary(i, N, H.Width, ColR));
+		Out.DoorBay = H.GetDoorBayIndex(N);
+
+		const HutongGen::FrameLayout::FLayout L = HutongGen::FrameLayout::Make(H);
+		Out.ColumnRows.Add(L.Y[0]);
+		if (L.bFrontVeranda) Out.ColumnRows.Add(L.Y[L.Front]);
+		if (L.bRearVeranda) Out.ColumnRows.Add(L.Y[L.Rear]);
+		Out.ColumnRows.Add(L.Y.Last());
+		Out.ColumnRadius = 0.5 * L.D;
+		Out.FootingSize = HutongCanon::Frame::BaseStoneSide * L.D;
+		HutongGen::PlanBays::OntoFacade(Out, BaySide, FootprintX, FootprintY);
+	}
+
+	virtual FVector2D GetFootprintSize() const override { return FVector2D(FootprintX, FootprintY); }
+	virtual void SetFootprintSize(const FVector2D& S) override
+	{
+		FootprintX = FMath::Max(S.X, 10.0);
+		FootprintY = FMath::Max(S.Y, 10.0);
 	}
 
 protected:

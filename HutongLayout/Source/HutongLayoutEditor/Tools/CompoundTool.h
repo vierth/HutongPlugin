@@ -11,6 +11,7 @@
 #include "Generation/InnerGateGenerator.h"
 #include "Generation/PathGenerator.h"
 #include "Generation/PassageGenerator.h"
+#include "Generation/EarPassageGenerator.h"
 #include "Generation/FlowerBedGenerator.h"
 #include "Generation/WaterJarGenerator.h"
 #include "Generation/ScreenWallGenerator.h"
@@ -27,6 +28,9 @@ public:
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="North Direction (yaw)", UIMin="-180", UIMax="180", ClampMin="-360", ClampMax="360", Units="deg", ToolTip="World yaw that is north, in degrees; zero is +X."))
 	double NorthYawDeg = 0.0;
 
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Plot Size (院落尺度)", ToolTip="Stamps the plot at one of the three ordinary widths, sizing its buildings with it; Custom sizes the plot by dragging."))
+	EHutongCompoundSize PlotSize = EHutongCompoundSize::Large;
+
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(ToolTip="Number of courtyards the compound is laid out with."))
 	EHutongCompoundPlan Plan = EHutongCompoundPlan::ThreeCourtyards;
 
@@ -42,7 +46,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Court Walk", ToolTip="What shelters the inner court."))
 	EHutongCourtWalk CourtWalk = EHutongCourtWalk::WingVerandas;
 
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Covered Corridor (遊廊) Walk Width", EditCondition="CourtWalk == EHutongCourtWalk::Corridor", UIMin="95", UIMax="300", ClampMin="60", Units="cm", ToolTip="Clear walk width the covered corridor (遊廊) ring is built at, in cm."))
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Covered Corridor (遊廊) Walk Width", EditCondition="CourtWalk == EHutongCourtWalk::Corridor || CourtWalk == EHutongCourtWalk::Linked", UIMin="95", UIMax="300", ClampMin="60", Units="cm", ToolTip="Clear walk width the covered corridor (遊廊) ring is built at, in cm."))
 	double CorridorWalkWidth = HutongCanon::Compound::CorridorWalkWidthCm;
 
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Paved Path (甬路)", ToolTip="Lays a paved path (甬路) from the gate to the main hall (正房)."))
@@ -106,8 +110,11 @@ public:
 	UPROPERTY(EditAnywhere, Category="Courtyard|Water Jar (魚缸)", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the water jar (魚缸)."))
 	FHutongWaterJarParams WaterJar;
 
-	UPROPERTY(EditAnywhere, Category="Buildings|Main Hall (正房)", meta=(ToolTip="Parameters of the main hall (正房)."))
+	UPROPERTY(EditAnywhere, Category="Buildings|Main Hall (正房)", meta=(ToolTip="Parameters of the main hall (正房), 七檁前後廊, built wherever the plot is big enough for it."))
 	FHutongSiheyuanParams MainHall;
+
+	UPROPERTY(EditAnywhere, Category="Buildings|Main Hall, Small Court (正房 前廊後無廊)", meta=(ToolTip="Parameters of the smaller main hall (正房), 前廊後無廊, built when the plot is too small for the 七檁前後廊 one."))
+	FHutongSiheyuanParams SmallMainHall;
 
 	UPROPERTY(EditAnywhere, Category="Buildings|Ear Rooms (耳房)", meta=(ToolTip="Parameters of the ear rooms (耳房) and wing ear rooms (廂耳房)."))
 	FHutongSiheyuanParams EarRoom;
@@ -149,6 +156,11 @@ public:
 	FHutongWallParams Wall;
 
 	UHutongCompoundToolProperties();
+
+	// Seeds the 正房, 耳房 and 廂房 from the chosen court size. Custom leaves them alone.
+	void ApplyCourtSize();
+
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 };
 
 // Lays out a whole 四合院 from one drag, spawning a dozen ordinary actors.
@@ -192,6 +204,9 @@ protected:
 	// Builds the layout input from the current settings and the dragged plot.
 	HutongGen::FCompoundInput MakeInput(double SizeX, double SizeY) const;
 
+	// The ordinary plot, which is the one the 七檁前後廊 hall is laid out on.
+	void GetSuggestedPlot(double& OutW, double& OutD) const;
+
 	// The frontage and depth the layout gives a row's slot on the plot being placed, for seeding a
 	// derived figure from the building that will actually be built rather than from the preset's
 	// suggested frontage. False when the plan has no such slot.
@@ -200,6 +215,16 @@ protected:
 public:
 	// The same input off a settings object, which is the half a test can reach.
 	static HutongGen::FCompoundInput MakeInputFrom(const UHutongCompoundToolProperties* S, double SizeX, double SizeY);
+
+	// The same input with the 正房 named rather than chosen by plot size.
+	static HutongGen::FCompoundInput MakeInputWithHall(const UHutongCompoundToolProperties* S,
+		const FHutongSiheyuanParams& Hall, double SizeX, double SizeY);
+
+	// 七檁前後廊 on a plot that fits it, 前廊後無廊 on one that does not.
+	static const FHutongSiheyuanParams& MainHallFor(const UHutongCompoundToolProperties* S, double SizeX, double SizeY);
+
+	// The 正房 of the plot being spawned, chosen once before any slot is.
+	mutable const FHutongSiheyuanParams* PlacedMainHall = nullptr;
 
 	// Spawns one slot as its own actor. Returns it, or null if nothing was built.
 	AStaticMeshActor* SpawnSlot(UWorld* World, const FHutongCompoundSlot& Slot,
@@ -210,6 +235,10 @@ public:
 
 	// Walks the slots and fills StreetRowRidgeZ in. Call before spawning any of them.
 	void ResolveStreetRowRidge(const TArray<FHutongCompoundSlot>& Slots) const;
+
+	// The 正房's eave as it will be built, which every subordinate building is held under.
+	mutable double HallEaveZ = 0.0;
+	void ResolveHallEave(const TArray<FHutongCompoundSlot>& Slots, double SizeX, double SizeY) const;
 
 	UPROPERTY()
 	TObjectPtr<UHutongCompoundToolProperties> Settings;
@@ -231,6 +260,16 @@ namespace HutongCompound
 {
 	// The 廂房 the compound builds: the panel's preset plus whatever the court's walk asks of it.
 	FHutongSiheyuanParams CourtWing(const FHutongSiheyuanParams& Base, EHutongCourtWalk Walk);
+
+	// A building whose 前廊 is part of the court's covered walk opens its gables across it.
+	FHutongSiheyuanParams OnCourtWalk(const FHutongSiheyuanParams& Base, EHutongCourtWalk Walk);
+
+	// The 耳房 that carries the compound's 過道 through it.
+	FHutongEarPassageParams CourtEarPassage(const FHutongSiheyuanParams& Room,
+		const FHutongPassageParams& Roof, double PassageWidth, bool bAtFarEnd);
+
+	// A subordinate building held under the hall's eave. Its own footprint has to be filled in first.
+	FHutongSiheyuanParams Subordinate(const FHutongSiheyuanParams& Base, double MaxEave);
 
 	// The hall row's 後檐, which is the plan's answer.
 	FHutongSiheyuanParams CourtRow(const FHutongSiheyuanParams& Base, EHutongCompoundPlan Plan,

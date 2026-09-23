@@ -29,12 +29,13 @@ namespace HutongGen
 			double X0, double X1, double EdgeY, double Direction,
 			int32 StepCount, double StepTread, double FloorHeight);
 
-		// 下鹼 round the left, right and rear walls.
+		// 下鹼 round the left, right and rear walls; both side runs broken over SideGapY0..SideGapY1 when it is not empty.
 		void AppendBaseCourseU(
 			UE::Geometry::FDynamicMesh3& Mesh,
 			double Width, double Depth, double WallThickness,
 			double FloorHeight, double CourseHeight, double Projection,
-			bool bIncludeRear = true, bool bToGround = false);
+			bool bIncludeRear = true, bool bToGround = false,
+			double SideGapY0 = 0.0, double SideGapY1 = 0.0);
 
 		// 墀頭: a corbelled pier at the front corner of each gable wall.
 		void AppendChitou(

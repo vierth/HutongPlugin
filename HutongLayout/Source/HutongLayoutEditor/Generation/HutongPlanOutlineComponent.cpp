@@ -90,6 +90,9 @@ public:
 		, BayBoundaries(C->BayBoundaries)
 		, bBaysAlongX(C->bBaysAlongX)
 		, DoorBay(C->DoorBay)
+		, ColumnRows(C->ColumnRows)
+		, ColumnRadius(C->ColumnRadius)
+		, FootingSize(C->FootingSize)
 	{
 		OutlineColor = C->Colour;
 		// The facade marks are the same hue turned toward the front: one colour per type, two
@@ -196,6 +199,29 @@ public:
 				PDI->DrawLine(A, B, Division, DPG, FMath::Max(Thickness - 1.0f, 1.5f), 0.0f, true);
 			}
 
+			// Where the columns will stand: each 柱頂石 as a square, the column's own section as a
+			// circle in it. The rows say what the frame is — 前廊, 後廊, how deep — before it is built.
+			for (const double Row : ColumnRows)
+			{
+				for (const double T : BayBoundaries)
+				{
+					const double X = bBaysAlongX ? T : Row, Y = bBaysAlongX ? Row : T;
+					FLinearColor Footing = Line;
+					Footing.A = Line.A * 0.85f;
+					const double H = 0.5 * FootingSize;
+					const FVector S[4] = { At(X - H, Y - H), At(X + H, Y - H), At(X + H, Y + H), At(X - H, Y + H) };
+					for (int32 k = 0, m = 3; k < 4; m = k++)
+					{
+						PDI->DrawLine(S[m], S[k], Footing, DPG, FMath::Max(Thickness - 1.0f, 1.5f), 0.0f, true);
+					}
+					if (ColumnRadius > 0.0)
+					{
+						DrawCircle(PDI, At(X, Y), L2W.GetUnitAxis(EAxis::X), L2W.GetUnitAxis(EAxis::Y),
+							Line, ColumnRadius, 16, DPG, Thickness, 0.0f, true);
+					}
+				}
+			}
+
 			// Hatch along the facade: short ticks from the edge into the footprint.
 			if (bHasFacade)
 			{
@@ -254,6 +280,9 @@ private:
 	TArray<double> BayBoundaries;
 	bool bBaysAlongX;
 	int32 DoorBay;
+	TArray<double> ColumnRows;
+	double ColumnRadius;
+	double FootingSize;
 	FHitProxyId HitProxyId;
 };
 
@@ -280,6 +309,9 @@ void UHutongPlanOutlineComponent::SetPlan(const FVector2D& InFootprint, const FH
 	BayBoundaries = InBays.Boundaries;
 	bBaysAlongX = bInBaysAlongX;
 	DoorBay = InBays.DoorBay;
+	ColumnRows = InBays.ColumnRows;
+	ColumnRadius = InBays.ColumnRadius;
+	FootingSize = InBays.FootingSize;
 	Colour = InColour;
 	// The proxy bakes the colour with the rest of the plan, so a retint is a rebuild like a resize.
 	MarkRenderStateDirty();

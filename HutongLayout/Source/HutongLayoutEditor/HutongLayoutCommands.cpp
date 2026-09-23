@@ -99,6 +99,13 @@ void FHutongLayoutCommands::RegisterCommands()
 		"Click to set the southeast corner, move to size the plot, click to lay it out. The orange edge is the street. Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord(EModifierKey::Shift | EModifierKey::Alt, EKeys::One));
 
+	// 構架: for showing how a house is framed, not for building a street.
+	UI_COMMAND(BeginFrameTool, "Frame",
+		"Place the timber frame (構架) of a main hall (正房) — columns, beams, purlins and rafters on the platform (臺明), with no walls or roof.\n"
+		"Stamped at the preset's canonical size: click where it stands, move toward its front, click to place.\n"
+		"Hold R to rotate, Esc to cancel.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
 	UI_COMMAND(BeginGalleryTool, "Gallery",
 		"Place one of every type and variant on a grid.\n"
 		"Click to anchor, move to position the set, click to place. Hold R to rotate, Esc to cancel.",

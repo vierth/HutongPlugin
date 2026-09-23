@@ -47,8 +47,8 @@ namespace HutongGen
 		{
 			// A gate has courtyard behind it and lane in front.
 			Shell::AppendApron(Mesh, 0.0, -PlatO, W, D,
-				P.Apron.GetWidth(P.RoofOverhang),
-				P.Apron.GetWidth(P.RoofOverhang),
+				P.Apron.GetWidth(P.GetRoofOverhang()),
+				P.Apron.GetWidth(P.GetRoofOverhang()),
 				/*SideWidth*/ 0.0,   // 硬山 as well
 				P.Apron.Thickness);
 		}
@@ -230,9 +230,9 @@ namespace HutongGen
 
 		// 5) Roof, eave course and 正脊, tagged into the roof slot by the shell helper.
 		Shell::FRoofParams Roof;
-		Roof.FrontOverhang = P.RoofOverhang;
+		Roof.FrontOverhang = P.GetRoofOverhang();
 		// Symmetrical: a gate's back is the courtyard, not a lane. See the note on the params.
-		Roof.RearOverhang = P.RoofOverhang;
+		Roof.RearOverhang = P.GetRoofOverhang();
 		Roof.Rise = P.GetRoofRise(D);
 		Roof.Section = Jiajia::MakeSection(P.GetPurlins(), 0.5 * D, Roof.FrontOverhang, P.RoofApexRoll);
 		Roof.Tile = P.GetRoofTile();

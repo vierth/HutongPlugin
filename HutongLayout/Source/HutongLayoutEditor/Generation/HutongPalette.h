@@ -68,6 +68,9 @@ namespace HutongGen
 		// 板壁: plain boarding, waxed or oiled at best, of a piece with the floor rather than with the painted frame.
 		MatSlot_Partition = 11,
 
+		// 正脊: stacked 瓦條 and brick along the top of the roof, laid in courses rather than in 壟.
+		MatSlot_Ridge = 12,
+
 		MatSlot_Count        // must stay last
 	};
 
@@ -88,6 +91,7 @@ namespace HutongGen
 		case MatSlot_Plaster:    return TEXT("Interior Plaster (白灰)");
 		case MatSlot_Earth:      return TEXT("Bare Earth (素土)");
 		case MatSlot_Partition:  return TEXT("Partitions (板壁)");
+		case MatSlot_Ridge:      return TEXT("Ridge (正脊)");
 		default:                 return TEXT("Unnamed");
 		}
 	}
@@ -200,6 +204,11 @@ struct FHutongPalette
 		meta = (DisplayName = "Partition Material (板壁)", ToolTip="Material for the interior partitions; replaces the partition colour when set."))
 	TObjectPtr<UMaterialInterface> PartitionMaterial = nullptr;
 
+	// The roof's colour, its own material: the ridge is coursed, not laid in 壟.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Materials",
+		meta = (DisplayName = "Ridge Material (正脊)", ToolTip="Material for the main ridge (正脊); replaces the derived roof colour there when set."))
+	TObjectPtr<UMaterialInterface> RidgeMaterial = nullptr;
+
 	// The body scaled in linear space, alpha untouched.
 	FLinearColor GetRoofColor() const
 	{
@@ -212,7 +221,8 @@ struct FHutongPalette
 	{
 		switch (Slot)
 		{
-		case HutongGen::MatSlot_Roof:  return GetRoofColor();
+		case HutongGen::MatSlot_Roof:
+		case HutongGen::MatSlot_Ridge: return GetRoofColor();
 		case HutongGen::MatSlot_Wood:  return Wood;
 		case HutongGen::MatSlot_Stone: return Stone;
 		case HutongGen::MatSlot_Paint: return Paint;
@@ -243,6 +253,7 @@ struct FHutongPalette
 		case HutongGen::MatSlot_Plaster:    return PlasterMaterial;
 		case HutongGen::MatSlot_Earth:      return EarthMaterial;
 		case HutongGen::MatSlot_Partition:  return PartitionMaterial;
+		case HutongGen::MatSlot_Ridge:      return RidgeMaterial;
 		default:                       return BodyMaterial;
 		}
 	}

@@ -90,13 +90,11 @@ double UHutongSiheyuanTool::GetEffectiveVerandaDepth() const
 	const double Depth = HutongGen::BaySide::IsAlongX(BaySide) ? (MaxY - MinY) : (MaxX - MinX);
 
 	const FHutongSiheyuanParams P = GetResolvedParams();
-	const double T = P.WallThickness;
-	const double ColR = FMath::Max(0.5 * P.GetColumnDiameter(), 1.0);
-
-	// Same two guards as BuildSiheyuan, and they have to stay the same or the preview lies.
-	double V = P.GetVerandaDepth();
-	if (V < 4.0 * ColR) V = 0.0;
-	return FMath::Clamp(V, 0.0, FMath::Max(Depth - 2.0 * T - 100.0, 0.0));
+	// BuildSiheyuan clamps its wall thickness against the footprint before asking.
+	const double T = FMath::Clamp(P.WallThickness, 1.0, FMath::Min(FMath::Max(P.Width, 1.0), Depth) * 0.2);
+	double Front, Rear;
+	P.GetBuiltVerandaDepths(Depth, T, Front, Rear);
+	return Front;
 }
 
 FString UHutongSiheyuanTool::GetPlacementDetail() const

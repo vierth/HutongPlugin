@@ -408,7 +408,7 @@ TArray<FText> URectDragToolBase::GetToolHelpLines() const
 
 FText URectDragToolBase::GetKeyHintText() const
 {
-	return FText::Format(LOCTEXT("KeyHint", "- = height · R rotate · {0} {1} · Esc cancel · Ctrl+Z undo"),
+	return FText::Format(LOCTEXT("KeyHint", "- = height · R rotate · {0} {1} · Esc cancel, again to put the tool down · Ctrl+Z undo"),
 		SnapKeyName(),
 		SnappingActive() ? LOCTEXT("KeyHintNoSnap", "no snap") : LOCTEXT("KeyHintSnap", "snap"));
 }

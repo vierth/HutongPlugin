@@ -190,8 +190,10 @@ namespace HutongMeshUtils
 		int32 EaveSegments = 6;       // samples along each panel's eave
 	};
 
+	// OutMainRidge: the triangle range [A, B) of the 正脊, for the caller to tag after the roof.
 	void AppendXieshanRoof(
 		UE::Geometry::FDynamicMesh3& Mesh,
 		const FVector3d& EaveMin,
-		const FXieshanRoofSpec& Spec);
+		const FXieshanRoofSpec& Spec,
+		UE::Geometry::FIndex2i* OutMainRidge = nullptr);
 }

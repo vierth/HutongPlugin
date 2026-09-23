@@ -13,7 +13,23 @@ enum class EHutongCourtWalk : uint8
 
 	Corridor UMETA(DisplayName = "Ring Corridor (抄手遊廊) — the covered ring", ToolTip="A ring corridor (抄手遊廊) round the inner court."),
 
+	Linked UMETA(DisplayName = "Verandas Linked by Corridors (前廊 + 抄手遊廊)", ToolTip="Front verandas (前廊) on the side houses (廂房), joined by corridors (抄手遊廊) to the inner gate (垂花門) and to the main hall's (正房) veranda: a covered walk all round the court."),
+
 	None UMETA(DisplayName = "Neither", ToolTip="No verandas and no corridor."),
+};
+
+// 北京四合院有小型、中型、大型之分 (四合院建築及其構造 p.83): the plot's width, and with it every
+// building on it. The three are stamped at their own width; Custom is the plot the drag sizes.
+UENUM()
+enum class EHutongCompoundSize : uint8
+{
+	Small UMETA(DisplayName = "Small (小型) — 16 m wide"),
+
+	Medium UMETA(DisplayName = "Medium (中型) — 20 m wide"),
+
+	Large UMETA(DisplayName = "Large (大型) — 25 m wide"),
+
+	Custom UMETA(DisplayName = "Custom — sized by dragging"),
 };
 
 UENUM()
@@ -31,6 +47,7 @@ enum class EHutongCompoundPiece : uint8
 {
 	MainHall UMETA(ToolTip="The main hall (正房) across the back of the inner court."),
 	EarRoom UMETA(ToolTip="An ear room (耳房) against the flank of a hall or wing."),
+	EarPassage UMETA(ToolTip="An ear room (耳房) with the covered passage (過道) cut through it."),
 	SideHouse UMETA(ToolTip="A side house (廂房) down one side of the court."),
 	FrontRow UMETA(ToolTip="The front row (倒座房) along the street."),
 	RearRow UMETA(ToolTip="The rear row (後罩房) closing the back of the plot."),
@@ -162,6 +179,7 @@ namespace HutongGen
 		bool bHasPath = true;
 
 		bool HasRingCorridor() const { return CourtWalk == EHutongCourtWalk::Corridor; }
+		bool HasLinkedVerandas() const { return CourtWalk == EHutongCourtWalk::Linked; }
 
 		// 天棚魚缸石榴樹: the jar on the axis before the 正房 with a bed either side of it.
 		bool bHasCourtyardFurnishing = true;

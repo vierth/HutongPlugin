@@ -15,14 +15,16 @@ namespace HutongGen
 
 namespace
 {
-	// 舉架 over the drawn depth, with the eave overhang as its outermost run.
-	Shell::FRoofParams MakeRoofParams(const FHutongSiheyuanParams& P, double Depth, double VerandaY)
+	// 舉架 over the drawn depth, with the eave overhang as its outermost run. A 廊 is one of the
+	// section's 步架, never added outside it: 前廊後無廊 framed the other way is the 撅尾巴房, rear eave
+	// a 金檁 high and ridge off the middle, which the 鑽金柱 frame exists to avoid (四合院建築及其構造 p.85).
+	Shell::FRoofParams MakeRoofParams(const FHutongSiheyuanParams& P, double Depth)
 	{
 		Shell::FRoofParams Roof;
 		Roof.FrontOverhang = P.GetRoofOverhang();
 		Roof.RearOverhang = P.GetRearRoofOverhang();
 		Roof.RearSlopeTrim = (P.RearEave == EHutongRearEave::Lane)
-			? FMath::Max(Roof.FrontOverhang + VerandaY - Roof.RearOverhang, 0.0)
+			? FMath::Max(Roof.FrontOverhang - Roof.RearOverhang, 0.0)
 			: 0.0;
 		Roof.Section = Jiajia::MakeSection(
 			P.Purlins, 0.5 * Depth, Roof.FrontOverhang, P.RoofApexRoll);
@@ -371,12 +373,10 @@ namespace
 		// Bays are not evenly spaced — 明間 is wider than the 次間 either side.
 		auto BayBoundaryX = [&](int32 i) { return P.GetBayBoundary(i, N, W, ColR); };
 
-		// 前廊: the wall retreats by one 廊步 while the 檐柱 stay on the footprint edge.
-		double FY = P.GetVerandaDepth();
-		// Two column rows closer than this have nearly-coincident curved faces, which genuinely z-fights.
-		if (FY < 4.0 * ColR) FY = 0.0;
-		// Never let the veranda eat the interior: the facade runs FY..FY+T, the back wall D-T..D.
-		FY = FMath::Clamp(FY, 0.0, FMath::Max(D - 2.0 * T - 100.0, 0.0));
+		// 前廊: the wall retreats by one 廊步 while the 檐柱 stay on the footprint edge. 後廊: the back
+		// wall stays on the 後檐柱 line and the rear 金柱 stand one 廊步 inside it.
+		double FY, RY;
+		P.GetBuiltVerandaDepths(D, T, FY, RY);
 		const bool bVeranda = (FY > 0.0);
 
 		const double BaseH = FMath::Clamp(P.GetBaseCourseHeight(), 0.0, (Eave - Floor) * 0.6);
@@ -400,11 +400,24 @@ namespace
 				P.Apron.Thickness);
 		}
 
+		// 廊門筒子: the gable walls open across the 前廊 between its two columns, head at the least
+		// clear height a doorway takes.
+		double EndDoorY0 = 0.0, EndDoorY1 = 0.0;
+		const double EndDoorHead = HutongGen::Passage::MinHeadZ(Floor, 0.0);
+		if (P.bHasVerandaEndDoorways && bVeranda && EndDoorHead < Eave - 20.0)
+		{
+			// Column face to column face: a 前出廊 wing's 廊步 is under a metre, and any margin
+			// leaves a slot rather than a way through.
+			EndDoorY0 = ColR + 1.0;
+			EndDoorY1 = FY - ColR - 1.0;
+			if (EndDoorY1 - EndDoorY0 < 50.0) EndDoorY0 = EndDoorY1 = 0.0;
+		}
+
 		// 下鹼 round three sides; the front stays flush or it would foul the facade columns.
 		{
 			const int32 BaseFirstTri = Mesh.MaxTriangleID();
 			Shell::AppendBaseCourseU(Mesh, W, D, T, Floor, BaseH, BaseP,
-				/*bIncludeRear*/ true, /*bToGround*/ true);
+				/*bIncludeRear*/ true, /*bToGround*/ true, EndDoorY0, EndDoorY1);
 			SetMaterialIDForTrianglesFrom(Mesh, BaseFirstTri, MatSlot_BaseCourse);
 		}
 
@@ -425,7 +438,7 @@ namespace
 		AppendPiercedWall(Mesh, T, W - T, D - T, D, WallBottom, Eave,
 			RearWinSill, RearWinHead, RearWins);
 
-		const Shell::FRoofParams Roof = MakeRoofParams(P, D, FY);
+		const Shell::FRoofParams Roof = MakeRoofParams(P, D);
 
 		// 封護檐: the rear slope terminates over the wall, and because a slope descends outward, terminating earlier means terminating higher.
 		const double RearLift = Shell::RearEaveLift(Roof, D);
@@ -437,12 +450,19 @@ namespace
 				FVector3d(W + BandP, D + BandP, Eave + RearLift));
 		}
 
-		AppendBox(Mesh,
-			FVector3d(0.0,   0.0, WallBottom),
-			FVector3d(T,     D,   Eave));
-		AppendBox(Mesh,
-			FVector3d(W - T, 0.0, WallBottom),
-			FVector3d(W,     D,   Eave));
+		for (const double X0 : { 0.0, W - T })
+		{
+			if (EndDoorY1 > EndDoorY0)
+			{
+				AppendBox(Mesh, FVector3d(X0, 0.0, WallBottom), FVector3d(X0 + T, EndDoorY0, Eave));
+				AppendBox(Mesh, FVector3d(X0, EndDoorY0, EndDoorHead), FVector3d(X0 + T, EndDoorY1, Eave));
+				AppendBox(Mesh, FVector3d(X0, EndDoorY1, WallBottom), FVector3d(X0 + T, D, Eave));
+			}
+			else
+			{
+				AppendBox(Mesh, FVector3d(X0, 0.0, WallBottom), FVector3d(X0 + T, D, Eave));
+			}
+		}
 
 		AppendInterior(Mesh, P, W, T, Floor, Eave, /*RoomY0*/ FY + T, /*RoomY1*/ D - T,
 			N, BayBoundaryX, RearWinSill, RearWinHead, RearWins);
@@ -476,6 +496,14 @@ namespace
 			Frame::AppendArchitrave(Mesh, BayBoundaryX(0), BayBoundaryX(N), 0.0, PT,
 				LintelBottom, Eave);
 			Frame::AppendTieBeams(Mesh, BayBoundaryX, N, 0.0, FY + 0.5 * T, PT,
+				LintelBottom, Eave, ColOvershoot);
+		}
+
+		if (RY > 0.0)
+		{
+			// 後金柱 free-standing in the room, tied back to the 後檐柱 buried in the wall.
+			Frame::AppendColumnRow(Mesh, BayBoundaryX, N, D - RY, ColR, ColTopR, 0.0, Eave, ColOvershoot);
+			Frame::AppendTieBeams(Mesh, BayBoundaryX, N, D - RY, D - 0.5 * T, PT,
 				LintelBottom, Eave, ColOvershoot);
 		}
 

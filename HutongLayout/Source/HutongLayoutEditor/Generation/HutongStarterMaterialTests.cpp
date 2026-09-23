@@ -4,6 +4,7 @@
 
 #include "Generation/HutongPalette.h"
 #include "Generation/HutongStarterMaterials.h"
+#include "Materials/MaterialExpressionMultiply.h"
 #include "Generation/HutongActorSpawn.h"
 #include "Generation/HutongBuildingComponent.h"
 #include "Generation/SiheyuanGenerator.h"
@@ -78,6 +79,20 @@ bool FHutongStarterMaterialCreateTest::RunTest(const FString& Parameters)
 			EO ? (UMaterialExpression*)EO->BaseColor.Expression : nullptr);
 		TestNotNull(*FString::Printf(TEXT("slot %d roughness is connected"), Slot),
 			EO ? (UMaterialExpression*)EO->Roughness.Expression : nullptr);
+		// A patterned slot describes its own relief: the normal is the pattern's, and the roughness
+		// runs through the multiply that carries the pattern's own figure.
+		if (HutongGen::StarterMaterialHasRelief(Slot))
+		{
+			TestNotNull(*FString::Printf(TEXT("slot %d's normal is the pattern's"), Slot),
+				EO ? (UMaterialExpression*)EO->Normal.Expression : nullptr);
+			TestNotNull(*FString::Printf(TEXT("slot %d's roughness is scaled by the pattern"), Slot),
+				EO ? Cast<UMaterialExpressionMultiply>(EO->Roughness.Expression) : nullptr);
+		}
+		else
+		{
+			TestNull(*FString::Printf(TEXT("a flat slot (%d) leaves the normal alone"), Slot),
+				EO ? (UMaterialExpression*)EO->Normal.Expression : nullptr);
+		}
 		FLinearColor Colour;
 		TestTrue(*FString::Printf(TEXT("slot %d carries a Color parameter"), Slot),
 			M->GetVectorParameterDefaultValue(FMaterialParameterInfo(TEXT("Color")), Colour));

@@ -33,6 +33,7 @@ struct FHutongPassageParams;
 struct FHutongFlowerBedParams;
 struct FHutongWaterJarParams;
 struct FHutongHallParams;
+struct FHutongFrameParams;
 
 namespace HutongGen
 {
@@ -55,6 +56,7 @@ namespace HutongGen
 		void Apply(EHutongDetail D, FHutongFlowerBedParams& P);
 		void Apply(EHutongDetail D, FHutongWaterJarParams& P);
 		void Apply(EHutongDetail D, FHutongHallParams& P);
+		void Apply(EHutongDetail D, FHutongFrameParams& P);
 
 		TArray<EHutongDetail> LODChain(EHutongDetail Placed);
 

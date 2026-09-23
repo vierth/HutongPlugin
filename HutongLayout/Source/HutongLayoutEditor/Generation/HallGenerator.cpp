@@ -203,6 +203,7 @@ namespace HutongGen
 		// 6) The roof, overhanging on all four sides.
 		const double O = FMath::Max(P.RoofOverhang, 0.0);
 		const int32 RoofFirstTri = Mesh.MaxTriangleID();
+		UE::Geometry::FIndex2i MainRidge(0, 0);
 
 		const double RoofW = W + 2.0 * O;
 		const double RoofD = D + 2.0 * O;
@@ -232,7 +233,7 @@ namespace HutongGen
 			Xie.BargeDepth = FMath::Max(P.BargeBoardDepth, 0.0);
 			Xie.EaveSegments = P.RoofEaveSegments;
 			Xie.SlopeSegments = FMath::Max(P.RoofSlopeSegments, 3);
-			AppendXieshanRoof(Mesh, RoofMin, Xie);
+			AppendXieshanRoof(Mesh, RoofMin, Xie, &MainRidge);
 		}
 		else
 		{
@@ -255,5 +256,6 @@ namespace HutongGen
 		}
 
 		SetMaterialIDForTrianglesFrom(Mesh, RoofFirstTri, MatSlot_Roof);
+		SetMaterialIDForTriangleRange(Mesh, MainRidge.A, MainRidge.B, MatSlot_Ridge);
 	}
 }

@@ -30,6 +30,7 @@ public:
 	TSharedPtr<FUICommandInfo> BeginStoreyTool;
 	TSharedPtr<FUICommandInfo> BeginPavilionTool;
 	TSharedPtr<FUICommandInfo> BeginHallTool;
+	TSharedPtr<FUICommandInfo> BeginFrameTool;
 	TSharedPtr<FUICommandInfo> BeginPathTool;
 	TSharedPtr<FUICommandInfo> BeginCompoundTool;
 	TSharedPtr<FUICommandInfo> BeginStreetRowTool;

@@ -201,6 +201,14 @@ namespace HutongCanon
 		// further than the frame — which is what a 垂花門 looks like.
 		inline constexpr FSizeBand InnerGateSize  = { 280.0, 400.0, 105.0, 215.0, 265.0, 365.0 };
 
+		// JUDGEMENT — how much of a house's 上檐出 each rank's gate carries over the street. A 廣亮大門
+		// is a columned bay and takes a full eave; a 如意門 is a doorway in a brick screen and takes
+		// little. The ordering is the claim; the fractions are a reading.
+		inline constexpr double GuangliangEaveShare = 1.0;
+		inline constexpr double JinzhuEaveShare = 0.95;
+		inline constexpr double ManziEaveShare = 0.8;
+		inline constexpr double RuyiEaveShare = 0.5;
+
 		// JUDGEMENT — a 大門 set into a street row is the tallest thing on that face: its ridge
 		// stands this much above the row's. One rule for the compound, the street row and a gate
 		// placed by hand against a traced 倒座房, whose own band was written for a gate standing alone.
@@ -267,16 +275,40 @@ namespace HutongCanon
 			EHutongPurlins Purlins;
 			double StepRunCm;
 			bool bRearHighWindows;
+			bool bRearVeranda = false;
+			double SideBayRatio = Module::SideBayWidthRatio;
+			double ColumnPerCentralBay = Module::ColumnHeightPerCentralBay;
 		};
 
-		// JUDGEMENT throughout — these are the sizes the types are ordinarily built at, read off
+		// JUDGEMENT unless marked — these are the sizes the types are ordinarily built at, read off
 		// the plans rather than stated anywhere. What is CANON is the shape of the table: the hall
 		// is the tallest and the only one with a 前廊, the rows facing the lane carry 高窗, and
 		// 進深 is never given because it is (檁數 - 1) × 步架.
 
-		// 正房: the main hall on the north, 七檁 with the veranda as its front-most 步架.
+		// CANON 四合院建築及其構造 p.84 — 正房: 七檁前後廊, four rows of columns (前檐柱, 前檐金柱,
+		// 後檐金柱, 後檐柱), 門窗 on the 前金柱 line and the 後檐牆 on the 後檐柱 line, so the 後廊
+		// is enclosed in the room. 進深 7 m and more with the 廊, 明間 3.9-4.2 m, 次間 about 3.3 m,
+		// 檐柱 3.3-3.5 m: a large or medium compound's hall.
+		// DERIVED — 1060 frontage at 0.82 gives 明間 402 and 次間 329; 6 步架 of 117 give 702; 0.84 of
+		// the 明間 gives a 337 column. 8/10 would give 321, under the source's range at any 明間 in it.
 		inline constexpr FHouse MainHall =
-			{ 365.0, 300.0, 380.0, true,  EHutongRearEave::Lane, 1040.0, EHutongPurlins::Seven, 100.0, true };
+			{ 399.0, 320.0, 420.0, true,  EHutongRearEave::Lane, 1060.0, EHutongPurlins::Seven, 117.0, true,
+			  true, 0.82, 0.84 };
+
+		// 五間正房: the same 七檁前後廊 hall two 次間 wider, for a large compound's main court.
+		// JUDGEMENT — frontage = 明間 + four 次間 at MainHall's own widths (402 + 4 × 330), so every
+		// bay, the 檐柱 and the section match the three-bay hall and only the count changes.
+		inline constexpr FHouse MainHallFiveBay =
+			{ 399.0, 320.0, 420.0, true,  EHutongRearEave::Lane, 1720.0, EHutongPurlins::Seven, 117.0, true,
+			  true, 0.82, 0.84 };
+
+		// CANON same work, p.85 and 圖5-3-2 — 前廊後無廊: a smaller court's 正房 drops the 後檐柱. Framed
+		// with a 鑽金柱 so the ridge stays over the middle: 五檁, four 步架 across the whole depth with
+		// the 廊 as the first of them, both eaves level, the roof visibly lower than the 七檁 hall's.
+		// JUDGEMENT — 150 步架 and 600 進深 scaled off the figure, whose two sections are near one depth;
+		// 1040 frontage because the page says 面寬要酌減 and gives no figure.
+		inline constexpr FHouse MainHallSmall =
+			{ 365.0, 300.0, 380.0, true,  EHutongRearEave::Lane, 1040.0, EHutongPurlins::Five, 150.0, true };
 
 		// 廂房: the side houses down the east and west of the courtyard.
 		inline constexpr FHouse SideHouse =
@@ -291,8 +323,95 @@ namespace HutongCanon
 			{ 328.0, 260.0, 320.0, false, EHutongRearEave::Courtyard, 1300.0, EHutongPurlins::Five, 100.0, true };
 
 		// 耳房: the low rooms tucked against the hall's flanks, and the type the 柱高 floor bites on.
+		// CANON p.83 — 耳房面寬 3.0 m in a 大型 court, two rooms to a flank (三正四耳); 2.4 m and one
+		// room in a 小型 one, which the compound's own size table carries.
 		inline constexpr FHouse EarRoom =
-			{ 316.0, 220.0, 270.0, false, EHutongRearEave::Lane,  460.0, EHutongPurlins::Five,  85.0, false };
+			{ 316.0, 240.0, 320.0, false, EHutongRearEave::Lane,  600.0, EHutongPurlins::Five,  85.0, false };
+	}
+
+	// 構架: the members of a house's timber frame, in 柱徑 (D) of its 檐柱.
+	// JUDGEMENT throughout — the usual 小式 sections as the secondary literature tabulates them from
+	// 則例, not checked against its text. The first place to look when a member reads too heavy.
+	namespace Frame
+	{
+		inline constexpr double GoldColumnExtraCm = 3.2;      // 金柱徑 = 檐柱徑 + 1 寸
+		inline constexpr double PurlinDiameter = 0.9;          // 檁徑
+		inline constexpr double BoardHeight = 0.65;            // 墊板
+		inline constexpr double BoardThickness = 0.25;
+		inline constexpr double TieHeight = 1.0;               // 檐枋, 金枋, 脊枋, 穿插枋, 隨梁枋
+		inline constexpr double TieThickness = 0.68;
+		inline constexpr double HeadBeamHeight = 1.4;          // 抱頭梁, 插梁
+		inline constexpr double HeadBeamWidth = 1.1;
+		inline constexpr double LongBeamHeight = 1.5;          // 五架梁, 七架梁
+		inline constexpr double LongBeamWidth = 1.25;
+		inline constexpr double ShortBeamHeight = 1.25;        // 三架梁
+		inline constexpr double ShortBeamWidth = 1.1;
+		// 瓜柱: the stoutest thing at its joint — wider than the 檁 it carries (0.9) and the 枋 that
+		// tenons into it (0.68), narrower than the beam it stands on (1.1), so no two of their faces
+		// are coplanar. Its head bevels in to seat the 檁, and runs up into it rather than stopping
+		// at its underside.
+		inline constexpr double StrutSection = 1.0;
+		inline constexpr double StrutHeadWidth = 0.6;          // of the section, where it meets the 檁
+		inline constexpr double StrutHeadBevel = 0.35;         // of the section, the bevel's own height
+		inline constexpr double StrutIntoPurlin = 0.33;        // of 檁徑, how far the head rises into it
+
+		// 角背: the brace the 脊瓜柱 stands in. 圖5-3-1 draws it flat on top with an angled edge down
+		// to the beam, reaching about half a 步架 either side of the post and a little thinner than
+		// the 三架梁 it sits on.
+		inline constexpr double BraceWidth = 0.85;             // of the 三架梁's own width
+		inline constexpr double BraceReach = 0.5;              // 步架, each side of the post
+		inline constexpr double BraceCut = 0.12;               // 步架, the corner cut's own run
+		// Low enough that the post it braces is read all the way down to the beam, not a head rising
+		// out of a lump: 圖5-3-1's 角背 covers the post's foot, no more.
+		inline constexpr double BraceHeight = 0.38;            // of the post's exposed height
+		inline constexpr double BraceStraight = 0.45;          // of its height, standing before the cut
+
+		// 出頭: what a 穿插枋 shows where it passes through a column. 圖5-3-1 draws a smaller square
+		// than the member itself, sitting on its underside — the tenon, not the whole timber.
+		inline constexpr double TenonHeight = 0.5;             // of the member's own height
+		inline constexpr double TenonWidth = 0.75;             // of its thickness
+		inline constexpr double TenonReach = 0.9;              // 柱徑, past the column's axis
+		// How far every member running along the frontage passes the last column it crosses. 圖5-3-1
+		// carries 檐枋, 墊板 and 檁 — and the 金 and 脊 sets above them — out to one line past the
+		// gable frame, so the nine of them end together; ending on the column's axis reads as a
+		// timber buried in it.
+		inline constexpr double RunProjection = 0.8;           // 檁, 墊板 and 枋 alike
+		inline constexpr double RafterDiameter = 1.0 / 3.0;    // 椽徑, laid one 椽徑 apart
+		inline constexpr double FlyingShareOfEave = 1.0 / 3.0; // 飛椽出 of 上檐出
+		inline constexpr double FlyingTailRatio = 2.5;         // 飛椽 tail against its head
+		inline constexpr double PlatformReachOfEave = 0.8;     // 臺明 下出 inside 上出, the 回水
+		inline constexpr double PlatformSide = 2.0;            // 臺明 past the gable columns
+		inline constexpr double EdgeStoneWidth = 1.3;          // 階條
+		inline constexpr double BaseStoneSide = 2.0;           // 柱頂石
+		inline constexpr double StringerWidth = 1.3;           // 垂帶
+	}
+
+	// 院落尺度: 北京四合院有小型、中型、大型之分. The plot's width decides the buildings in it —
+	// 院落寬大, 房子也隨之高大 — so a size is a row of figures, not a scale factor.
+	namespace Courtyard
+	{
+		struct FSize
+		{
+			double PlotWidthCm;
+			double HallCentralBayCm;   // 正房明間面寬
+			double HallSideBayCm;      // 次間面寬
+			double EarRoomBayCm;       // 耳房面寬, per room
+			int32 EarRoomsPerFlank;    // 三正兩耳 or 三正四耳
+			double WingStepRunCm;      // 廂房's 步架; its 進深 is (檁數 - 1) × this, plus a 廊 if it has one
+			bool bWingVeranda;         // 廂房's 外廊: the 大型 court's 5.5 m 進深 includes one, the 小型's does not
+			bool bHallRearVeranda;     // 七檁前後廊, against 前廊後無廊 in a small court
+		};
+
+		// CANON 四合院建築及其構造 p.83 — 小型: 占地寬 16 m, 三正兩耳共五間, 明間 3.3, 次間 3.0,
+		// 耳房 2.4, 廂房進深 3.5-4 m 無外廊, 院當寬度 7-8 m.
+		inline constexpr FSize Small = { 1600.0, 330.0, 300.0, 240.0, 1, 100.0, false, false };
+
+		// JUDGEMENT — 中型 between the two the page gives figures for, which names only 小型 and 大型.
+		inline constexpr FSize Medium = { 2000.0, 360.0, 315.0, 300.0, 1, 110.0, false, false };
+
+		// CANON same page — 大型: 占地寬 25 m, 三正四耳共七間, 明間 3.9-4.2, 次間 3.3, 耳房 3.0,
+		// 廂房進深 5.5 m 含外廊, 院當寬度 13 m 左右. The house table's 正房 is this hall.
+		inline constexpr FSize Large = { 2500.0, 405.0, 330.0, 300.0, 2, 110.0, true, true };
 	}
 
 	// 影壁, the screen facing the gate.
@@ -317,6 +436,11 @@ namespace HutongCanon
 		inline constexpr double WingFrontageCm = House::SideHouse.FrontageCm;
 		inline constexpr double MaxWingFrontageCm = 1500.0;
 		inline constexpr double WingEarRoomFrontageCm = House::EarRoom.FrontageCm;
+
+		// JUDGEMENT — how far below the 正房's eave an 耳房 is held. Its eave derives from its own bay
+		// width like everything else, and a wide slot pushed one to within 8 cm of the hall it is an
+		// ear of; the hierarchy is the point of the type.
+		inline constexpr double EarRoomBelowHallCm = 30.0;
 
 		// JUDGEMENT — 小天井: the shallowest light well worth walling off rather than leaving as yard.
 		inline constexpr double MinLightWellDepthCm = 300.0;

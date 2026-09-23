@@ -5,6 +5,7 @@
 #include "Generation/HutongBuildingComponent.h"
 #include "Generation/SiheyuanGenerator.h"
 #include "Generation/HutongBays.h"
+#include "Generation/HutongCanon.h"
 #include "Tools/GalleryTool.h"
 #include "Tools/HutongPresetDefaults.h"
 #include "Tools/HutongPresets.h"
@@ -197,9 +198,12 @@ bool FHutongDetailMassingTest::RunTest(const FString& Parameters)
 
 	for (const FString& Name : HutongPresets::BuiltInSiheyuanNames())
 	{
-		const FHutongSiheyuanParams P = PresetParams(Name);
+		FHutongSiheyuanParams P = PresetParams(Name);
 		const double W = P.SuggestedFrontage > 0.0 ? P.SuggestedFrontage : 900.0;
 		const double D = P.GetSuggestedDepth() > 0.0 ? P.GetSuggestedDepth() : 450.0;
+		// The eave and the section below are read off the footprint, which is the tool's to fill in.
+		P.Width = W;
+		P.Depth = D;
 
 		FDynamicMesh3 Mesh;
 		UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(
@@ -325,6 +329,65 @@ bool FHutongPlanBaysTest::RunTest(const FString& Parameters)
 	FHutongPlanBays None;
 	Wall->GetPlanBays(None);
 	TestEqual(TEXT("a wall reports no bays"), None.Boundaries.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanColumnsTest,
+	"HutongLayout.Detail.PlanColumns",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongPlanColumnsTest::RunTest(const FString& Parameters)
+{
+	// A frame and the house it is the frame of, on one footprint, put their column footings on the
+	// plan in the same places: the frame tool's Full House stamps the one beside the other.
+	for (const HutongCanon::House::FHouse& Canon : { HutongCanon::House::MainHall,
+			HutongCanon::House::MainHallSmall, HutongCanon::House::MainHallFiveBay })
+	{
+		const FHutongFrameParams FrameParams = HutongPresets::MakeFrame(Canon);
+		UHutongFrameBuildingComponent* Frame = NewObject<UHutongFrameBuildingComponent>(GetTransientPackage());
+		UHutongSiheyuanBuildingComponent* House = NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
+		Frame->Params = FrameParams;
+		House->Params = FrameParams.House;
+		const FString Label = FString::Printf(TEXT("%.0f cm, %d rows expected"), Canon.FrontageCm, Canon.bRearVeranda ? 4 : 3);
+
+		for (int32 s = 0; s < 4; ++s)
+		{
+			const EHutongBaySide Side = (EHutongBaySide)s;
+			const bool bAlongX = HutongGen::BaySide::IsAlongX(Side);
+			const double W = Canon.FrontageCm, D = FrameParams.House.GetSuggestedDepth();
+			for (UHutongBuildingComponent* C : { (UHutongBuildingComponent*)Frame, (UHutongBuildingComponent*)House })
+			{
+				C->SetFootprintSize(bAlongX ? FVector2D(W, D) : FVector2D(D, W));
+				C->SetFacade(Side);
+			}
+			FHutongPlanBays F, H;
+			Frame->GetPlanBays(F);
+			House->GetPlanBays(H);
+			const FString Name = Label + TEXT(" · ") + StaticEnum<EHutongBaySide>()->GetNameStringByValue(s);
+
+			TestEqual(*(Name + TEXT(": frame rows")), F.ColumnRows.Num(), Canon.bRearVeranda ? 4 : 3);
+			TestEqual(*(Name + TEXT(": house rows")), H.ColumnRows.Num(), F.ColumnRows.Num());
+			TestEqual(*(Name + TEXT(": boundaries")), H.Boundaries.Num(), F.Boundaries.Num());
+			if (F.ColumnRows.Num() != H.ColumnRows.Num() || F.Boundaries.Num() != H.Boundaries.Num()) continue;
+			for (int32 i = 0; i < F.ColumnRows.Num(); ++i)
+			{
+				TestTrue(*FString::Printf(TEXT("%s: row %d where the frame's is (%.1f vs %.1f)"), *Name, i, H.ColumnRows[i], F.ColumnRows[i]),
+					FMath::Abs(H.ColumnRows[i] - F.ColumnRows[i]) < 0.5);
+			}
+			for (int32 i = 0; i < F.Boundaries.Num(); ++i)
+			{
+				TestTrue(*FString::Printf(TEXT("%s: column line %d where the frame's is"), *Name, i),
+					FMath::Abs(H.Boundaries[i] - F.Boundaries[i]) < 0.5);
+			}
+			TestTrue(*(Name + TEXT(": footings drawn")), F.FootingSize > 2.0 * F.ColumnRadius && H.FootingSize > 0.0);
+		}
+		if (Canon.FrontageCm > 1500.0)
+		{
+			FHutongPlanBays F;
+			Frame->GetPlanBays(F);
+			TestEqual(TEXT("the five-bay hall is five bays"), F.Boundaries.Num(), 6);
+		}
+	}
 	return true;
 }
 

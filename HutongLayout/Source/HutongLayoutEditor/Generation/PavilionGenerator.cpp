@@ -103,6 +103,7 @@ namespace HutongGen
 		// 5) The roof.
 		const double O = FMath::Max(P.RoofOverhang, 0.0);
 		const int32 RoofFirstTri = Mesh.MaxTriangleID();
+		UE::Geometry::FIndex2i MainRidge(0, 0);
 
 		const double RoofW = (X1 - X0) + 2.0 * O;
 		const double RoofD = (Y1 - Y0) + 2.0 * O;
@@ -133,7 +134,7 @@ namespace HutongGen
 			// The gable needs rows on both sides of the 收山 line.
 			Xie.SlopeSegments = FMath::Max(P.RoofSlopeSegments, 3);
 
-			AppendXieshanRoof(Mesh, RoofMin, Xie);
+			AppendXieshanRoof(Mesh, RoofMin, Xie, &MainRidge);
 		}
 		else
 		{
@@ -185,5 +186,6 @@ namespace HutongGen
 		}
 
 		SetMaterialIDForTrianglesFrom(Mesh, RoofFirstTri, MatSlot_Roof);
+		SetMaterialIDForTriangleRange(Mesh, MainRidge.A, MainRidge.B, MatSlot_Ridge);
 	}
 }

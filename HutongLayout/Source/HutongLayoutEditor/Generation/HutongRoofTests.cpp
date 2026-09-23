@@ -13,6 +13,8 @@
 #include "Tools/GalleryTool.h"
 #include "Tools/HutongPresetDefaults.h"
 #include "Tools/HutongPresets.h"
+#include "Generation/HutongCanon.h"
+#include "Generation/FrameGenerator.h"
 #include "Generation/HutongUrban.h"
 #include "Misc/AutomationTest.h"
 
@@ -1978,65 +1980,49 @@ bool FHutongCompoundRearCourtTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("there is a 後院 between the hall row and the 後罩房"),
 		RearFront - HallNorth > 150.0);
 
-	// Exactly one of the hall's two 耳房 is held off the boundary, leaving the 過道; the other still runs out to it.
-	int32 EarsAtEdge = 0, EarsHeldBack = 0;
+	// Both 耳房 run out to their boundary; the way through to the 後院 is cut through the one on the
+	// gate's side, which is that type's whole job (四合院: the hall keeps the axis).
+	int32 Ears = 0, Passages = 0;
 	double PassageAt = -1.0;
 	for (const FHutongCompoundSlot& S : Slots)
 	{
-		if (S.Piece != EHutongCompoundPiece::EarRoom) continue;
-		if (S.Facing != EHutongBaySide::MinusY) continue;   // the wing's ears face across the court
+		const bool bEar = S.Piece == EHutongCompoundPiece::EarRoom
+			|| S.Piece == EHutongCompoundPiece::EarPassage;
+		if (!bEar || S.Facing != EHutongBaySide::MinusY) continue;   // the wing's ears face across the court
+		if (FMath::Abs(S.Min.Y + S.Size.Y - HallNorth) > 1.0) continue;
 
+		++Ears;
 		const bool bLow = S.Min.X < 0.5 * In.Width;
 		const double Outer = bLow ? S.Min.X : (In.Width - (S.Min.X + S.Size.X));
-		if (Outer < 0.01) ++EarsAtEdge;
-		else { ++EarsHeldBack; PassageAt = bLow ? 0.0 : In.Width; }
+		TestTrue(TEXT("an 耳房 runs out to its boundary"), Outer < 0.01);
+		if (S.Piece == EHutongCompoundPiece::EarPassage)
+		{
+			++Passages;
+			PassageAt = bLow ? 0.0 : In.Width;
+			// Wide enough to be a room and a way through: the layout refuses the ears otherwise.
+			TestTrue(TEXT("the 耳房過道 seats its room beside the way"),
+				S.Size.X >= In.MinEarRoomFrontage + In.PassageWidth - 1.0);
+		}
 	}
-	TestEqual(TEXT("one 耳房 still runs to the boundary"), EarsAtEdge, 1);
-	TestEqual(TEXT("one 耳房 is held back for the 過道"), EarsHeldBack, 1);
+	TestEqual(TEXT("an 耳房 on each flank"), Ears, 2);
+	TestEqual(TEXT("exactly one of them carries the 過道"), Passages, 1);
 	// East is local -X, so the gate's side is the low-X end when the gate is at the east.
 	TestTrue(TEXT("the 過道 is on the gate's own side"),
 		In.bGateAtEastEnd ? (PassageAt == 0.0) : (PassageAt == In.Width));
 
-	// The 過道 is covered: one roof over the strip, running from the 隔牆 that closes it to the 後罩房 across the back.
-	int32 Passages = 0;
+	// The hall keeps the plot's axis, whichever flank the way through is on.
 	for (const FHutongCompoundSlot& S : Slots)
 	{
-		if (S.Piece != EHutongCompoundPiece::Passage) continue;
-		++Passages;
-		TestTrue(TEXT("the 過道's roof runs along the plot's depth"), S.bLengthAlongY);
-		TestTrue(TEXT("the 過道's roof reaches the 後罩房"),
-			FMath::Abs(S.Min.Y + S.Size.Y - RearFront) < 0.01);
-		TestTrue(TEXT("the 過道's roof covers the 隔牆 that closes it"), S.Min.Y <= HallNorth);
-		// It bears into the wall at each side.
-		const bool bLow = S.Min.X < 0.5 * In.Width;
-		TestTrue(TEXT("the 過道's roof bears into the 院牆"),
-			bLow ? (S.Min.X < In.WallThickness) : (S.Min.X + S.Size.X > In.Width - In.WallThickness));
-
-		// And it builds: a roof and nothing else, so every vertex sits at or above its eave.
-		FHutongPassageParams Pass;
-		UE::Geometry::FDynamicMesh3 Mesh;
-		UHutongPassageBuildingComponent::BuildPassageMesh(
-			Pass, S.Size.Y, S.Size.X - 2.0 * Pass.Bearing, /*bAlongY*/ true, Mesh);
-		TestTrue(TEXT("the 過道's roof builds geometry"), Mesh.TriangleCount() > 0);
-		for (int32 vid : Mesh.VertexIndicesItr())
-		{
-			TestTrue(TEXT("nothing of the 過道 hangs below its eave"),
-				Mesh.GetVertex(vid).Z >= Pass.EaveHeight - 0.01);
-		}
+		if (S.Piece != EHutongCompoundPiece::MainHall) continue;
+		TestNearlyEqual(TEXT("the 正房 stands on the plot's centre line"),
+			S.Min.X + 0.5 * S.Size.X, 0.5 * In.Width, 1.0);
 	}
-	TestEqual(TEXT("exactly one 過道"), Passages, 1);
 
-	// And the strip is closed onto the 內院 by a 隔牆 with a doorway.
-	bool bGatedPassage = false;
+	// Nothing stands in a strip beside the ear room any more: the 耳房過道 builds its own roof and walls.
 	for (const FHutongCompoundSlot& S : Slots)
 	{
-		if (S.Piece != EHutongCompoundPiece::Wall) continue;
-		if (S.WallRole != EHutongWallRole::Courtyard || S.bLengthAlongY) continue;
-		if (S.WallGateAt < 0.0) continue;
-		// The run that crosses the passage strip, as opposed to the cross wall further south.
-		if (S.Min.Y > HallNorth - 400.0 && S.Min.Y < HallNorth) bGatedPassage = true;
+		TestTrue(TEXT("no separate 過道 roof"), S.Piece != EHutongCompoundPiece::Passage);
 	}
-	TestTrue(TEXT("the 過道 is closed onto the 內院 by a gated 隔牆"), bGatedPassage);
 
 	// And no other plan grows one: the 後罩房 belongs to the 三進 alone.
 	for (EHutongCompoundPlan Plan :
@@ -2445,4 +2431,175 @@ bool FHutongBaseCourseLineTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// 七檁前後廊 as 四合院建築及其構造 p.84 gives it: four column rows, the figures in the source's ranges, the ridge over the plan's middle.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongMainHallFrameTest,
+	"HutongLayout.Proportions.MainHallFrame",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongMainHallFrameTest::RunTest(const FString& Parameters)
+{
+	FHutongSiheyuanParams P = HutongPresets::MakeHouse(HutongCanon::House::MainHall);
+	P.Width = P.SuggestedFrontage;
+	P.Depth = P.GetSuggestedDepth();
+
+	const int32 N = P.GetBayCount();
+	TestEqual(TEXT("three bays"), N, 3);
+	const double Central = P.GetCentralBayWidth();
+	const double Side = Central * P.SideBayWidthRatio;
+	TestTrue(FString::Printf(TEXT("明間 %.0f in 390-420"), Central), Central >= 390.0 && Central <= 420.0);
+	TestTrue(FString::Printf(TEXT("次間 %.0f about 330"), Side), FMath::Abs(Side - 330.0) <= 15.0);
+	TestTrue(FString::Printf(TEXT("檐柱 %.0f in 330-350"), P.GetColumnHeight()),
+		P.GetColumnHeight() >= 330.0 && P.GetColumnHeight() <= 350.0);
+	TestTrue(FString::Printf(TEXT("進深 %.0f at least 700"), P.Depth), P.Depth >= 699.0);
+
+	double Front, Rear;
+	P.GetBuiltVerandaDepths(P.Depth, P.WallThickness, Front, Rear);
+	TestTrue(TEXT("a 前廊 and a 後廊, one 步架 each"),
+		FMath::IsNearlyEqual(Front, P.StepRun, 0.01) && FMath::IsNearlyEqual(Rear, P.StepRun, 0.01));
+
+	// Where the ridge course stands along the depth: the mean Y of everything within a centimetre of the top.
+	auto RidgeY = [](const FHutongSiheyuanParams& Q)
+	{
+		FDynamicMesh3 M;
+		HutongGen::BuildSiheyuan(M, Q);
+		double Top = -TNumericLimits<double>::Max();
+		for (const int32 V : M.VertexIndicesItr()) Top = FMath::Max(Top, M.GetVertex(V).Z);
+		double Sum = 0.0;
+		int32 Count = 0;
+		for (const int32 V : M.VertexIndicesItr())
+		{
+			const FVector3d X = M.GetVertex(V);
+			if (X.Z > Top - 1.0) { Sum += X.Y; ++Count; }
+		}
+		return Count ? Sum / Count : 0.0;
+	};
+
+	const double Centred = RidgeY(P);
+	TestTrue(FString::Printf(TEXT("前後廊 ridge at %.0f, over the middle of %.0f"), Centred, P.Depth),
+		FMath::Abs(Centred - 0.5 * P.Depth) < 5.0);
+
+	// 前廊後無廊 on its 鑽金柱 frame: ridge still over the middle, no 撅尾巴.
+	FHutongSiheyuanParams Small = HutongPresets::MakeHouse(HutongCanon::House::MainHallSmall);
+	Small.Width = Small.SuggestedFrontage;
+	Small.Depth = Small.GetSuggestedDepth();
+	Small.GetBuiltVerandaDepths(Small.Depth, Small.WallThickness, Front, Rear);
+	TestTrue(TEXT("前廊後無廊: a 前廊 of one 步架 and no 後廊"),
+		FMath::IsNearlyEqual(Front, Small.StepRun, 0.01) && Rear == 0.0);
+	const double SmallRidge = RidgeY(Small);
+	TestTrue(FString::Printf(TEXT("前廊後無廊 ridge at %.0f, over the middle of %.0f"), SmallRidge, Small.Depth),
+		FMath::Abs(SmallRidge - 0.5 * Small.Depth) < 5.0);
+	TestTrue(TEXT("and its roof is lower than the 七檁 hall's"),
+		Small.GetRoofRise() < P.GetRoofRise());
+	return true;
+}
+
+// 構架: 圖5-3-1's four column rows and stacked beams for 七檁前後廊, 圖5-3-2's 鑽金柱 frame for the small court.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFrameTest,
+	"HutongLayout.Frame.MainHall",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongFrameTest::RunTest(const FString& Parameters)
+{
+	auto Placed = [](const HutongCanon::House::FHouse& Row)
+	{
+		FHutongFrameParams P = HutongPresets::MakeFrame(Row);
+		P.House.Width = P.House.SuggestedFrontage;
+		P.House.Depth = P.House.GetSuggestedDepth();
+		return P;
+	};
+
+	FHutongFrameParams Big = Placed(HutongCanon::House::MainHall);
+	TestFalse(TEXT("no roof until it is asked for"), Big.bHasRafters);
+	// The rest of this is about the frame under one, so the roof goes on.
+	Big.bHasRafters = true;
+	const HutongGen::FrameLayout::FLayout L = HutongGen::FrameLayout::Make(Big.House);
+	TestEqual(TEXT("七檁"), L.Num(), 7);
+	TestTrue(TEXT("前後廊: the main beams span 金柱 to 金柱"), L.bRearVeranda && L.Front == 1 && L.Rear == 5);
+	TestTrue(TEXT("both eaves level"), FMath::IsNearlyEqual(L.Support[0], L.Support[6]));
+	TestTrue(TEXT("the 檐柱 is the house's column"),
+		FMath::IsNearlyEqual(L.Support[0] - L.Floor, Big.House.GetColumnHeight(), 0.5));
+	TestTrue(TEXT("each line higher toward the ridge"),
+		L.Support[0] < L.Support[1] && L.Support[1] < L.Support[2] && L.Support[2] < L.Support[3]);
+	TestTrue(TEXT("the 金柱 is thicker than the 檐柱"), L.GoldD > L.D);
+
+	const HutongGen::FrameLayout::FLayout S = HutongGen::FrameLayout::Make(Placed(HutongCanon::House::MainHallSmall).House);
+	TestTrue(TEXT("前廊後無廊: 五檁, a 前廊, no 後廊, the main beams ending on the 插梁's 瓜柱"),
+		S.Num() == 5 && S.bFrontVeranda && !S.bRearVeranda && S.Front == 1 && S.Rear == 3);
+
+	auto Build = [](const FHutongFrameParams& P)
+	{
+		FDynamicMesh3 M;
+		HutongGen::BuildFrame(M, P);
+		return M;
+	};
+	const FDynamicMesh3 Whole = Build(Big);
+	const HutongMeshInspect::FShellReport R = HutongMeshInspect::InspectShell(Whole);
+	// Not IsSolid: edges are matched by position, and the 階條 stacked on the platform's body share
+	// theirs with it, which reads as duplicated. Every edge still has its partner.
+	TestTrue(FString::Printf(TEXT("every member closed and wound outward (%d unmatched)"), R.Unmatched),
+		R.Triangles > 0 && R.Unmatched == 0 && R.Volume > 0.0);
+	const UE::Geometry::FAxisAlignedBox3d B = Whole.GetBounds();
+	TestTrue(TEXT("stands on the ground"), FMath::Abs(B.Min.Z) < 1.0);
+	TestTrue(TEXT("reaches past the ridge purlin"), B.Max.Z >= L.PurlinTop(L.Ridge()) - 1.0);
+	TestTrue(TEXT("the eaves reach out to 上檐出 front and back"),
+		B.Min.Y <= -Big.House.GetRoofOverhang() + 1.0 && B.Max.Y >= Big.House.Depth + Big.House.GetRearRoofOverhang() - 1.0);
+
+	FHutongFrameParams Bare = Big;
+	Bare.bHasPlatform = false;
+	Bare.bHasRafters = false;
+	const FDynamicMesh3 Skeleton = Build(Bare);
+
+	// 檐枋, 墊板, 檁 and the 金 and 脊 sets above them all pass the gable frame's column by the one
+	// reach, so with the platform and the rafters off nothing along X reaches past that line.
+	const double EndColumn = Big.House.GetBayBoundary(0, Big.House.GetBayCount(),
+		Big.House.Width, Big.House.GetColumnRadius());
+	const double RunEnd = EndColumn - HutongCanon::Frame::RunProjection * L.D;
+	TestNearlyEqual(TEXT("the members along the frontage end on one line past the column"),
+		Skeleton.GetBounds().Min.X, RunEnd, 0.01);
+	TestTrue(TEXT("the platform and the rafters are what their toggles take off"),
+		Skeleton.TriangleCount() < Whole.TriangleCount());
+	TestTrue(TEXT("without the platform the columns stand at floor height"),
+		FMath::Abs(Skeleton.GetBounds().Min.Z - L.Floor) < 2.0);
+
+	UE_LOG(LogTemp, Display, TEXT("構架 正房: %d triangles, ridge purlin top %.0f, eave %.0f"),
+		R.Triangles, L.PurlinTop(L.Ridge()), L.Support[0]);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRidgeSlotTest,
+	"HutongLayout.Appearance.RidgeSlot",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// The 正脊 wears its own slot, so it is coursed rather than tiled in 壟 like the slopes under it.
+bool FHutongRidgeSlotTest::RunTest(const FString& Parameters)
+{
+	auto RidgeTris = [](const UE::Geometry::FDynamicMesh3& M)
+	{
+		int32 N = 0;
+		if (const UE::Geometry::FDynamicMeshMaterialAttribute* Mat = M.HasAttributes() ? M.Attributes()->GetMaterialID() : nullptr)
+		{
+			for (int32 tid : M.TriangleIndicesItr()) N += Mat->GetValue(tid) == HutongGen::MatSlot_Ridge;
+		}
+		return N;
+	};
+
+	FHutongSiheyuanParams House = HutongPresets::MakeHouse(HutongCanon::House::MainHall);
+	House.bHasRidgeCourse = true;
+	UE::Geometry::FDynamicMesh3 A;
+	UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(House, EHutongBaySide::MinusY, 0, 1060.0, House.GetSuggestedDepth(), A);
+	TestTrue(TEXT("a gable roof's 正脊 is on the ridge slot"), RidgeTris(A) >= 12);
+
+	House.bHasRidgeCourse = false;
+	UE::Geometry::FDynamicMesh3 B;
+	UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(House, EHutongBaySide::MinusY, 0, 1060.0, House.GetSuggestedDepth(), B);
+	TestEqual(TEXT("and no ridge, no ridge slot"), RidgeTris(B), 0);
+
+	FHutongHallParams Hall;
+	Hall.RoofType = EHutongRoofType::Xieshan;
+	UE::Geometry::FDynamicMesh3 C;
+	UHutongHallBuildingComponent::BuildHallMesh(Hall, EHutongBaySide::MinusY, 0, 1500.0, 900.0, C);
+	TestTrue(TEXT("a 歇山's 正脊 is on the ridge slot"), RidgeTris(C) > 0);
+	return true;
+}

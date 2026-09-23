@@ -16,6 +16,7 @@
 #include "Generation/PassageGenerator.h"
 #include "Generation/FlowerBedGenerator.h"
 #include "Generation/WaterJarGenerator.h"
+#include "Generation/FrameGenerator.h"
 #include "Generation/PavilionGenerator.h"
 #include "Generation/ScreenWallGenerator.h"
 #include "Generation/ShopfrontGenerator.h"
@@ -240,6 +241,16 @@ void Apply(EHutongDetail D, FHutongWaterJarParams& P)
 	else if (D == EHutongDetail::Hero)
 	{
 		P.Sides = FMath::Min(Finer(P.Sides), 48);
+	}
+}
+
+void Apply(EHutongDetail D, FHutongFrameParams& P)
+{
+	// No block form: a frame is its members, so 塊 reads as 遠 — posts, beams and purlins, no rafters.
+	if (D == EHutongDetail::Far || D == EHutongDetail::Massing)
+	{
+		P.bHasRafters = false;
+		P.bHasRidgeBraces = false;
 	}
 }
 
@@ -468,7 +479,7 @@ FBlock From(const FHutongSiheyuanParams& P)
 	B.EaveHeight = P.GetEaveHeight();
 	B.FrontOverhang = P.GetRoofOverhang();
 	B.RearOverhang = P.GetRearRoofOverhang();
-	// The same arithmetic MakeRoofParams does, less the veranda.
+	// The same arithmetic MakeRoofParams does.
 	B.RearSlopeTrim = (P.RearEave == EHutongRearEave::Lane)
 		? FMath::Max(B.FrontOverhang - B.RearOverhang, 0.0) : 0.0;
 	B.Section = P.GetRoofSection();
@@ -484,7 +495,7 @@ FBlock From(const FHutongGateHouseParams& P)
 	B.FloorHeight = P.FloorHeight;
 	B.PlatformOverhang = P.PlatformOverhang;
 	B.EaveHeight = P.GetEaveHeight();
-	B.FrontOverhang = FMath::Max(P.RoofOverhang, 0.0);
+	B.FrontOverhang = P.GetRoofOverhang();
 	B.RearOverhang = B.FrontOverhang;
 	B.Section = Jiajia::MakeSection(
 		P.GetPurlins(), 0.5 * FMath::Max(P.Depth, 1.0), B.FrontOverhang, P.RoofApexRoll);

@@ -38,6 +38,9 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Has Front Veranda (前廊)", ToolTip="Sets the facade back behind a front colonnade to form a veranda (前廊)."))
 	bool bHasFrontVeranda = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Has Rear Veranda (後廊)", EditCondition="bHasFrontVeranda", ToolTip="Makes the frame 前後廊: a row of rear 金柱 one 廊步 inside the back wall, the rear veranda enclosed in the room and the ridge over the middle of the plan."))
+	bool bHasRearVeranda = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Eave From Central Bay Width (檐柱高 = 8/10 明間)", EditCondition="bDeriveProportions", ToolTip="Derives the column height from the width of the central bay."))
 	bool bDeriveEaveFromBays = true;
 
@@ -245,6 +248,9 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(UIMin="15", UIMax="80", ClampMin="5", Units="cm", ToolTip="Depth of each step tread, in cm."))
 	double StepTread = 30.0;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Veranda End Doorways (廊門筒子)", EditCondition="bHasFrontVeranda", ToolTip="Opens a doorway through each gable wall across the front veranda (前廊), so a corridor (遊廊) meeting the gable walks straight on along the veranda."))
+	bool bHasVerandaEndDoorways = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Has Gable Pier (墀頭)", ToolTip="Adds a corbelled brick pier (墀頭) at each gable's front corner."))
 	bool bHasChitou = true;
 
@@ -450,6 +456,26 @@ struct FHutongSiheyuanParams
 		if (!bHasFrontVeranda) return 0.0;
 		return FMath::Max(bDeriveProportions ? FMath::Max(StepRun, 40.0)
 											 : VerandaDepth, 0.0);
+	}
+
+	// 後廊: the rear 金柱 stand one 廊步 in from the back wall, which is on the 後檐柱 line.
+	double GetRearVerandaDepth() const
+	{
+		return (bHasFrontVeranda && bHasRearVeranda) ? GetVerandaDepth() : 0.0;
+	}
+
+	// The 廊步 actually built on a footprint this deep, front and rear: under four column radii two
+	// rows' curved faces nearly coincide and z-fight, and the verandas never eat the room.
+	void GetBuiltVerandaDepths(double InDepth, double WallT, double& OutFront, double& OutRear) const
+	{
+		const double MinRow = 4.0 * GetColumnRadius();
+		const double Room = FMath::Max(InDepth - 2.0 * WallT - 100.0, 0.0);
+		OutFront = GetVerandaDepth();
+		if (OutFront < MinRow) OutFront = 0.0;
+		OutFront = FMath::Clamp(OutFront, 0.0, Room);
+		OutRear = (OutFront > 0.0) ? GetRearVerandaDepth() : 0.0;
+		if (OutRear < MinRow) OutRear = 0.0;
+		OutRear = FMath::Clamp(OutRear, 0.0, Room - OutFront);
 	}
 
 	// 舉架: the eave overhang, then one segment per 步架 in from it.

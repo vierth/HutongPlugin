@@ -21,6 +21,10 @@ public:
 	virtual void CreateToolkit() override;
 	virtual TMap<FName, TArray<TSharedPtr<FUICommandInfo>>> GetModeCommands() const override;
 
+	// Puts the active tool down, next tick. Escape with nothing in hand: no preview under the
+	// cursor, and a click on the ground lays nothing out.
+	void PutToolDown();
+
 	// The palette command that started a tool, by the tool's registered identifier.
 	TSharedPtr<FUICommandInfo> FindToolCommand(const FString& ToolIdentifier) const;
 

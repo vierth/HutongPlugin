@@ -949,7 +949,8 @@ namespace HutongMeshUtils
 	void AppendXieshanRoof(
 		FDynamicMesh3& Mesh,
 		const FVector3d& EaveMin,
-		const FXieshanRoofSpec& Spec)
+		const FXieshanRoofSpec& Spec,
+		UE::Geometry::FIndex2i* OutMainRidge)
 	{
 		const double W = FMath::Max(Spec.Width, 1.0);
 		const double D = FMath::Max(Spec.Depth, 1.0);
@@ -1218,7 +1219,9 @@ namespace HutongMeshUtils
 			{
 				TArray<FVector3d> RidgeLine = {
 					Sample(0, 0.0, 1.0), Sample(0, 1.0, 1.0) };
+				const int32 RidgeFirst = Mesh.MaxTriangleID();
 				SweepStripAlongPath(Mesh, RidgeLine, FVector3d(0.0, 1.0, 0.0), HalfW, Below, Above);
+				if (OutMainRidge) *OutMainRidge = UE::Geometry::FIndex2i(RidgeFirst, Mesh.MaxTriangleID());
 			}
 
 			// One rake and one hip per corner.

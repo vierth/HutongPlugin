@@ -36,12 +36,28 @@ namespace HutongGen::GateRow
 	}
 
 	// Raises the gate's eave until its ridge clears the row's by Clearance. Zero row leaves it alone.
+	// Solved rather than added: 上檐出 derives from 柱高 and the eave's own overhang carries the first
+	// 舉, so a taller gate has a taller roof too and adding the shortfall once overshoots it.
 	inline void LiftGateAboveRidge(FHutongGateHouseParams& Gate, double GateDepth,
 		double RowRidgeZ, double Clearance = HutongCanon::Gate::RidgeAboveRowCm)
 	{
 		if (RowRidgeZ <= 0.0) return;
-		const double Have = Ridge::Gate(Gate, GateDepth);
 		const double Want = RowRidgeZ + FMath::Max(Clearance, 0.0);
-		if (Have < Want) Gate.EaveHeight = Gate.GetEaveHeight() + (Want - Have);
+		const double Start = Gate.GetEaveHeight();
+		if (Ridge::Gate(Gate, GateDepth) >= Want) return;
+
+		for (int32 Pass = 0; Pass < 6; ++Pass)
+		{
+			const double Have = Ridge::Gate(Gate, GateDepth);
+			if (FMath::Abs(Have - Want) < 0.005) break;
+
+			FHutongGateHouseParams Probe = Gate;
+			Probe.EaveHeight = Gate.GetEaveHeight() + 10.0;
+			const double Slope = 0.1 * (Ridge::Gate(Probe, GateDepth) - Have);
+			if (Slope < UE_KINDA_SMALL_NUMBER) break;
+			Gate.EaveHeight = Gate.GetEaveHeight() + (Want - Have) / Slope;
+		}
+		// Never lowered: a gate already clear of the row stays where it stands.
+		Gate.EaveHeight = FMath::Max(Gate.EaveHeight, Start);
 	}
 }

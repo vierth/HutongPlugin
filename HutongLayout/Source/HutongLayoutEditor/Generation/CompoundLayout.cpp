@@ -90,42 +90,45 @@ namespace HutongGen
 			Add(Out, EHutongCompoundPiece::FrontRow, 0.0, 0.0, GateX0, FrontD, EHutongBaySide::PlusY);
 		}
 
+		const double T = FMath::Max(In.WallThickness, 5.0);
+
+		// 過道: the way through to the 後院 is cut through the 耳房 on the gate's own side, so the
+		// flank that carries it has to seat a room and the way both.
+		const double PassWanted = In.HasRearCourt()
+			? FMath::Clamp(In.PassageWidth, T + 80.0, 0.25 * W) : 0.0;
+
 		// 正房三間兩耳: the hall's own three bays in the middle with an 耳房 against each flank.
 		double HallW = FMath::Clamp(In.HallFrontage, 400.0, W);
 		double EarD = FMath::Clamp(In.EarRoomDepth, 150.0, FMath::Max(HallD - 60.0, 150.0));
-		const bool bEars = In.bHasEarRooms && (0.5 * (W - HallW) >= In.MinEarRoomFrontage);
+		const bool bEars = In.bHasEarRooms && (0.5 * (W - HallW) >= In.MinEarRoomFrontage + PassWanted);
 		if (!bEars)
 		{
 			HallW = W;
 			EarD = HallD;
 		}
+		// The 正房 stands on the plot's axis, and its two 耳房 fill the flanks either side of it.
 		const double HallX0 = 0.5 * (W - HallW);
 		const double HallX1 = HallX0 + HallW;
 
-		const double T = FMath::Max(In.WallThickness, 5.0);
 		// The 隔牆 the compound divides itself with: the cross wall, the gate court's cheeks and the 外院's partition.
 		const double CT = FMath::Max(In.CourtyardWallThickness, 5.0);
 
 		// Where a 隔牆 meeting the perimeter stops.
 		const double WallBury = 0.5 * T;
 
-		// 過道: the way through to the 後院, at the plot edge past the 耳房 on the gate's own side.
-		const double PassW = (In.HasRearCourt() && bEars)
-			? FMath::Clamp(In.PassageWidth, T + 80.0, 0.25 * W) : 0.0;
+		const double PassW = bEars ? PassWanted : 0.0;
 		const bool bPassAtLowX = In.bGateAtEastEnd;
-
-		// The 耳房 on the passage's side stops short of the boundary by that strip; the other still runs out to it.
-		const double EarLowX  = (PassW > 0.0 && bPassAtLowX)  ? PassW : 0.0;
-		const double EarHighX = (PassW > 0.0 && !bPassAtLowX) ? (W - PassW) : W;
 
 		Add(Out, EHutongCompoundPiece::MainHall, HallX0, HallNorth - HallD, HallX1, HallNorth,
 			EHutongBaySide::MinusY);
 		if (bEars)
 		{
-			Add(Out, EHutongCompoundPiece::EarRoom, EarLowX, HallNorth - EarD, HallX0, HallNorth,
-				EHutongBaySide::MinusY);
-			Add(Out, EHutongCompoundPiece::EarRoom, HallX1, HallNorth - EarD, EarHighX, HallNorth,
-				EHutongBaySide::MinusY);
+			// One of the two carries the way through; both run out to the boundary.
+			const bool bPassage = PassW > 0.0;
+			Add(Out, (bPassage && bPassAtLowX) ? EHutongCompoundPiece::EarPassage : EHutongCompoundPiece::EarRoom,
+				0.0, HallNorth - EarD, HallX0, HallNorth, EHutongBaySide::MinusY);
+			Add(Out, (bPassage && !bPassAtLowX) ? EHutongCompoundPiece::EarPassage : EHutongCompoundPiece::EarRoom,
+				HallX1, HallNorth - EarD, W, HallNorth, EHutongBaySide::MinusY);
 		}
 
 		// 後罩房 across the back, full width, its front onto the 後院 and its back the plot boundary.
@@ -136,24 +139,6 @@ namespace HutongGen
 
 		// What stands at the plot edge on the north, which the side walls run up to.
 		const double NorthEdgeFace = HallNorth - (bEars ? EarD : HallD);
-
-		// The 隔牆 closing the 過道 onto the 內院, with the doorway that is the whole point of it.
-		if (PassW > 0.0)
-		{
-			const double PassX0 = bPassAtLowX ? WallBury : (W - PassW);
-			const double PassX1 = bPassAtLowX ? PassW : (W - WallBury);
-			Add(Out, EHutongCompoundPiece::Wall, PassX0, NorthEdgeFace, PassX1, NorthEdgeFace + CT,
-				EHutongBaySide::MinusY, /*bAlongY*/ false, EHutongWallRole::Courtyard,
-				/*bFlip*/ false, /*WallGateAt*/ 0.5);
-
-			// And the roof over it, which is what makes the strip a 過道 rather than an alley.
-			const double Bear = FMath::Clamp(In.PassageBearing, 1.0, 30.0);
-			const double ClearX0 = bPassAtLowX ? T : (W - PassW);
-			const double ClearX1 = bPassAtLowX ? PassW : (W - T);
-			Add(Out, EHutongCompoundPiece::Passage,
-				ClearX0 - Bear, NorthEdgeFace, ClearX1 + Bear, D - RearRowD,
-				EHutongBaySide::MinusY, /*bAlongY*/ true);
-		}
 
 		// The 垂花門's span is wanted below: the 抄手遊廊's returns stop against its cheeks.
 		double InnerY0 = CourtY0;
@@ -277,8 +262,15 @@ namespace HutongGen
 		Add(Out, EHutongCompoundPiece::SideHouse, 0.0, WY0, WingD, WY1, EHutongBaySide::PlusX);
 		Add(Out, EHutongCompoundPiece::SideHouse, W - WingD, WY0, W, WY1, EHutongBaySide::MinusX);
 
+		// 前廊 + 抄手遊廊: each link runs on the line of the 廂房's veranda, its court side on the
+		// wing's front, so the rooms either side of the wing give up their front strip to it.
+		const double LW = FMath::Clamp(In.CorridorDepth, 90.0, 0.22 * W);
+		const bool bLinks = In.HasLinkedVerandas() && WingD - LW >= 120.0;
+		const double LegX0 = WingD - LW;
+
 		// Shallower than the wing: an 耳房 as deep as the building it defers to is not one.
-		const double WED = FMath::Clamp(EarD, 120.0, FMath::Max(WingD - 60.0, 120.0));
+		double WED = FMath::Clamp(EarD, 120.0, FMath::Max(WingD - 60.0, 120.0));
+		if (bLinks) WED = FMath::Min(WED, LegX0);
 		if (bWingEars)
 		{
 			// Butted against the 廂房 with no gap, the way the street row butts the gate.
@@ -287,7 +279,8 @@ namespace HutongGen
 		}
 
 		// 小天井: the pocket at each plot edge between the 耳房's front and the north end of the wing range.
-		const double WellX = WingD;
+		// Behind the north link when there is one, whose back its wall then is.
+		const double WellX = bLinks ? LegX0 - CT : WingD;
 		const double WellY0 = WingY1;
 		const double WellY1 = NorthEdgeFace;
 		if (bEars && WellY1 - WellY0 >= In.MinLightWellDepth && WellX >= 150.0)
@@ -425,6 +418,52 @@ namespace HutongGen
 			Add(Out, EHutongCompoundPiece::Corridor, FMath::Max(IGX1, RingX0), RingY0, RingX1, RingY0 + CD,
 				EHutongBaySide::MinusY, /*bAlongY*/ false, EHutongWallRole::Perimeter,
 				/*bFlipOpenSide*/ true);
+		}
+
+		// 前廊 + 抄手遊廊: four L-shaped links, each run abutting the next, so the 垂花門, both 廂房
+		// 前廊 and the 正房's 前廊 are one covered walk. The 廂房 and 正房 open their gables across
+		// their verandas where a link meets them.
+		if (bLinks)
+		{
+			for (const bool bHigh : { false, true })
+			{
+				// Mirrored about the axis: X measured in from this side's plot edge.
+				auto X = [&](double A) { return bHigh ? W - A : A; };
+				auto AddRun = [&](double A0, double Y0, double A1, double Y1, bool bAlongY, bool bOpenFlip)
+				{
+					Add(Out, EHutongCompoundPiece::Corridor, FMath::Min(X(A0), X(A1)), Y0, FMath::Max(X(A0), X(A1)), Y1,
+						EHutongBaySide::MinusY, bAlongY, EHutongWallRole::Perimeter, bOpenFlip);
+				};
+				// An along-Y run opens to +X unflipped, an along-X run to -Y: both toward the court.
+				const bool bLegFlip = bHigh;
+
+				// South: from the 垂花門's cheek along the cross wall, the corner, then north past the
+				// 廂耳房 to the 廂房's south gable. With no 廂耳房 the wing starts on the cross wall and
+				// the return stops at its veranda instead.
+				if (In.HasInnerGate())
+				{
+					const double Cheek = bHigh ? W - IGX1 : IGX0;
+					const bool bLeg = WY0 - (InnerY0 + LW) >= 20.0;
+					const double ReturnFrom = bLeg ? LegX0 : WingD;
+					if (Cheek - ReturnFrom >= LW)
+					{
+						AddRun(ReturnFrom, InnerY0, Cheek, InnerY0 + LW, false, true);
+						if (bLeg) AddRun(LegX0, InnerY0 + LW, WingD, WY0, true, bLegFlip);
+					}
+				}
+
+				// North: from the 廂房's north gable up the same line to the hall row. Where the 正房
+				// reaches past the wing's front the leg lands on its 前廊 directly; otherwise it turns
+				// and runs along the front of the 正房's 耳房 to the 正房's gable.
+				const double HallFront = HallNorth - HallD;
+				const double HallEnd = bHigh ? W - HallX1 : HallX0;
+				AddRun(LegX0, WY1, WingD, HallFront, true, bLegFlip);
+				const double Band = FMath::Min(LW, NorthEdgeFace - HallFront);
+				if (bEars && Band >= 0.6 * LW && HallEnd - LegX0 >= LW)
+				{
+					AddRun(LegX0, HallFront, HallEnd, HallFront + Band, false, false);
+				}
+			}
 		}
 
 		// 天棚魚缸石榴樹.

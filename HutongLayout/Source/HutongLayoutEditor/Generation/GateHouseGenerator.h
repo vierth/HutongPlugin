@@ -123,8 +123,8 @@ struct FHutongGateHouseParams
 
 	// --- Roof ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Front Roof Overhang", UIMin="0", UIMax="200", Units="cm", ToolTip="How far the front eave projects past the wall, in cm."))
-	double RoofOverhang = 75.0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Front Roof Overhang", UIMin="0", UIMax="200", Units="cm", ToolTip="How far the front eave projects past the wall, in cm; zero derives it from the column height and the gate's rank."))
+	double RoofOverhang = 0.0;
 
 	// No rear overhang of its own: a gate fronts the lane and opens onto the courtyard, so its rear eave is a front eave.
 
@@ -198,6 +198,20 @@ struct FHutongGateHouseParams
 		return HutongGen::Proportions::ChitouProjection(ChitouProjection, 0.5 * GetColumnDiameter());
 	}
 
+	// 上檐出 over the street, by rank: the house rule on 柱高, cut by what this gate is. A 大門 stands
+	// in a 封護檐 street face that projects nothing, so this is the whole of what comes forward of it.
+	double GetRoofOverhang() const
+	{
+		if (RoofOverhang > 0.0) return RoofOverhang;
+		const double Share =
+			(Style == EHutongGateStyle::Guangliang) ? HutongCanon::Gate::GuangliangEaveShare :
+			(Style == EHutongGateStyle::Jinzhu)     ? HutongCanon::Gate::JinzhuEaveShare :
+			(Style == EHutongGateStyle::Manzi)      ? HutongCanon::Gate::ManziEaveShare :
+			                                          HutongCanon::Gate::RuyiEaveShare;
+		return Share * HutongGen::Proportions::EaveOverhang(
+			GetColumnHeight(), HutongCanon::Module::EaveOverhangRatio);
+	}
+
 	// How far back from the 檐柱 line the door plane sits.
 	double GetDoorPlaneFraction() const
 	{
@@ -226,7 +240,7 @@ struct FHutongGateHouseParams
 	{
 		if (RoofRise > 0.0) return RoofRise;
 		const HutongGen::FHutongRoofSection S = HutongGen::Jiajia::MakeSection(
-			GetPurlins(), 0.5 * FMath::Max(OverDepth, 1.0), FMath::Max(RoofOverhang, 0.0), RoofApexRoll);
+			GetPurlins(), 0.5 * FMath::Max(OverDepth, 1.0), GetRoofOverhang(), RoofApexRoll);
 		return FMath::Max(S.Rise(), 1.0);
 	}
 

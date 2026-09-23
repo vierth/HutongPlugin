@@ -103,7 +103,7 @@ namespace HutongGen
 			FDynamicMesh3& Mesh,
 			double Width, double Depth, double WallThickness,
 			double FloorHeight, double CourseHeight, double Projection,
-			bool bIncludeRear, bool bToGround)
+			bool bIncludeRear, bool bToGround, double SideGapY0, double SideGapY1)
 		{
 			if (CourseHeight <= 0.0 || Projection <= 0.0)
 			{
@@ -116,12 +116,21 @@ namespace HutongGen
 			const double Bottom = bToGround ? 0.0 : FloorHeight;
 
 			// Left, right, then the back between them — tiling, never overlapping.
-			AppendBox(Mesh,
-				FVector3d(-Projection, 0.0, Bottom),
-				FVector3d(T, Depth + Projection, Top));
-			AppendBox(Mesh,
-				FVector3d(Width - T, 0.0, Bottom),
-				FVector3d(Width + Projection, Depth + Projection, Top));
+			const bool bGap = SideGapY1 > SideGapY0 && SideGapY0 > 0.0 && SideGapY1 < Depth;
+			auto Side = [&](double X0, double X1)
+			{
+				if (bGap)
+				{
+					AppendBox(Mesh, FVector3d(X0, 0.0, Bottom), FVector3d(X1, SideGapY0, Top));
+					AppendBox(Mesh, FVector3d(X0, SideGapY1, Bottom), FVector3d(X1, Depth + Projection, Top));
+				}
+				else
+				{
+					AppendBox(Mesh, FVector3d(X0, 0.0, Bottom), FVector3d(X1, Depth + Projection, Top));
+				}
+			};
+			Side(-Projection, T);
+			Side(Width - T, Width + Projection);
 			if (bIncludeRear)
 			{
 				AppendBox(Mesh,
@@ -373,6 +382,7 @@ namespace HutongGen
 				}
 			}
 
+			const int32 RidgeFirstTri = Mesh.MaxTriangleID();
 			const double RcH = FMath::Max(Roof.RidgeCourseHeight, 0.0);
 			const double RcW = FMath::Max(Roof.RidgeCourseWidth, 0.0);
 			if (Roof.bHasRidgeCourse && RcH > 0.0 && RcW > 0.0)
@@ -402,6 +412,8 @@ namespace HutongGen
 			}
 
 			SetMaterialIDForTrianglesFrom(Mesh, RoofFirstTri, MatSlot_Roof);
+			// 正脊 and its 蠍子尾, last appended: coursed, not tiled.
+			SetMaterialIDForTrianglesFrom(Mesh, RidgeFirstTri, MatSlot_Ridge);
 
 			// 硬山: the roof stops on the gable, and the face closing it is the 山牆 pediment, brick
 			// up to the ridge. 懸山 runs past the gable and that face is the open end of the roof.

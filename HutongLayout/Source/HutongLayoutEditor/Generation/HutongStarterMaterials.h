@@ -12,6 +12,9 @@ namespace HutongGen
 	// The asset a slot's starter material is called, e.g. M_Hutong_Body.
 	FString StarterMaterialAssetName(int32 Slot);
 
+	// Whether this slot's material carries a pattern, and so a normal and a roughness of its own.
+	bool StarterMaterialHasRelief(int32 Slot);
+
 	// The starter material for a slot if the project holds one; null when it was never created or was deleted. Cheap enough to ask on every spawn.
 	UMaterialInterface* FindStarterMaterial(int32 Slot);
 

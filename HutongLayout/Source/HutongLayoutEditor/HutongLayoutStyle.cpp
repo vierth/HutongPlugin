@@ -47,6 +47,7 @@ void FHutongLayoutStyle::Register()
 	AddToolIcon("HutongLayout.BeginStoreyTool", TEXT("StoreyTool"));
 	AddToolIcon("HutongLayout.BeginPavilionTool", TEXT("PavilionTool"));
 	AddToolIcon("HutongLayout.BeginHallTool", TEXT("HallTool"));
+	AddToolIcon("HutongLayout.BeginFrameTool", TEXT("FrameTool"));
 	AddToolIcon("HutongLayout.BeginPathTool", TEXT("PathTool"));
 	AddToolIcon("HutongLayout.BeginCompoundTool", TEXT("CompoundTool"));
 	AddToolIcon("HutongLayout.BeginStreetRowTool", TEXT("StreetRowTool"));
