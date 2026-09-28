@@ -9,13 +9,12 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// The metadata is only worth carrying if it survives the trip out to a spreadsheet and back, and
-// the confidence is the half that can silently go wrong: it travels as its own number, and a
-// display name or an empty cell must not be read as one.
+// Metadata survives a CSV round trip; confidence travels as a number, and a display name or empty
+// cell must not parse as one.
 
 namespace
 {
-	// A world of its own, so the test neither depends on nor disturbs whatever level is open.
+	// Own world: independent of the open level.
 	UWorld* MakeTestWorld()
 	{
 		UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);

@@ -42,8 +42,7 @@ namespace HutongSnap
 		LastRefreshSeconds = FPlatformTime::Seconds();
 		if (!World) return;
 
-		// The same walk the promote, rebuild and export paths make, rather than a second answer to
-		// which actors are buildings.
+		// Same walk as promote, rebuild and export, not a second answer to which actors are buildings.
 		for (UHutongBuildingComponent* Building : HutongDetailOps::CollectLoaded(World))
 		{
 			AActor* Actor = Building ? Building->GetOwner() : nullptr;
@@ -55,16 +54,15 @@ namespace HutongSnap
 			F.ActorToWorld = Actor->GetActorTransform();
 			F.Size = Building->GetFootprintSize();
 			F.bPlanOnly = Building->bPlanOnly;
-			// The mesh is built from the actor's origin; the corners are the placement's own, which
-			// with a skew are not the rectangle's — never derive them from Size here.
+			// The mesh is built from the actor origin; the corners are the placement's own, which differ
+			// with a skew. Never derive them from Size.
 			FVector2D Local[4];
 			Building->GetFootprintCorners(Local);
 			for (int32 i = 0; i < 4; ++i)
 			{
 				F.Corners[i] = F.ActorToWorld.TransformPosition(FVector(Local[i].X, Local[i].Y, 0.0));
 			}
-			// Dropped here rather than tested in every query: a footprint of nothing is not a
-			// neighbour anything can snap to.
+			// Dropped here, not tested per query: an empty footprint is no snap neighbour.
 			if (F.Size.X > 1.0 && F.Size.Y > 1.0) Items.Add(MoveTemp(F));
 		}
 	}
@@ -102,7 +100,7 @@ namespace HutongSnap
 					BestScore = DC * 0.66;
 					Best.bSnapped = true;
 					Best.Point = FVector(A.X, A.Y, Query.Z);
-					// The two edges meeting here; the run being drawn is usually continuing one of them.
+					// The two edges meeting here; the drawn run usually continues one.
 					Best.EdgeYawDeg = NormalizeYaw(
 						FMath::RadiansToDegrees(FMath::Atan2(B.Y - A.Y, B.X - A.X)));
 					const FVector P = C[(i + 3) % 4];
@@ -127,7 +125,7 @@ namespace HutongSnap
 					Best.Point = P;
 					Best.EdgeYawDeg = NormalizeYaw(FMath::RadiansToDegrees(FMath::Atan2(AB.Y, AB.X)));
 					Best.EdgeYaw2Deg = -1000.0;
-					// The perpendicular that points at the centre: the footprint's winding is not something to assume.
+					// Perpendicular pointing at the centre: footprint winding is not assumed.
 					FVector2D N(-AB.Y, AB.X);
 					N.Normalize();
 					if (FVector2D::DotProduct(N, Centre - FVector2D(P.X, P.Y)) < 0.0) N = -N;
@@ -148,8 +146,8 @@ namespace HutongSnap
 
 		ForEachFootprint(Footprints, IgnoreActor, [&](const FFootprint& F, const FVector C[4])
 		{
-			// All four edges: on a skewed footprint they are four bearings, and AddUnique folds the
-			// parallel pairs of a rectangle back to two.
+			// All four edges: a skewed footprint has four bearings; AddUnique folds a rectangle's parallel
+			// pairs to two.
 			bool bNear = false;
 			for (int32 i = 0; i < 4 && !bNear; ++i)
 			{
@@ -273,7 +271,7 @@ namespace HutongSnap
 					if (Delta > AngleToleranceDeg) continue;
 				}
 
-				// Only where the query actually lies across from the edge.
+				// Only where the query lies across from the edge.
 				const FVector2D Dir = E / Len;
 				const double Along = FVector2D::DotProduct(Q - A, Dir);
 				if (Along < -0.25 * Len || Along > 1.25 * Len) continue;

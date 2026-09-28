@@ -6,7 +6,7 @@
 #include "Generation/HutongJiajia.h"
 #include "ScreenWallGenerator.generated.h"
 
-// 影壁: the screen facing a gate, freestanding a few paces inside (獨立影壁) or built against the wall across from it (座山影壁).
+// 影壁: screen facing a gate, freestanding (獨立影壁) or against the opposite wall (座山影壁).
 USTRUCT(BlueprintType)
 struct FHutongScreenWallParams
 {
@@ -35,7 +35,7 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen", meta=(DisplayName="Base Course Projection", UIMin="0", UIMax="15", ClampMin="0", Units="cm", ToolTip="How far the base course stands proud of the wall face, in cm."))
 	double BaseCourseProjection = 3.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Panel", meta=(DisplayName="Has Centre Panel (影壁心)", ToolTip="Adds a bordered screen panel (影壁心) to both faces of the screen."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Panel", meta=(HutongBasic, DisplayName="Has Centre Panel (影壁心)", ToolTip="Adds a bordered screen panel (影壁心) to both faces of the screen."))
 	bool bHasPanel = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Panel", meta=(DisplayName="Border Width", EditCondition="bHasPanel", UIMin="0.05", UIMax="0.3", ClampMin="0.02", ClampMax="0.45", ToolTip="Width of the panel's border as a fraction of the face's shorter side."))
@@ -55,7 +55,7 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(UIMin="15", UIMax="120", ClampMin="5", Units="cm", ToolTip="Rise of the roof from eave to ridge, in cm."))
 	double RoofRise = 42.0;
 
-	// The roof's eave is the body's top; the floor used to be the generator's alone.
+	// Eave = body top.
 	double GetEaveHeight() const { return FMath::Max(Height, 40.0); }
 	double GetRoofRise() const { return FMath::Max(RoofRise, 5.0); }
 
@@ -63,7 +63,7 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Rounding of the ridge into a rolled ridge (捲棚); zero keeps it sharp."))
 	double RoofApexRoll = 0.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Has Ridge Course (清水脊)", ToolTip="Adds a plain tile ridge (清水脊) course along the top of the roof."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(HutongBasic, DisplayName="Has Ridge Course (清水脊)", ToolTip="Adds a plain tile ridge (清水脊) course along the top of the roof."))
 	bool bHasRidgeCourse = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge Course Height", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="40", Units="cm", ToolTip="Height of the ridge course, in cm."))
@@ -72,8 +72,8 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge Course Width", EditCondition="bHasRidgeCourse", UIMin="8", UIMax="60", Units="cm", ToolTip="Width of the ridge course, in cm."))
 	double RidgeCourseWidth = 22.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="40", Units="cm", ToolTip="Rise of each ridge-end tail (蠍子尾), in cm."))
-	double RidgeEndKick = 17.0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="120", Units="cm", ToolTip="Rise of each ridge-end tail (蠍子尾), in cm."))
+	double RidgeEndKick = 35.0;   // HutongCanon::Roof::TailRiseInCourses × the ridge course
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Depth", UIMin="0", UIMax="20", ClampMin="0", Units="cm", ToolTip="Vertical depth of the fascia board along the eave, in cm."))
 	double EaveFasciaDepth = 7.0;
@@ -84,13 +84,16 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="14", ClampMin="0", Units="cm", ToolTip="Section size of each exposed rafter end (椽頭), in cm; zero omits them."))
 	double RafterEndSection = 5.0;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	bool bHasTileRuns = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="8", UIMax="40", ClampMin="4", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))
 	double RafterEndSpacing = 16.0;
 
-	// Set by the tool from the drag rect; not user-editable.
+	// Set by the tool from the drag rect.
 	double Length = 400.0;
 
-	// Total depth on the ground, which the drag's collapsed axis has to contain: the plinth is the widest thing on it.
+	// Ground depth the drag's collapsed axis must contain; the plinth is widest.
 	double GetFootprintDepth() const
 	{
 		return FMath::Max(Thickness, 1.0) + 2.0 * FMath::Max(PlinthProjection, 0.0);

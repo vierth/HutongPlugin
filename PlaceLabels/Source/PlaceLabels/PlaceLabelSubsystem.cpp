@@ -50,7 +50,7 @@ void UPlaceLabelSubsystem::UnregisterRegion(UPlaceRegionComponent* Region)
 {
 	Regions.Remove(Region);
 
-	// A region leaving while the player is inside it would otherwise leave a stale chain on screen pointing at a dead component.
+	// Else a region leaving with the player inside leaves a stale chain on a dead component.
 	for (const FPlaceLabelEntry& Entry : CurrentChain)
 	{
 		if (Entry.Region.Get() == Region)

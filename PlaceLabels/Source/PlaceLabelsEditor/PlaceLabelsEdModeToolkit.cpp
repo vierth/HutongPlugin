@@ -32,7 +32,7 @@ FText FPlaceLabelsEdModeToolkit::GetToolPaletteDisplayName(FName PaletteName) co
 
 void FPlaceLabelsEdModeToolkit::BuildToolPalette(FName PaletteName, FToolBarBuilder& ToolbarBuilder)
 {
-	// Select first: it is the state the mode opens in and the one to come back to.
+	// Select first: the mode opens in it.
 	ToolbarBuilder.AddToolBarButton(FPlaceLabelsCommands::Get().BeginSelectTool);
 	ToolbarBuilder.AddToolBarButton(FPlaceLabelsCommands::Get().BeginPenTool);
 	ToolbarBuilder.AddToolBarButton(FPlaceLabelsCommands::Get().BeginEditTool);
@@ -40,7 +40,7 @@ void FPlaceLabelsEdModeToolkit::BuildToolPalette(FName PaletteName, FToolBarBuil
 
 TSharedPtr<SWidget> FPlaceLabelsEdModeToolkit::GetInlineContent() const
 {
-	// The panel resolves the active tool's prompt itself, from the mode manager, rather than being handed it here.
+	// The panel reads the active tool's prompt from the mode manager itself.
 	return SNew(SVerticalBox)
 
 		+ SVerticalBox::Slot()

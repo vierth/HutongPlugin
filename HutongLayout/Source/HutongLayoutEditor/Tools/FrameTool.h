@@ -19,7 +19,7 @@ public:
 	FHutongFrameParams Params;
 };
 
-// Stamps a house's 構架 alone at its preset's canonical footprint — columns, beams, purlins and rafters on the 臺明 — for teaching how it is put together.
+// Stamps a house's 構架 alone (columns, beams, purlins, rafters on the 臺明) at its preset's canonical footprint, for teaching.
 UCLASS()
 class UHutongFrameTool : public URectDragToolBase
 {
@@ -45,12 +45,12 @@ protected:
 	virtual void OnPlacementHover(const FVector& HitWorld) override;
 	virtual void RenderIdlePreview(FPrimitiveDrawInterface* PDI, const FVector& CursorGround) override;
 
-	// The preset's own frontage and depth, laid along the actor's axes for a front on Side.
+	// Preset's frontage and depth along the actor's axes, front on Side.
 	FVector2D StampSize(EHutongBaySide Side) const;
 	int32 BayCount() const;
 	bool IsFullHouse() const { return Settings && Settings->bFullHouse; }
 
-	// Front edge in green with a mark at every column line, round a footprint centred on Origin.
+	// Green front edge, a mark per column line, round a footprint centred on Origin.
 	void DrawFront(FPrimitiveDrawInterface* PDI, const FVector& Origin, EHutongBaySide Side) const;
 
 	UPROPERTY()

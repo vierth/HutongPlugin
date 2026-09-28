@@ -5,9 +5,8 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// A passage exists to be walked through: the closing wall is cut whatever width was asked, the
-// preview reads the same doorway the wall builds, and a narrow frontage never puts the wall
-// through the room.
+// The closing wall is cut at any width asked, the preview matches the built doorway, and a narrow
+// frontage never runs the wall through the room.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongEarPassageDoorwayTest,
 	"HutongLayout.EarPassage.Doorway",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -25,7 +24,7 @@ bool FHutongEarPassageDoorwayTest::RunTest(const FString&)
 			&& C.GetDoorwayCentre(C.Length) + 0.5 * C.GetDoorwayWidth() < C.Length);
 	}
 
-	// The doorway's place along the run and its shape are the user's.
+	// Doorway position and shape are user-set.
 	{
 		FHutongEarPassageParams P;
 		P.ClosingWall.DoorwayPosition = 0.25;
@@ -36,19 +35,30 @@ bool FHutongEarPassageDoorwayTest::RunTest(const FString&)
 		TestEqual(TEXT("a solid front takes no extra width"), P.GetClearWidth(), 240.0);
 	}
 
-	// The roof's eave drives, the wall follows it.
+	// Room's roof carried on: walls stand to the ceiling under it.
 	{
 		FHutongEarPassageParams P;
+		TestTrue(TEXT("the room's roof runs over the passage by default"), P.bRoofOverPassage);
+		TestNearlyEqual(TEXT("closing wall to the ceiling under the room's roof"), P.ClosingWallParams().GetHeight(),
+			P.RoomParams().GetRoofBaseHeight() + P.RoomParams().GetUndersideRise(), 0.01);
+		const FHutongWallParams C = P.ClosingWallParams();
+		TestTrue(TEXT("closing wall has no cap to pierce the roof"), C.CapSlabHeight <= 0.0 && C.CapRidgeHeight <= 0.0);
+	}
+
+	// Own low roof: its eave drives the wall.
+	{
+		FHutongEarPassageParams P;
+		P.bRoofOverPassage = false;
 		P.Passage.EaveHeight = 300.0;
 		TestEqual(TEXT("closing wall at the eave"), P.ClosingWallParams().GetHeight(), 300.0);
 		TestEqual(TEXT("passage roof at the eave"), P.PassageParams().GetEaveHeight(), 300.0);
-		// An eave below the doorway's head lifts to it, and the roof with it.
+		// An eave below the doorway head lifts to it, roof included.
 		P.Passage.EaveHeight = 150.0;
 		TestTrue(TEXT("eave lifted over the doorway"), P.GetPassageEaveHeight() > 150.0);
 		TestEqual(TEXT("wall and roof still meet"), P.ClosingWallParams().GetHeight(), P.PassageParams().GetEaveHeight());
 	}
 
-	// A frontage narrower than the strip and a room still lays out in order.
+	// A frontage narrower than the strip still lays out in order.
 	for (const bool bFar : { false, true })
 	{
 		FHutongEarPassageParams P;

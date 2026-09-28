@@ -7,17 +7,15 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// Every roofed type's ridge estimate is measured against the roof its generator builds and
-// against its massing block. The block carries no ridge course, so it lands on the estimate;
-// the full building carries one, so it stands on the estimate by the course's height.
+// Each roofed type's ridge estimate vs its built roof and massing block: the block (no ridge course)
+// lands on the estimate; the building stands on it by the course height.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRidgeEstimatesTest,
 	"HutongLayout.Roofs.RidgeEstimates",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 namespace
 {
-	// The highest point of the roof at mid-run, read by casting down across the whole depth
-	// (with room for the eaves), so the 蠍子尾 and 翼角 at the ends cannot be hit.
+	// Roof top at mid-run, cast down across the full depth plus eaves, clear of end 蠍子尾 and 翼角.
 	double RidgeOf(const UE::Geometry::FDynamicMesh3& M, double Width, double Depth)
 	{
 		if (M.TriangleCount() == 0) return -1.0;
@@ -71,14 +69,14 @@ bool FHutongRidgeEstimatesTest::RunTest(const FString& Parameters)
 	}
 	{
 		FHutongHallParams P;
-		Cases.Add({ TEXT("hall"), HutongGen::Ridge::Hall(P, 620.0), 900.0, 620.0,
+		Cases.Add({ TEXT("hall"), HutongGen::Ridge::Hall(P, 900.0, 620.0), 900.0, 620.0,
 			[P](FDynamicMesh3& M, EHutongDetail L) { UHutongHallBuildingComponent::BuildHallMesh(P, EHutongBaySide::MinusY, 0, 900.0, 620.0, M, L); } });
 	}
 	{
 		FHutongPavilionParams P;
-		// The 寶頂 stands on the apex and is not the ridge.
+		// The 寶頂 on the apex is not the ridge.
 		P.bHasFinial = false;
-		Cases.Add({ TEXT("pavilion"), HutongGen::Ridge::Pavilion(P, 300.0), 300.0, 300.0,
+		Cases.Add({ TEXT("pavilion"), HutongGen::Ridge::Pavilion(P, 300.0, 300.0), 300.0, 300.0,
 			[P](FDynamicMesh3& M, EHutongDetail L) { UHutongPavilionBuildingComponent::BuildPavilionMesh(P, 300.0, 300.0, M, L); } });
 	}
 	{

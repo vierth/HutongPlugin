@@ -46,7 +46,7 @@ namespace PlaceLabelsTopology
 	void WeldBoundaries(const TArray<UPlaceRegionComponent*>& Regions, double ToleranceCm,
 		FWeldReport& OutReport);
 
-	// Convenience: weld one pair, which is what the per-issue button in the problems list does.
+	// Welds one pair (the problems list's per-issue button).
 	void WeldPair(UPlaceRegionComponent* A, UPlaceRegionComponent* B, double ToleranceCm,
 		FWeldReport& OutReport);
 
@@ -76,7 +76,7 @@ namespace PlaceLabelsTopology
 		double DistanceCm = 0.0;
 	};
 
-	// Every near-miss between two boundaries, measured edge against edge rather than corner against boundary.
+	// Every near-miss between two boundaries, measured edge to edge.
 	void FindSeamMarks(const TArray<FVector2D>& A, const TArray<FVector2D>& B, double ToleranceCm,
 		TArray<FSeamMark>& OutMarks);
 }

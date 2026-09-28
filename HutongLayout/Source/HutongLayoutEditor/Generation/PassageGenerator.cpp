@@ -13,24 +13,24 @@ namespace HutongGen
 		const double Eave = P.GetEaveHeight();
 
 		Shell::FRoofParams Roof;
-		// No overhang either side: the roof is carried on the two walls it runs between, and its edges are buried in them.
+		// No side overhang: the roof bears on the two walls, edges buried in them.
 		Roof.FrontOverhang = 0.0;
 		Roof.RearOverhang = 0.0;
 		Roof.FasciaDepth = 0.0;
 		Roof.FasciaWidth = 0.0;
 		Roof.RafterSection = 0.0;
 
-		// 硬山, flush at both ends: the south end sits over the 隔牆 that closes the passage and the north end stops on the building across the back court.
+		// 硬山 flush both ends: south over the closing 隔牆, north on the building across the back court.
 		Roof.GableOverhang = 0.0;
 
-		// 三檁 — one 步架 a side, so a single straight slope each way, which is all a span this narrow wants.
+		// 三檁: one 步架 a side, a straight slope each way.
 		Roof.Section = Jiajia::MakeSection(EHutongPurlins::Three, 0.5 * Span, 0.0, 0.0);
 		Roof.Rise = P.GetRoofRise(Span);
 		Roof.Tile = EHutongRoofTile::He;
 
-		// AppendGableRoof owns its own material tagging, so the passage cannot come out brick.
-		// The roof bears into a wall at each side: no 山牆, no rake.
+		// AppendGableRoof tags its own material; no 山牆, no rake: it bears into a wall each side.
 		Roof.RakeDepth = 0.0;
+		Roof.bTileRuns = P.bHasTileRuns;
 		Shell::AppendGableRoof(Mesh, Run, Span, Eave, Roof);
 	}
 }

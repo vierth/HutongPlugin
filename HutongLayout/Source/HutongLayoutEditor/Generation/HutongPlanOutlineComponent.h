@@ -7,23 +7,20 @@
 #include "Generation/HutongFootprint.h"
 #include "HutongPlanOutlineComponent.generated.h"
 
-// What each kind of piece is drawn in while it is a plan. Grouped the way the palette tabs are —
-// houses warm, gates hot, enclosure cool, garden green — so a street of outlines reads as its
-// arrangement rather than as a field of identical rectangles. Colour is the only thing telling one
-// laid-out footprint from another: none of them has any geometry yet.
+// Plan outline colour per type, the only thing telling plans apart. Grouped like the palette
+// tabs: houses warm, gates hot, enclosure cool, garden green.
 namespace HutongPlanColours
 {
 	// Buildings.
 	inline const FLinearColor House(1.00f, 0.85f, 0.20f, 1.0f);      // 正房 and its family
 	inline const FLinearColor Shopfront(1.00f, 0.70f, 0.30f, 1.0f);  // 鋪面房
-	// 樓, the shop with a storey over it: the shopfront's hue carried warmer, since on a plan the
-	// two are the same rectangle and the difference is what stands on it.
+	// Shopfront hue, warmer: on a plan the two are the same rectangle.
 	inline const FLinearColor Storey(1.00f, 0.55f, 0.15f, 1.0f);     // 樓
 	inline const FLinearColor Hall(0.78f, 0.55f, 1.00f, 1.0f);       // 殿
 	inline const FLinearColor Pavilion(0.62f, 0.68f, 1.00f, 1.0f);   // 亭
-	// 構架: the house's yellow gone to bare timber.
+	// House yellow toward bare timber.
 	inline const FLinearColor Frame(0.80f, 0.62f, 0.40f, 1.0f);      // 構架
-	// 耳房 with its 過道: the house's yellow pulled toward the passage's green.
+	// House yellow toward the passage's green.
 	inline const FLinearColor EarPassage(0.88f, 0.90f, 0.35f, 1.0f); // 耳房過道
 
 	// Gates and screens.
@@ -34,9 +31,7 @@ namespace HutongPlanColours
 
 	// Enclosure.
 	inline const FLinearColor Wall(0.55f, 0.72f, 0.95f, 1.0f);       // 院牆, onto the lane
-	// A 隔牆 is the same generator and a different building: on a plan the two are told apart by
-	// nothing else, since a run of wall is a rectangle whatever it bounds. Deeper and greener than
-	// the boundary wall's blue, so the enclosure still reads as one family.
+	// Same generator as 院牆, told apart only by colour; greener than its blue, same family.
 	inline const FLinearColor CourtWall(0.35f, 0.85f, 0.88f, 1.0f);  // 隔牆, inside the compound
 	inline const FLinearColor Corridor(0.40f, 0.90f, 0.55f, 1.0f);   // 遊廊
 	inline const FLinearColor Passage(0.60f, 0.85f, 0.45f, 1.0f);    // 過道
@@ -46,21 +41,18 @@ namespace HutongPlanColours
 	inline const FLinearColor FlowerBed(0.35f, 0.80f, 0.35f, 1.0f);  // 花池
 	inline const FLinearColor WaterJar(0.30f, 0.72f, 1.00f, 1.0f);   // 魚缸
 
-	// A type that has not said.
+	// Fallback for a type with no colour.
 	inline const FLinearColor Building(1.00f, 0.85f, 0.20f, 1.0f);
 }
 
-// What the plan knows about a building's bays: where the columns divide the frontage, along the
-// bay axis in footprint coordinates with both ends included, so the number of bays is one less
-// than the number of boundaries. Read out of the generators' own BayBoundary, or a plan draws a
-// division the building will not build.
+// Bay boundaries along the bay axis in footprint coords, both ends included (bays = boundaries - 1).
+// Read from the generators' BayBoundary so the plan matches the build.
 struct FHutongPlanBays
 {
 	TArray<double> Boundaries;
 	// The bay the front door is in, as an index into the spans between boundaries.
 	int32 DoorBay = INDEX_NONE;
-	// Column lines across the depth, in footprint coordinates: a column stands at every boundary on
-	// every row. Empty where the type does not say, and nothing is drawn.
+	// Column rows across the depth, footprint coords; a column at every boundary on each. Empty = none drawn.
 	TArray<double> ColumnRows;
 	double ColumnRadius = 0.0;
 	// 柱頂石: the side of the square base stone under each column.
@@ -69,9 +61,8 @@ struct FHutongPlanBays
 
 namespace HutongGen::PlanBays
 {
-	// A facade generator builds with the front on -Y and the tool turns the finished mesh, so the
-	// bay boundaries turn with it: mapped through the same RotateVertex, and reversed when the turn
-	// reverses their order — which takes the door bay's index with it.
+	// Generators build front on -Y and the mesh is turned; boundaries go through the same
+	// RotateVertex, reversed (with the door index) when the turn reverses their order.
 	inline void OntoFacade(FHutongPlanBays& Bays, EHutongBaySide Side, double SizeX, double SizeY)
 	{
 		const bool bAlongX = BaySide::IsAlongX(Side);
@@ -96,20 +87,15 @@ namespace HutongGen::PlanBays
 	}
 }
 
-// Whether laid-out buildings draw their footprints at all. One switch for the whole editor, not a
-// property on each placement: what it answers is "am I working on the plans right now", and the
-// polygons are in the way of anything else drawn on the same ground — PlaceLabels' regions above
-// all. Mirrored by the console variable hutong.ShowPlanOutlines, which is how another plugin
-// offers the switch without linking to this one, and persisted in the editor's per-project ini.
-//
-// Hidden takes the fill's hit proxy with it, so a laid-out building cannot be clicked either. That
-// is the point rather than a side effect: an outline that still swallows clicks is still in the way.
+// Editor-wide switch for plan outlines, not per placement. Mirrored by the cvar
+// hutong.ShowPlanOutlines (lets other plugins toggle it without linking); saved in the per-project ini.
+// Hidden also removes the hit proxy, deliberately: a hidden outline must not swallow clicks.
 namespace HutongPlanOutline
 {
 	bool ArePlansVisible();
 	void SetPlansVisible(bool bVisible);
 
-	// Called once from the module's startup, since the console variable's own default is on.
+	// Called once at module startup; the cvar defaults to on.
 	void LoadVisibilityFromConfig();
 }
 
@@ -121,6 +107,9 @@ class UHutongPlanOutlineComponent : public UPrimitiveComponent
 
 public:
 	UHutongPlanOutlineComponent();
+
+	// Editor-module class: stripped at cook, like the building component.
+	virtual bool IsEditorOnly() const override { return true; }
 
 	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Size of the footprint in the actor's local frame, in cm."))
 	FVector2D Footprint = FVector2D(100.0, 100.0);

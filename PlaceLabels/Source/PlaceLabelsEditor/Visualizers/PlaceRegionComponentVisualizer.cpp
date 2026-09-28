@@ -52,7 +52,7 @@ namespace
 		PDI->DrawLine(P - FVector(0, 0, H), P + FVector(0, 0, H), Color, SDPG_Foreground, Thickness);
 	}
 
-	// Rotated 45 degrees off DrawHandle, so "this click removes the corner" never reads as "this is a corner" at a glance.
+	// DrawHandle rotated 45 degrees, so a removal never reads as a corner.
 	void DrawDeleteHandle(FPrimitiveDrawInterface* PDI, const FVector& P, const FLinearColor& Color,
 		double Size, float Thickness)
 	{
@@ -165,7 +165,7 @@ void FPlaceRegionComponentVisualizer::DrawVisualization(const UActorComponent* C
 		PDI->SetHitProxy(nullptr);
 	}
 
-	// Midpoint markers stay as the visible hint that edges are insertable — the outline alone does not advertise it.
+	// Midpoint markers show edges are insertable.
 	if (N >= 3)
 	{
 		for (int32 i = 0; i < N; ++i)
@@ -188,10 +188,10 @@ void FPlaceRegionComponentVisualizer::DrawVisualization(const UActorComponent* C
 		const FVector P = LocalPointToWorld(Region, i);
 		const double Size = WorldSizeForPixels(View, P, HandlePixels) * 2.0;
 
-		// Every SetHitProxy must be paired with a null, or everything drawn afterwards inherits this proxy and the whole outline becomes clickable as vertex i.
+		// Pair every SetHitProxy with a null, or later draws inherit it as vertex i.
 		PDI->SetHitProxy(new HPlaceRegionVertexProxy(Component, i));
 
-		// Holding Alt turns every corner into a removal, and says so before the click rather than after it.
+		// Alt shows every corner as a removal before the click.
 		if (bAlt && bCanDelete)
 		{
 			DrawDeleteHandle(PDI, P, DeleteColor, Size * 1.4, 4.0f);
@@ -281,7 +281,7 @@ void FPlaceRegionComponentVisualizer::InsertCornerOnEdge(UPlaceRegionComponent* 
 			if (T > 0.0)
 			{
 				const FVector OnPlane = LocalOrigin + LocalDirection * T;
-				// Clamped to the segment: a grazing ray can land the intersection well past the end of the edge that was clicked.
+				// Clamped: a grazing ray can land well past the edge's end.
 				Insert = FMath::ClosestPointOnSegment2D(FVector2D(OnPlane.X, OnPlane.Y), A, B);
 			}
 		}
@@ -367,7 +367,7 @@ bool FPlaceRegionComponentVisualizer::HandleInputDelta(FEditorViewportClient* Vi
 	}
 	if (!IsSelectionValid())
 	{
-		// Something changed the point count behind our back.
+		// Point count changed externally.
 		EndEditing();
 		return false;
 	}
@@ -393,7 +393,7 @@ bool FPlaceRegionComponentVisualizer::HandleInputDelta(FEditorViewportClient* Vi
 	Region->RebuildCache();
 	Region->UpdateBounds();
 
-	// Interactive, not ValueSet: re-parenting during a drag would run once per mouse move.
+	// Interactive, not ValueSet: re-parenting would run per mouse move.
 	NotifyPropertyModified(Region, PointsProperty, EPropertyChangeType::Interactive);
 	return true;
 }
@@ -431,7 +431,7 @@ void FPlaceRegionComponentVisualizer::TrackingStopped(
 	Region->RebuildCache();
 	Region->UpdateBounds();
 
-	// The commit the Interactive notifications during the drag deliberately skipped.
+	// The commit skipped by the drag's Interactive notifications.
 	NotifyPropertyModified(Region, PointsProperty, EPropertyChangeType::ValueSet);
 
 	// Its own transaction: the gizmo's has already closed by the time tracking stops.

@@ -16,7 +16,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Gate House", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the main gate (大門) house."))
 	FHutongGateHouseParams Params;
 
-	// A placement decision rather than a parameter of the gate, so it lives beside the params and not in them: a placed gate has no neighbour to match.
+	// Placement decision, not a gate parameter: a placed gate has no neighbour to match.
 	UPROPERTY(EditAnywhere, Category="Gate House", meta=(DisplayName="Match Neighbouring Row", ToolTip="Takes the depth and eave of the row the first click snaps to."))
 	bool bMatchNeighbouringRow = true;
 
@@ -24,7 +24,7 @@ public:
 	double RowRidgeClearance = HutongCanon::Gate::RidgeAboveRowCm;
 
 #if WITH_EDITOR
-	// Pull the eave into the style's band when the style or the height changes.
+	// Clamps the eave into the style's band when style or height changes.
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 };
@@ -50,30 +50,28 @@ protected:
 	virtual FString GetActorNameBase() const override { return TEXT("Hutong_Gate"); }
 	virtual FString GetPlacementDetail() const override;
 
-	// Holds the drag inside the style's size band, or to the row it is set into.
+	// Holds the drag in the style's size band, or to the matched row.
 	virtual void GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const override;
 
-	// The depth of the row the anchor snapped to, measured along this gate's own depth axis, or zero when the anchor joined nothing that is a row.
+	// Matched row's depth along this gate's depth axis; zero if the anchor joined no row.
 	double MatchedRowDepth() const;
-	// The row's eave, or zero for the same reasons.
+	// Matched row's eave; zero likewise.
 	double MatchedRowEave() const;
-	// The eave the match wants: the tool's params with the ridge lifted clear of the row's.
+	// Eave for the match: tool params with the ridge lifted clear of the row's.
 	double MatchedGateEave() const;
-	// Turns the placement onto the row's run, faces it the row's way, and moves the anchor onto
-	// the row's nearer front corner so the two fronts are one line.
+	// Aligns the placement to the row's run and facing, anchor on the row's nearer front corner so fronts line up.
 	void TakeRowBearing();
 
-	// Which way the body extends from the anchor along the depth axis, in the gate's frame, pinned
-	// at the click: +1 or -1 on the depth axis, zero when no row was matched. Not re-derived from
-	// BaySide, which the commit may flip to the camera's side.
+	// Body direction from the anchor on the depth axis (gate frame), pinned at the click: +/-1, zero if
+	// unmatched. Not re-derived from BaySide, which commit may flip to the camera side.
 	FVector2D RowInwardLocal = FVector2D::ZeroVector;
 
-	// Same extra stage as the siheyuan.
+	// Extra stage, as in the siheyuan.
 	virtual void OnPlacementStarted(const FVector& HitWorld) override;
 	virtual bool OnRectCommitted(const FVector& HitWorld) override;
 	virtual void OnPlacementHover(const FVector& HitWorld) override;
 
-	// Whichever of the two sides on that axis the camera is on.
+	// Side on that axis the camera is on.
 	HutongGen::EBaySide ComputeCameraFacingOnAxis() const;
 	HutongGen::EBaySide ComputeClosestSide(double Hx, double Hy) const;
 

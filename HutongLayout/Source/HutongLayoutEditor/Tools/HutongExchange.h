@@ -10,7 +10,7 @@ class AActor;
 class UHutongBuildingComponent;
 class UWorld;
 
-// Placed buildings to a file and back.
+// Placed buildings to file and back.
 namespace HutongExchange
 {
 	inline constexpr int32 FormatVersion = 1;
@@ -27,24 +27,22 @@ namespace HutongExchange
 		int32 Skipped = 0;
 		TArray<FString> Problems;
 
-		// What the import actually put down or reshaped, so a caller can select the set and let the
-		// ordinary gizmo move and turn it as one — which is what a file landing in a level whose
-		// coordinates are not the ones it was written in needs.
+		// What the import placed or reshaped, so the caller can select it and move it as one with the gizmo
+		// (a file landing at foreign coordinates).
 		TArray<TWeakObjectPtr<AActor>> Placed;
 
-		// Set on an import from a layout-only file: the parameters in the level are the types'
-		// current defaults, not the ones the export was made from, and a report that does not say
-		// so reads as tuning lost.
+		// Imported from a layout-only file: params are current type defaults, not the export's, and the
+		// report must say so or it reads as lost tuning.
 		bool bFromLayoutOnly = false;
 
 		FText Summarise() const;
 	};
 
-	// One placed building as it survives the trip.
+	// One placed building as serialised.
 	struct FRecord
 	{
 		FGuid Id;
-		// The component class's own name, e.g.
+		// Component class name.
 		FName ClassName;
 		FString Label;
 		FName Folder;
@@ -53,33 +51,29 @@ namespace HutongExchange
 		double OffsetZ = 0.0;
 		double RelativeYawDeg = 0.0;
 
-		// GetFootprintSize() as it stood at export.
+		// GetFootprintSize() at export.
 		FVector2D Footprint = FVector2D::ZeroVector;
-		// The corner offsets as they stood, for the import ghost and the set's bounds only: the
-		// component blob and the Footprint-category fields are the authority on the way back in.
+		// Corner offsets at export, for the import ghost and set bounds only; the component blob and
+		// Footprint-category fields are authoritative on import.
 		FHutongFootprintSkew Skew;
 
-		// The placement's own decisions, written whether or not the parameters are. On a layout-only
-		// record these are all there is: the type, where it stands, how big it is, which way it
-		// faces, and what it was placed at.
+		// Placement decisions, written with or without params; all a layout-only record has.
 		bool bHasFacing = false;
 		EHutongBaySide Facing = EHutongBaySide::MinusY;
 		EHutongDetail Detail = EHutongDetail::Near;
 		bool bPlanOnly = false;
-		// Which way a line-like piece runs. Without it a layout-only record cannot say what its
-		// footprint means: `SetFootprintSize` takes the length off the run's own axis, so a wall
-		// drawn down Y came back with its thickness for a length — a stub.
+		// Run axis of a line-like piece. Needed by layout-only records: `SetFootprintSize` takes length off
+		// the run axis, so a wall drawn along Y came back a stub.
 		bool bRunAlongY = false;
 
-		// The kind within the class — the wall's 院牆/隔牆 role — where a class carries more than one.
+		// Variant within the class (the wall's 院牆/隔牆 role), where a class has several.
 		FName Variant;
 
-		// The component's own Footprint-category fields: length, width, run axis, facade side,
-		// bay override, the wall's miters. Everything a placement decided that is not a parameter,
-		// taken by reflection so a field added to that category travels the day it is added.
+		// Component's Footprint-category fields (length, width, run axis, facade side, bay override, wall
+		// miters), by reflection so a new field in that category travels automatically.
 		TSharedPtr<FJsonObject> FootprintFields;
 
-		// The parameters. Null on a layout-only record, which is the whole point of one.
+		// Params; null on a layout-only record.
 		TSharedPtr<FJsonObject> Blob;
 	};
 
@@ -88,13 +82,11 @@ namespace HutongExchange
 		int32 Version = FormatVersion;
 		FString LevelName;
 
-		// The arrangement without the parameters: type, footprint, position, yaw and facing, and
-		// nothing about how any of them is built. Re-importing one rebuilds the street from the
-		// types' current defaults, which is what makes it the file to iterate against — change a
-		// generator or a canon figure and the same plan comes back built the new way.
+		// Arrangement only (type, footprint, position, yaw, facing), no params. Re-import rebuilds from
+		// current type defaults, so a generator or canon change shows on the same plan.
 		bool bLayoutOnly = false;
 
-		// Where the set frame stood in the level it came from, which is all a placement at the recorded coordinates needs.
+		// Set frame origin in the source level; enough to place at recorded coordinates.
 		FVector SetOriginWorld = FVector::ZeroVector;
 		double SetYawDeg = 0.0;
 
@@ -102,21 +94,20 @@ namespace HutongExchange
 
 		TArray<FRecord> Records;
 
-		// What to place for a type this build does not have: old class name -> the class to build
-		// instead, or NAME_None to skip it. Filled in by the import dialog before Place runs, so
-		// a file written before a type was split or renamed still lands.
+		// Unknown-type remap: old class name -> class to build, or NAME_None to skip. Filled by the import
+		// dialog before Place, so files predating a split or rename still land.
 		TMap<FName, FName> TypeRemap;
 	};
 
 	enum class EMode : uint8
 	{
-		// Always spawn, always a fresh id — dropping a copy of somebody else's street beside your own.
+		// Always spawn with fresh ids: a copy of someone else's street beside yours.
 		Additive,
-		// Match on the id: update that building in place, spawn what is missing.
+		// Match on id: update in place, spawn what is missing.
 		Sync,
 	};
 
-	// --- the reflected halves, public because the tests drive them directly ---
+	// --- reflected halves, public for tests ---
 	TSharedPtr<FJsonObject> WriteComponent(const UHutongBuildingComponent* Component);
 	bool ReadComponent(const TSharedRef<FJsonObject>& Blob, UHutongBuildingComponent* Component,
 		FString& OutProblem);
@@ -131,35 +122,39 @@ namespace HutongExchange
 
 	// --- placement arithmetic.
 
-	// Where one record lands given the set's own transform.
+	// Record's world transform given the set transform.
 	FTransform ComposeRecordTransform(const FRecord& Record, const FTransform& SetToWorld);
 
-	// The record's four footprint corners in the set frame, carrying its own relative yaw, in order.
+	// Record's four footprint corners in the set frame, its relative yaw applied, in order.
 	void FootprintCornersInSetFrame(const FRecord& Record, FVector2D OutCorners[4]);
 
-	// Slides every offset so the set frame's origin is the bounding rectangle's min corner, and reports the size.
+	// Shifts offsets so the set origin is the bounds' min corner; outputs the size.
 	FVector2D NormaliseToBounds(TArray<FRecord>& Records, FVector2D& OutSize);
 
 	// --- set -> level.
 	void Place(UWorld* World, const FSceneFile& File, const FTransform& SetToWorld,
 		EMode Mode, FName FolderOverride, FResult& OutResult);
 
-	// --- the conveniences, which do open their own FScopedTransaction.
+	// --- conveniences; these open their own FScopedTransaction.
 	void ExportLoaded(UWorld* World, const FString& FilePath, FResult& OutResult,
 		bool bLayoutOnly = false);
 	void ExportSelection(UWorld* World, const FString& FilePath, FResult& OutResult,
 		bool bLayoutOnly = false);
-	// Resolve is given the file between the read and the placement — the hook the unknown-type
-	// dialog hangs on. Returning false abandons the import.
+	// Resolve runs between read and placement (unknown-type dialog hook); false abandons the import.
 	using FResolveFile = TFunction<bool(FSceneFile&)>;
 
 	void ImportAtRecordedTransforms(UWorld* World, const FString& FilePath, EMode Mode,
 		FName FolderOverride, FResult& OutResult, const FResolveFile& Resolve = nullptr);
 
-	// Every concrete UHutongBuildingComponent subclass, keyed by class name, for resolving a record's type on import.
+	// Concrete UHutongBuildingComponent subclasses by class name, for resolving record types.
 	void GatherBuildingComponentClasses(TMap<FName, UClass*>& OutClasses);
 
-	// The types this file names that this build has no class for, with how many records each has.
-	// Answered before anything is placed, so the user can say what to build instead.
+	// Types in the file with no class in this build, with record counts; asked before placing anything.
 	void FindUnknownTypes(const FSceneFile& File, TMap<FName, int32>& OutCounts);
+
+	// The file dialogs' filter for scene files.
+	inline const TCHAR* SceneFileTypes = TEXT("Hutong scene (*.hutong.json)|*.hutong.json|JSON (*.json)|*.json");
+
+	// Every problem to the log, the summary to a toast.
+	void Report(const FResult& Result, const TCHAR* What);
 }

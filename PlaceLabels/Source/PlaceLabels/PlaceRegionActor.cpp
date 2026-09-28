@@ -57,7 +57,7 @@ void APlaceRegionActor::PostEditMove(bool bFinished)
 		Region->RebuildCache();
 	}
 
-	// Only on the commit: the gizmo fires this continuously while dragging, and re-resolving a parent sweeps every region in the level.
+	// Commit only: the gizmo fires this per drag frame, and re-resolving sweeps every region.
 	if (bFinished && Region)
 	{
 		Region->RecomputeDerivedParent();

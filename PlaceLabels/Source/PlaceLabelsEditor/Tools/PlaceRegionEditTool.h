@@ -26,14 +26,14 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Snapping")
 	bool bSnapToVertices = true;
 
-	// Pull it onto their edges too, for a boundary that runs along a neighbour without matching any of its corners.
+	// Also snap onto their edges.
 	UPROPERTY(EditAnywhere, Category = "Snapping")
 	bool bSnapToEdges = true;
 
 	UPROPERTY(EditAnywhere, Category = "Snapping", meta = (ClampMin = "0.0", Units = "cm"))
 	double SnapRadius = 100.0;
 
-	// How far apart two boundaries may be and still count as meant to be the same boundary, used both to report seams and to weld them.
+	// Max gap for two boundaries to count as one; used to report seams and to weld.
 	UPROPERTY(EditAnywhere, Category = "Boundaries", meta = (ClampMin = "0.1", Units = "cm"))
 	double WeldTolerance = 25.0;
 
@@ -45,7 +45,7 @@ public:
 	UFUNCTION(CallInEditor, Category = "Boundaries", meta = (DisplayName = "Weld To Neighbours"))
 	void WeldToNeighbours();
 
-	// Outlines every other region while the tool is up, so you can see what you are lining up with.
+	// Outlines every other region while the tool is up.
 	UPROPERTY(EditAnywhere, Category = "Display")
 	bool bShowOtherRegions = true;
 
@@ -106,7 +106,7 @@ public:
 	virtual void Render(IToolsContextRenderAPI* RenderAPI) override;
 	virtual void DrawHUD(FCanvas* Canvas, IToolsContextRenderAPI* RenderAPI) override;
 
-	// Regions are drawn, deleted and imported while this tool is up, and none of that notifies it.
+	// Region adds, deletes and imports do not notify the tool.
 	virtual void OnTick(float DeltaTime) override;
 
 	// IClickDragBehaviorTarget.
@@ -128,16 +128,14 @@ public:
 	void DeleteSelectedCorners();
 	void ClearTarget();
 	void WeldTargetToNeighbours();
-	// Writes the panel's fields back onto the target. NAME_None writes all of them; a property
-	// name writes just that one, so an edit made in the mode panel is not carried over by a
-	// snapshot taken before it.
+	// Writes panel fields to the target: NAME_None all, else just that property, so a stale
+	// snapshot does not overwrite a mode-panel edit.
 	void ApplyTargetProperties(FName ChangedProperty = NAME_None);
 	void SelectAllCorners();
 
 	bool HasTarget() const { return TargetRegion.IsValid(); }
 
-	// The region picked up by a click. The mode panel's form follows it, so clicking a polygon in
-	// the viewport is how a region is put in front of you rather than hunting it down in the list.
+	// The clicked region; the mode panel's form follows it.
 	UPlaceRegionComponent* GetTargetRegion() const { return TargetRegion.Get(); }
 	bool HasCornerSelection() const { return SelectedCorners.Num() > 0; }
 
@@ -172,7 +170,7 @@ protected:
 
 	void UpdateHoverState(const FVector& WorldHit);
 
-	// Snapshot / apply, so a drag produces exactly one undo step without holding a transaction open across every mouse-move.
+	// Snapshot/apply: one undo step per drag without a transaction held open.
 	void BeginPointEdit();
 	void CommitPointEdit(const FText& TransactionName);
 
@@ -216,7 +214,7 @@ protected:
 
 	double TimeSinceCacheRefresh = 0.0;
 
-	// Cached from the last Render, so hover picking can size handles the same way they are drawn.
+	// From the last Render, so hover picking sizes handles as drawn.
 	FVector CameraPosition = FVector::ZeroVector;
 	double WorldPerPixelOrtho = 1.0;
 	double WorldPerPixelPerUnitDistance = 0.001;

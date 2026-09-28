@@ -5,7 +5,7 @@
 #include "Generation/HutongJiajia.h"
 #include "PassageGenerator.generated.h"
 
-// 過道: the roofed slot between a building's gable and the wall beside it, which on a 三進 plan is how the 後院 is reached.
+// 過道: roofed slot between a gable and the wall beside it; the way to the 後院 on 三進.
 USTRUCT(BlueprintType)
 struct FHutongPassageParams
 {
@@ -18,7 +18,7 @@ struct FHutongPassageParams
 	double RoofRise = 0.0;
 
 	double GetEaveHeight() const { return FMath::Max(EaveHeight, 60.0); }
-	// Zero is the 三檁 section's own rise over the span.
+	// Zero = the 三檁 section's own rise over the span.
 	double GetRoofRise(double OverSpan) const
 	{
 		if (RoofRise > 0.0) return RoofRise;
@@ -29,11 +29,14 @@ struct FHutongPassageParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Bearing", UIMin="2", UIMax="30", ClampMin="1", Units="cm", ToolTip="How far the roof runs into the wall at each side, in cm."))
 	double Bearing = 8.0;
 
-	// Set by the layout; not user-editable. Width is the clear way through, wall face to wall face.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	bool bHasTileRuns = true;
+
+	// Set by the layout. Width = clear way, wall face to wall face.
 	double Length = 300.0;
 	double Width = 200.0;
 
-	// The roof spans the clear way through plus its bearing at each side.
+	// Roof span: clear way plus bearing each side.
 	double GetRoofSpan() const
 	{
 		return FMath::Max(Width, 1.0) + 2.0 * FMath::Max(Bearing, 0.0);

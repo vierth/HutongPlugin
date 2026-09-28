@@ -102,7 +102,7 @@ public:
 			}
 			if (Key == EKeys::Enter)
 			{
-				// Enter means "finish the current stage": first it closes the outline, then it commits the named region.
+				// Enter finishes the stage: closes the outline, then commits the region.
 				if (Pen->IsAwaitingConfirm())
 				{
 					Pen->ConfirmRegion();
@@ -168,8 +168,7 @@ void UPlaceLabelsEdMode::Enter()
 {
 	Super::Enter();
 
-	// Draw every region while the mode is up, filled, so which ground is already labelled is
-	// obvious without clicking anything. Nothing is drawn once the mode is down.
+	// Regions draw, filled, only while the mode is up.
 	UPlaceRegionComponent::SetEditorDrawingVisible(true);
 
 	const FPlaceLabelsCommands& Commands = FPlaceLabelsCommands::Get();
@@ -181,7 +180,7 @@ void UPlaceLabelsEdMode::Enter()
 	RegisterTool(Commands.BeginEditTool, TEXT("PlaceRegionEditTool"),
 		NewObject<UPlaceRegionEditToolBuilder>(this));
 
-	// The mode opens ready to look at what is already down rather than ready to draw over it.
+	// Opens on Select, not Pen.
 	GetToolManager()->SelectActiveToolType(EToolSide::Left, TEXT("PlaceRegionSelectTool"));
 
 	if (FSlateApplication::IsInitialized())

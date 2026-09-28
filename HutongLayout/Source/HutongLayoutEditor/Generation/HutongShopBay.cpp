@@ -12,7 +12,7 @@ void OpenBayRange(int32 BayCount, int32 OpenBayCount, int32& OutLo, int32& OutHi
 {
 	const int32 Open = FMath::Clamp(OpenBayCount, 0, BayCount);
 	const int32 Mid = BayCount / 2;
-	// Counted outward from the middle, so a half-open shop opens at its centre.
+	// Outward from the middle, so a half-open shop opens at its centre.
 	OutLo = Mid - (Open - 1) / 2;
 	OutHi = OutLo + Open - 1;
 }
@@ -38,7 +38,7 @@ void AppendFront(FDynamicMesh3& Mesh, const TFunctionRef<double(int32)>& Boundar
 
 		if (bAnyOpen && i >= OpenLo && i <= OpenHi)
 		{
-			// 櫃檯 across the mouth of the bay.
+			// 櫃檯 across the bay mouth.
 			if (F.bHasCounter)
 			{
 				const double CH = FMath::Clamp(F.CounterHeight, 20.0, F.HeadZ - F.SillZ - 30.0);
@@ -50,8 +50,7 @@ void AppendFront(FDynamicMesh3& Mesh, const TFunctionRef<double(int32)>& Boundar
 			continue;
 		}
 
-		// 排板門: loose boards dropped into a grooved sill, every second one set a little deeper —
-		// the stagger is what reads as boards rather than a panel.
+		// 排板門: loose boards in a grooved sill, every second set deeper; the stagger reads as boards, not a panel.
 		const double Span = X1 - X0;
 		const int32 Boards = FMath::Max(FMath::RoundToInt32(Span / BoardW), 2);
 		for (int32 b = 0; b < Boards; ++b)

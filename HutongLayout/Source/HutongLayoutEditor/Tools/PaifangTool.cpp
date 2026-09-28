@@ -15,12 +15,11 @@ void UHutongPaifangTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongPaifangToolProperties>(this);
 
-	// Registered before the params, and the order here is the panel order.
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("Paifang"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongPaifangToolProperties, Params));
 	Presets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
-	// Presets after the parameters they save.
+	// Panel order is registration order: presets after the params they save.
 	RegisterSettings(Settings);
 	RegisterSettings(Presets);
 }
@@ -60,7 +59,7 @@ void UHutongPaifangTool::GetEffectiveRectBounds(
 void UHutongPaifangTool::BuildMeshForRect(double SizeX, double SizeY, FDynamicMesh3& OutMesh,
 	EHutongDetail Level)
 {
-	// Only two scalars arrive, so the run direction is recovered by comparing them.
+	// Only two scalars arrive; compare them to recover the run direction.
 	UHutongPaifangBuildingComponent::BuildPaifangMesh(
 		Settings ? Settings->Params : FHutongPaifangParams(),
 		FMath::Max(SizeX, SizeY),
@@ -90,7 +89,7 @@ void UHutongPaifangTool::AttachBuildingComponent(AStaticMeshActor* Actor, double
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: the plan outline (and any lights) attach to the actor's root, which the component needs to be live to reach.
+	// After registration: the plan outline and lights attach to the actor's root, which needs the component live.
 	Building->ApplyPlacementAttachments();
 }
 
@@ -118,8 +117,8 @@ TArray<FText> UHutongPaifangTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongPaifangTool", "HelpSpan",
-		"Drag across the street to set the span. The depth is fixed by the post clamp stones (夾杆石), so only the long axis follows the cursor.");
+		"Drag across the street to set the span; the depth is fixed.");
 	Lines.Insert(NSLOCTEXT("HutongPaifangTool", "HelpType",
-		"Has Roofs below switches between a plain stone memorial arch (牌坊) and a roofed memorial arch (牌樓)."), 1);
+		"Has Roofs: off for a stone arch (牌坊), on for a roofed arch (牌樓)."), 1);
 	return Lines;
 }

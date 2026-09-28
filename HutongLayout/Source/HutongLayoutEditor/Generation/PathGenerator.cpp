@@ -15,13 +15,13 @@ namespace HutongGen
 		const double Rise = FMath::Max(P.Rise, 0.5);
 		const double Kerb = P.GetKerbWidth();
 
-		// Laid out across the rect: kerb, paving, kerb.
+		// Across the rect: kerb, paving, kerb.
 		const double PaveY0 = Kerb;
 		const double PaveY1 = Kerb + W;
 
-		const int32 StoneFirstTri = Mesh.MaxTriangleID();
+		FSlotScope StoneTag(Mesh, MatSlot_Stone);
 
-		// 牙子石 either side, standing a lip proud of the paving they retain.
+		// 牙子石 each side, a lip proud of the paving.
 		if (Kerb > 0.0)
 		{
 			const double Lip = FMath::Max(P.KerbLip, 0.0);
@@ -29,7 +29,7 @@ namespace HutongGen
 			AppendBox(Mesh, FVector3d(0.0, PaveY1, 0.0), FVector3d(L, PaveY1 + Kerb, Rise + Lip));
 		}
 
-		// The paving.
+		// Paving.
 		const double Spacing = FMath::Max(P.CourseSpacing, 0.0);
 		const double Joint = FMath::Clamp(P.JointWidth, 0.0, FMath::Max(Spacing * 0.4, 0.0));
 
@@ -39,22 +39,22 @@ namespace HutongGen
 		}
 		else
 		{
-			// Courses fall out of the length.
+			// Course count falls out of the length.
 			const int32 Count = FMath::Max(FMath::RoundToInt32(L / Spacing), 1);
 			for (int32 i = 0; i < Count; ++i)
 			{
 				const double A = L * i / double(Count);
 				const double B = L * (i + 1) / double(Count);
-				// The joint is taken off the *far* end of each course except the last.
+				// Joint taken off each course's far end, except the last.
 				const double End = (i == Count - 1) ? B : (B - 0.5 * Joint);
 				const double Start = (i == 0) ? A : (A + 0.5 * Joint);
 				if (End <= Start) continue;
 
-				// Each course sits a hair below the kerb's retained face.
+				// A hair below the kerb's retained face.
 				AppendBox(Mesh, FVector3d(Start, PaveY0, 0.0), FVector3d(End, PaveY1, Rise));
 			}
 		}
 
-		SetMaterialIDForTrianglesFrom(Mesh, StoneFirstTri, MatSlot_Stone);
+		StoneTag.Close();
 	}
 }

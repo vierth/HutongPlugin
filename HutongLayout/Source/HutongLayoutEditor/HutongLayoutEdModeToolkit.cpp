@@ -1,6 +1,7 @@
 #include "HutongLayoutEdModeToolkit.h"
 #include "HutongLayoutCommands.h"
 #include "Tools/RectDragToolBase.h"
+#include "Tools/HutongPanelFilter.h"
 #include "HutongLayoutEdMode.h"
 #include "HutongLayoutModeSettings.h"
 #include "Generation/HutongPlanOutlineComponent.h"
@@ -47,8 +48,13 @@ void FHutongLayoutEdModeToolkit::Init(const TSharedPtr<IToolkitHost>& InitToolki
 	Args.NameAreaSettings = FDetailsViewArgs::HideNameArea;
 	SelectedBuildingView = PropertyEditor.CreateDetailView(Args);
 
-	// The level editor's selection is read, never written: writing it from here restarted the
-	// active tool mid-click and the plan handles went with it.
+	// Simple view: the tool panel and selected building show only what a student decides.
+	const FIsPropertyVisible Filter = FIsPropertyVisible::CreateRaw(this, &FHutongLayoutEdModeToolkit::IsPropertyVisible);
+	if (DetailsView.IsValid()) DetailsView->SetIsPropertyVisibleDelegate(Filter);
+	SelectedBuildingView->SetIsPropertyVisibleDelegate(Filter);
+
+	// Read the level editor's selection, never write it: writing restarted the active tool
+	// mid-click and dropped the plan handles.
 	SelectionChangedHandle = USelection::SelectionChangedEvent.AddRaw(
 		this, &FHutongLayoutEdModeToolkit::OnSelectionChanged);
 	RefreshSelectedBuilding();
@@ -105,7 +111,7 @@ FText FHutongLayoutEdModeToolkit::GetBaseToolkitName() const
 	return LOCTEXT("ToolkitName", "Hutong Layout");
 }
 
-// Five palettes, not one: seventeen buttons in a single palette wrap into a grid the panel is too narrow for and the labels truncate.
+// Five palettes, not one: seventeen buttons wrap into a grid too narrow for their labels.
 namespace HutongPalettes
 {
 	static const FName Buildings("Buildings");
@@ -114,9 +120,8 @@ namespace HutongPalettes
 	static const FName Courtyard("Courtyard");
 	static const FName Layout("Layout");
 
-	// What acts on buildings already down — promotion, rebuilding, export and import — rather than
-	// on the one being placed. It was reaching every tool's panel as a collapsed section at the
-	// foot of it, on every tool, on every visit.
+	// Actions on placed buildings (promotion, rebuild, export, import), not on the one being
+	// placed; kept off every tool's panel.
 	static const FName Scene("Scene");
 }
 
@@ -141,11 +146,9 @@ FText FHutongLayoutEdModeToolkit::GetToolPaletteDisplayName(FName PaletteName) c
 	return FText::FromName(PaletteName);
 }
 
-// A tab is a question about what to place next, and the panel under it answers for the tool that
-// is up. Left running across a switch, the House tool's parameters sat under the Gates tab with
-// every button on it unpressed — a panel describing something the tab does not offer. So a tool
-// that is not on the tab being switched to is closed, and the panel goes back to its help block
-// until a tool on this tab is picked. Switching to the tab a tool is already on leaves it alone.
+// A tab asks what to place next and the panel answers for the active tool, so a switch closes
+// a tool not on the new tab (else e.g. House params sat under Gates, no button pressed) and the
+// panel shows help until a tool is picked. Switching to the active tool's tab leaves it alone.
 void FHutongLayoutEdModeToolkit::OnToolPaletteChanged(FName PaletteName)
 {
 	UHutongLayoutEdMode* Mode = Cast<UHutongLayoutEdMode>(OwningEditorMode.Get());
@@ -155,8 +158,7 @@ void FHutongLayoutEdModeToolkit::OnToolPaletteChanged(FName PaletteName)
 	const FString Active = ToolManager->GetActiveToolName(EToolSide::Left);
 	if (Active.IsEmpty() || Mode->IsToolOnPalette(Active, PaletteName)) return;
 
-	// Cancel, not accept: a half-drawn rectangle is a placement the user did not finish, and a tab
-	// switch is not the click that finishes it.
+	// Cancel, not accept: a tab switch is not the click that finishes a half-drawn rect.
 	ToolManager->DeactivateTool(EToolSide::Left, EToolShutdownType::Cancel);
 }
 
@@ -198,9 +200,15 @@ void FHutongLayoutEdModeToolkit::BuildToolPalette(FName PaletteName, FToolBarBui
 	else if (PaletteName == HutongPalettes::Layout)
 	{
 		ToolbarBuilder.AddToolBarButton(Commands.BeginGalleryTool);
+		ToolbarBuilder.AddToolBarButton(Commands.BeginGalleryWallsTool);
+		ToolbarBuilder.AddToolBarButton(Commands.BeginGalleryHousesTool);
+		ToolbarBuilder.AddToolBarButton(Commands.BeginGalleryGatesTool);
+		ToolbarBuilder.AddToolBarButton(Commands.BeginGalleryCourtyardTool);
+		ToolbarBuilder.AddToolBarButton(Commands.BeginGalleryStreetTool);
+		ToolbarBuilder.AddToolBarButton(Commands.BeginGalleryTemplesTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginMeasureTool);
-		// The import *tool* stays with the placement tools: it drags a set out onto the ground,
-		// and the Scene tab has no tool panel to show its file path and folder in.
+		// The import *tool* stays with the placement tools: it drags a set onto the ground, and the
+		// Scene tab has no tool panel for its path and folder.
 		ToolbarBuilder.AddToolBarButton(Commands.BeginImportTool);
 	}
 }
@@ -251,9 +259,52 @@ FText FHutongLayoutEdModeToolkit::GetHoverText() const
 	return Tool ? Tool->GetHoverSummaryText() : FText::GetEmpty();
 }
 
+FText FHutongLayoutEdModeToolkit::GetHoverHeaderText() const
+{
+	const URectDragToolBase* Tool = GetActiveRectTool();
+	return Tool && Tool->IsHoverUnderCursor()
+		? LOCTEXT("HoverHeader", "Under the cursor (already placed)")
+		: LOCTEXT("SelectedHeader", "Selected (already placed)");
+}
+
 EVisibility FHutongLayoutEdModeToolkit::GetHoverVisibility() const
 {
+	// Mid-placement the panel shows only the piece going down: students read the hover readout as
+	// describing what they were placing.
+	const URectDragToolBase* Tool = GetActiveRectTool();
+	if (!Tool || Tool->IsPlacingActive()) return EVisibility::Collapsed;
 	return GetHoverText().IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible;
+}
+
+bool FHutongLayoutEdModeToolkit::IsPropertyVisible(const FPropertyAndParent& PropertyAndParent) const
+{
+	const UHutongLayoutModeSettings* Settings = UHutongLayoutEdMode::GetActiveSettings();
+	const bool bAdvanced = Settings && Settings->bShowAdvancedSettings;
+	return HutongPanel::IsVisible(PropertyAndParent.Property, PropertyAndParent.ParentProperties, bAdvanced);
+}
+
+ECheckBoxState FHutongLayoutEdModeToolkit::GetShowAdvancedState() const
+{
+	const UHutongLayoutModeSettings* Settings = UHutongLayoutEdMode::GetActiveSettings();
+	return Settings && Settings->bShowAdvancedSettings ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+}
+
+void FHutongLayoutEdModeToolkit::OnShowAdvancedChanged(ECheckBoxState State)
+{
+	UHutongLayoutModeSettings* Settings = UHutongLayoutEdMode::GetActiveSettings();
+	if (!Settings) return;
+	Settings->bShowAdvancedSettings = (State == ECheckBoxState::Checked);
+	Settings->SaveConfig();
+	// The filter is asked at row build, so rebuild the views.
+	if (DetailsView.IsValid()) DetailsView->ForceRefresh();
+	if (SelectedBuildingView.IsValid()) SelectedBuildingView->ForceRefresh();
+}
+
+FText FHutongLayoutEdModeToolkit::GetAdvancedHintText() const
+{
+	return GetShowAdvancedState() == ECheckBoxState::Checked
+		? LOCTEXT("AdvancedOn", "Every setting is showing.")
+		: LOCTEXT("AdvancedOff", "Showing the main choices. Proportions, structure and detailing are under advanced.");
 }
 
 EVisibility FHutongLayoutEdModeToolkit::GetHelpVisibility() const
@@ -374,8 +425,8 @@ void FHutongLayoutEdModeToolkit::OnShowPlansChanged(ECheckBoxState State)
 	const bool bVisible = (State == ECheckBoxState::Checked);
 	HutongPlanOutline::SetPlansVisible(bVisible);
 
-	// The mode settings' own checkbox is a mirror seeded on Enter, and the Scene tab is showing it
-	// right now: left alone it would sit there contradicting this one.
+	// The mode settings' checkbox is a mirror seeded on Enter and visible on the Scene tab; update
+	// it or it contradicts this one.
 	if (UHutongLayoutModeSettings* Settings = UHutongLayoutEdMode::GetActiveSettings())
 	{
 		Settings->bShowPlanOutlines = bVisible;
@@ -394,7 +445,7 @@ FReply FHutongLayoutEdModeToolkit::OnGenerateClicked()
 TSharedRef<SWidget> FHutongLayoutEdModeToolkit::MakePlanRow() const
 {
 	FHutongLayoutEdModeToolkit* Self = const_cast<FHutongLayoutEdModeToolkit*>(this);
-	// Two rows, not one: side by side the label ran under the button at the panel's width.
+	// Two rows: side by side the label ran under the button.
 	return SNew(SBorder)
 		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
 		.Padding(FMargin(8.0f, 4.0f))
@@ -447,8 +498,8 @@ TSharedRef<SWidget> FHutongLayoutEdModeToolkit::MakePlanRow() const
 
 TSharedPtr<SWidget> FHutongLayoutEdModeToolkit::GetInlineContent() const
 {
-	// Two panels in one slot, and the palette tab decides which is up: the tool being placed, or
-	// what is already down. Bound rather than rebuilt, because GetInlineContent runs once.
+	// Two panels in one slot, picked by the palette tab: the tool being placed, or what is down.
+	// Bound, not rebuilt, since GetInlineContent runs once.
 	return SNew(SVerticalBox)
 
 		// The tool side, under one binding: the plan row, the help block and the tool's own panel.
@@ -479,7 +530,7 @@ TSharedPtr<SWidget> FHutongLayoutEdModeToolkit::GetInlineContent() const
 					.AutoHeight()
 					.Padding(0.0f, 0.0f, 0.0f, 2.0f)
 					[
-						// What is being placed, in the palette's own words: label, then the first line of the tooltip.
+						// What is being placed: palette label, then the tooltip's first line.
 						SNew(SHorizontalBox)
 						+ SHorizontalBox::Slot()
 						.AutoWidth()
@@ -516,19 +567,6 @@ TSharedPtr<SWidget> FHutongLayoutEdModeToolkit::GetInlineContent() const
 						SNew(STextBlock)
 						.Text(this, &FHutongLayoutEdModeToolkit::GetPlacementPromptText)
 						.ColorAndOpacity(this, &FHutongLayoutEdModeToolkit::GetPlacementPromptColor)
-						.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
-						.AutoWrapText(true)
-					]
-
-					+ SVerticalBox::Slot()
-					.AutoHeight()
-					.Padding(0.0f, 0.0f, 0.0f, 4.0f)
-					[
-						// What the cursor is resting on.
-						SNew(STextBlock)
-						.Text(this, &FHutongLayoutEdModeToolkit::GetHoverText)
-						.Visibility(this, &FHutongLayoutEdModeToolkit::GetHoverVisibility)
-						.ColorAndOpacity(FSlateColor(FLinearColor(0.25f, 0.85f, 1.0f)))
 						.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
 						.AutoWrapText(true)
 					]
@@ -572,15 +610,77 @@ TSharedPtr<SWidget> FHutongLayoutEdModeToolkit::GetInlineContent() const
 				]
 			]
 
+			// What is already down under the cursor or selected, in its own headed box so it is not read
+			// as the piece being placed.
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.0f, 4.0f, 0.0f, 0.0f)
+			[
+				SNew(SBorder)
+				.BorderImage(FAppStyle::GetBrush("ToolPanel.DarkGroupBorder"))
+				.Padding(FMargin(8.0f, 6.0f))
+				.Visibility(this, &FHutongLayoutEdModeToolkit::GetHoverVisibility)
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot()
+					.AutoHeight()
+					.Padding(0.0f, 0.0f, 0.0f, 2.0f)
+					[
+						SNew(STextBlock)
+						.Text(this, &FHutongLayoutEdModeToolkit::GetHoverHeaderText)
+						.Font(FCoreStyle::GetDefaultFontStyle("Bold", 8))
+						.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+					]
+					+ SVerticalBox::Slot()
+					.AutoHeight()
+					[
+						SNew(STextBlock)
+						.Text(this, &FHutongLayoutEdModeToolkit::GetHoverText)
+						.ColorAndOpacity(FSlateColor(FLinearColor(0.25f, 0.85f, 1.0f)))
+						.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
+						.AutoWrapText(true)
+					]
+				]
+			]
+
+			// The simple / advanced switch, right above the settings it hides.
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(8.0f, 6.0f, 8.0f, 4.0f)
+			[
+				SNew(SVerticalBox)
+				.Visibility(this, &FHutongLayoutEdModeToolkit::GetHelpVisibility)
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					SNew(SCheckBox)
+					.IsChecked(this, &FHutongLayoutEdModeToolkit::GetShowAdvancedState)
+					.OnCheckStateChanged(const_cast<FHutongLayoutEdModeToolkit*>(this), &FHutongLayoutEdModeToolkit::OnShowAdvancedChanged)
+					.ToolTipText(LOCTEXT("AdvancedTip", "Shows every setting of the tool, not just the main choices."))
+					[
+						SNew(STextBlock)
+						.Text(LOCTEXT("ShowAdvanced", "Show advanced settings"))
+						.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
+					]
+				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					SNew(STextBlock)
+					.Text(this, &FHutongLayoutEdModeToolkit::GetAdvancedHintText)
+					.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
+					.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+					.AutoWrapText(true)
+				]
+			]
+
 			+ SVerticalBox::Slot()
 			[
 				DetailsView.ToSharedRef()
 			]
 		]
 
-		// Promote, rebuild, export, import, count — everything that acts on buildings already
-		// down, on its own tab and open, rather than collapsed at the foot of whichever tool
-		// happened to be active.
+		// Actions on placed buildings (promote, rebuild, export, import, count), on their own open tab.
 		+ SVerticalBox::Slot()
 		[
 			SNew(SVerticalBox)

@@ -30,7 +30,7 @@ public:
 		meta = (DisplayName = "Recompute Parent"))
 	void RecomputeParent();
 
-	// Clearing an object property to null in the Details panel is a two-click affordance people miss, and leaving a stale explicit parent set silently defeats auto-parenting.
+	// Clears Explicit Parent so auto-parenting applies again.
 	UFUNCTION(CallInEditor, Category = "Place Label|Hierarchy",
 		meta = (DisplayName = "Clear Explicit Parent"))
 	void ClearExplicitParent();

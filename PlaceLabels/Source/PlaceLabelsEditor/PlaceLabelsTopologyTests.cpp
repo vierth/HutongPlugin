@@ -128,7 +128,7 @@ bool FPlaceLabelsWeldGapTest::RunTest(const FString& Parameters)
 	PlaceLabelsTopology::FindPolygonSeams(Polygons, 25.0, Seams);
 	TestEqual(TEXT("no seam survives the weld"), Seams.Num(), 0);
 
-	// Idempotent: welding an already-welded pair must be a no-op, or the panel would report work done every time somebody pressed the button.
+	// Idempotent: re-welding is a no-op, else the panel reports work on every press.
 	TArray<bool> SecondPass;
 	PlaceLabelsTopology::FWeldReport SecondReport;
 	PlaceLabelsTopology::WeldPolygons(Polygons, 25.0, SecondPass, SecondReport);
@@ -269,7 +269,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPlaceLabelsWeldLeavesRealGapsTest,
 
 bool FPlaceLabelsWeldLeavesRealGapsTest::RunTest(const FString& Parameters)
 {
-	// A gap somebody drew on purpose — a lane between two compounds — has to survive the weld untouched.
+	// A deliberate gap (lane between compounds) survives the weld.
 	TArray<TArray<FVector2D>> Polygons;
 	Polygons.Add(Square(0.0, 0.0, 100.0));
 	Polygons.Add(Square(950.0, 0.0, 100.0));
@@ -292,10 +292,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPlaceLabelsWeldKeepsTrianglesTest,
 	"PlaceLabels.Topology.WeldKeepsTriangles",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-// A cluster is refused when it spans more than one corner of a polygon it cannot afford to lose.
-// The "confined to one polygon" guard passed a cluster holding two corners of A and one of B, and
-// both of A's went to the same centroid: a triangle then had three vertices with two identical,
-// zero signed area, no containment and no fill — and the weld reported success.
+// A cluster taking two corners of a triangle is refused: collapsing them leaves zero area.
 bool FPlaceLabelsWeldKeepsTrianglesTest::RunTest(const FString& Parameters)
 {
 	// Two corners of the triangle within tolerance of each other and of the square's corner.

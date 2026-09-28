@@ -19,7 +19,7 @@ public:
 	UFUNCTION(CallInEditor, Category="File", meta=(DisplayName="Browse…", ToolTip="Opens a file dialog to pick a scene file and loads it."))
 	void Browse();
 
-	// For the case the file is being written by something else while this is open.
+	// For a file being rewritten externally while open.
 	UFUNCTION(CallInEditor, Category="File", meta=(DisplayName="Reload", ToolTip="Loads the current scene file again from disk."))
 	void Reload();
 
@@ -41,12 +41,11 @@ public:
 	UPROPERTY(EditAnywhere, Category="Placement", meta=(DisplayName="Update Matching Placements", ToolTip="Updates buildings whose id matches an imported record in place."))
 	bool bUpdateMatchingPlacements = true;
 
-	// Straight back to the coordinates the file recorded, with no drag.
+	// Back to the file's recorded coordinates, no drag.
 	UFUNCTION(CallInEditor, Category="Placement", meta=(DisplayName="Place At Recorded Coordinates", ToolTip="Places the loaded set at the world coordinates the file recorded."))
 	void PlaceAtRecordedCoordinates();
 
-	// TransientToolProperty, or RestoreProperties copies a shut-down tool's pointer back out of
-	// the CDO cache and every button on this set forwards to nothing.
+	// TransientToolProperty, else RestoreProperties restores a dead tool's pointer from the CDO cache.
 	UPROPERTY(meta=(TransientToolProperty))
 	TWeakObjectPtr<UHutongImportTool> Owner;
 };
@@ -63,11 +62,10 @@ public:
 	virtual TArray<FText> GetToolHelpLines() const override;
 	virtual FText GetStagePromptText() const override;
 
-	// Opens the dialog, loads, and refreshes the preview. Called from the property set's buttons.
+	// Opens the dialog, loads, refreshes the preview. Called from the property set's buttons.
 	void BrowseForFile();
-	// bPrompt: whether an unrecognised type in the file may put a modal question up now. The file
-	// remembered from the last session is loaded as the tool starts, and a dialog on the way in to
-	// a tool is a dialog nobody asked for; that one is answered at the moment of placing instead.
+	// bPrompt: may an unknown type raise a modal now. The last session's file loads on tool start, where a
+	// dialog is unasked for; that case is asked at placement instead.
 	void LoadFile(const FString& InPath, bool bPrompt = true);
 	void PlaceAtRecordedCoordinates();
 
@@ -80,17 +78,17 @@ protected:
 	virtual FString GetPlacementDetail() const override;
 	virtual double GetPreviewHeight() const override { return 0.0; }
 
-	// Nothing to bake: every record carries its own parameters and its own detail level.
+	// Nothing to bake: each record carries its own params and detail level.
 	virtual void BuildMeshForRect(double, double, UE::Geometry::FDynamicMesh3&, EHutongDetail) override {}
 
 	UPROPERTY()
 	TObjectPtr<UHutongImportToolProperties> Settings;
 
 private:
-	// Four per record, in the set frame, each already carrying the record's own relative yaw.
+	// Four corners per record, set frame, record's relative yaw applied.
 	void RebuildPreview();
 
-	// Past this many footprints only the set's bounding rectangle is drawn.
+	// Beyond this many footprints only the set's bounds are drawn.
 	static constexpr int32 MaxPreviewFootprints = 400;
 
 	FString FilePath;

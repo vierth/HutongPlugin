@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "HutongJiajia.generated.h"
 
-// 檁數, which is the decision a Qing builder makes: the depth and the roof profile both fall out of it.
+// 檁數: sets both depth and roof profile.
 UENUM(BlueprintType)
 enum class EHutongPurlins : uint8
 {
@@ -18,16 +18,16 @@ enum class EHutongPurlins : uint8
 
 namespace HutongGen
 {
-	// 舉架, the Qing roof section: a polyline, not a curve.
+	// 舉架 roof section: a polyline, not a curve.
 	struct FHutongRoofSection
 	{
-		// Eave to ridge, including the overhang as segment 0 when the caller has one.
+		// Eave to ridge; segment 0 is the overhang if any.
 		TArray<double> Run;
 
-		// 舉 for each segment: rise divided by that segment's own run.
+		// 舉 per segment: rise over its own run.
 		TArray<double> Ju;
 
-		// 捲棚/過壟脊: rounds the apex over the last stretch instead of folding it, as a fraction of the half span.
+		// 捲棚/過壟脊: apex rounding band, as a fraction of the half span.
 		double ApexRoll = 0.0;
 
 		double HalfSpan() const
@@ -44,14 +44,14 @@ namespace HutongGen
 			return Z;
 		}
 
-		// Height above the eave line, measured from the ridge.
+		// Height above the eave line at a distance from the ridge.
 		double HeightAtDistanceFromRidge(double DistanceFromRidge) const;
-		// Where the roof actually tops out: the fold, or on a 捲棚 the rounded crown below it.
+		// Top of the roof: the fold, or a 捲棚's crown below it.
 		double CrownHeight() const { return HeightAtDistanceFromRidge(0.0); }
-		// The crown as a fraction of the fold's rise, 1 on a sharp section.
+		// Crown / fold rise; 1 when sharp.
 		double CrownFactor() const { const double R = Rise(); return R > 0.0 ? CrownHeight() / R : 1.0; }
 
-		// The same profile as a fraction of the total rise.
+		// Profile as a fraction of total rise.
 		double HeightFraction(double NormalizedDistanceFromRidge) const;
 
 		bool IsValid() const { return Run.Num() > 0 && Run.Num() == Ju.Num() && HalfSpan() > 0.0; }
@@ -61,20 +61,34 @@ namespace HutongGen
 	{
 		int32 PurlinCount(EHutongPurlins Purlins);
 
-		// One less than the purlin count halved and rounded — 2 for 五檁.
+		// 步架 per side: 2 for 五檁.
 		int32 StepsPerSide(EHutongPurlins Purlins);
 
-		// The canonical 舉 sequence, eave first.
+		// Canonical 舉 sequence, eave first.
 		TArray<double> DefaultRatios(EHutongPurlins Purlins);
+
+		// The eave step's 舉, which the overhang takes too.
+		inline double EaveJu(EHutongPurlins Purlins)
+		{
+			const TArray<double> R = DefaultRatios(Purlins);
+			return R.Num() > 0 ? R[0] : 0.5;
+		}
+
+		// The eave step's 舉 once the section is scaled to the rise actually built (a fixed RoofRise).
+		inline double BuiltEaveJu(const FHutongRoofSection& S, double BuiltRise)
+		{
+			const double R = S.Rise();
+			return (S.Ju.Num() > 0 && R > 0.0) ? S.Ju[0] * FMath::Max(BuiltRise, 0.0) / R : 0.5;
+		}
 
 		// (檁數 - 1) × 步架, both sides.
 		double DepthFor(EHutongPurlins Purlins, double StepRun);
 
-		// Half a gable roof: the eave overhang, then the 步架 in from it.
+		// Half a gable roof: overhang, then the 步架.
 		FHutongRoofSection MakeSection(
 			EHutongPurlins Purlins, double HalfDepth, double EaveOverhang, double ApexRoll);
 
-		// The same with the ratios supplied, for a non-canonical pitch.
+		// With explicit ratios, for a non-canonical pitch.
 		FHutongRoofSection MakeSectionWithRatios(
 			const TArray<double>& Ratios, double HalfDepth, double EaveOverhang, double ApexRoll);
 	}

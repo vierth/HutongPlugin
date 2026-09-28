@@ -31,12 +31,11 @@ public class PlaceLabelsEditor : ModuleRules
 			"LevelEditor",
 			"InteractiveToolsFramework",
 			"EditorInteractiveToolsFramework",
-			// Registering the generated starter type assets with the content browser, and
-			// resolving imported type ids back to assets.
+			// Starter type assets; resolving imported type ids.
 			"AssetRegistry",
 			// GeoJSON import and export.
 			"Json",
-			// The file open/save dialogs the import and export buttons put up.
+			// Import/export file dialogs.
 			"DesktopPlatform",
 			// SListView and the rest of the region browser.
 			"ApplicationCore",

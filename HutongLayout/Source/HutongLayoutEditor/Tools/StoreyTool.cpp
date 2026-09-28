@@ -17,12 +17,11 @@ void UHutongStoreyTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongStoreyToolProperties>(this);
 
-	// Registered before the params, and the order here is the panel order.
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("Storey"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongStoreyToolProperties, Params));
 	Presets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
-	// Presets after the parameters they save.
+	// Panel order is registration order: presets after the params they save.
 	RegisterSettings(Settings);
 	RegisterSettings(Presets);
 }
@@ -30,20 +29,20 @@ void UHutongStoreyTool::RegisterToolSettings()
 void UHutongStoreyTool::OnPlacementStarted(const FVector& HitWorld)
 {
 	BaySide = ComputeDefaultBaySide();
-	// The right bay count depends on the frontage being drawn.
+	// Bay count depends on the frontage drawn.
 	if (Settings) Settings->Params.BayCountOverride = 0;
 }
 
 void UHutongStoreyTool::CancelPlacement()
 {
 	Super::CancelPlacement();
-	// The override is only meaningful for the footprint that was being drawn.
+	// The override applies only to the footprint being drawn.
 	if (Settings) Settings->Params.BayCountOverride = 0;
 }
 
 bool UHutongStoreyTool::OnRectCommitted(const FVector& HitWorld)
 {
-	// Defer to a third click so the facing side can be picked by hovering.
+	// Defer to a third click so the facing side is picked by hovering.
 	return false;
 }
 
@@ -72,9 +71,9 @@ void UHutongStoreyTool::AttachBuildingComponent(AStaticMeshActor* Actor, double 
 	if (!Building) return;
 
 	if (Settings) Building->Params = Settings->Params;
-	// The count that was previewed, mirrored onto the component.
+	// The previewed count, mirrored onto the component.
 	if (Settings) Building->BayCountOverride = Settings->Params.BayCountOverride;
-	// The component keeps the rect's own extents and the side, not the frontage/depth pair.
+	// The component keeps the rect's extents and side, not frontage/depth.
 	Building->FootprintX = SizeX;
 	Building->FootprintY = SizeY;
 	Building->BaySide = BaySide;
@@ -84,15 +83,14 @@ void UHutongStoreyTool::AttachBuildingComponent(AStaticMeshActor* Actor, double 
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: the plan outline (and any lights) attach to the actor's root, which the component needs to be live to reach.
+	// After registration: the plan outline and lights attach to the actor's root, which needs the component live.
 	Building->ApplyPlacementAttachments();
 }
 
 void UHutongStoreyTool::AdjustHeight(double DeltaCm)
 {
 	if (!Settings) return;
-	// The upper storey is what the keys move: a 樓 is raised by its own storey, not by lifting the
-	// shop's ceiling, and the ground floor is the one dimension the street sets.
+	// Keys move the upper storey: a 樓 rises by its own storey; the street sets the ground floor.
 	Settings->Params.UpperStoreyHeight =
 		FMath::Clamp(Settings->Params.UpperStoreyHeight + DeltaCm, 140.0, 500.0);
 }
@@ -169,9 +167,9 @@ TArray<FText> UHutongStoreyTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongStoreyTool", "HelpDrag",
-		"Click to anchor, move, click to fix the footprint, move to pick the side facing the street, click to place.");
+		"Click to anchor, move, click to fix the footprint, move toward the street side, click to place.");
 	Lines.Insert(NSLOCTEXT("HutongStoreyTool", "HelpOpen",
-		"The shop below is a 鋪面房: Open Bays lifts the board doors (排板門) out of that many bays, counted from the middle. Over it the story line carries a tiled skirt (腰檐) and a railed gallery (欄杆); - and = raise the upper story."), 1);
+		"Open Bays opens the shop below; - and = raise the upper story."), 1);
 	return Lines;
 }
 

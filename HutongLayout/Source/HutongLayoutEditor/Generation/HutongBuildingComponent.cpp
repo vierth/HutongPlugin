@@ -15,19 +15,17 @@
 
 using UE::Geometry::FDynamicMesh3;
 
-void UHutongBuildingComponent::BuildLODs(TArray<FDynamicMesh3>& OutLODs) const
+int32 UHutongBuildingComponent::BuildLODs(TArray<FDynamicMesh3>& OutLODs) const
 {
 	const FVector2D Footprint = GetFootprintSize();
-	// The one seam every rebuild shares: the generator builds its rectangle, and the footprint's
-	// corner offsets are then laid over the whole mesh, before normals and box UVs are taken.
+	// The seam every rebuild shares: generator builds the rectangle, then the corner offsets warp
+	// the mesh, before normals and box UVs.
 	const bool bSkew = HasFootprintSkew();
-	HutongGen::Detail::BuildPlacementLODs(bPlanOnly, Footprint.X, Footprint.Y,
+	return HutongGen::Detail::BuildPlacementLODs(bPlanOnly, Footprint.X, Footprint.Y,
 		DetailLevel, bBuildLODChain,
 		[this, Footprint, bSkew](FDynamicMesh3& Mesh, EHutongDetail Level)
 		{
 			BuildMesh(Mesh, Level);
-			// Seen from below, a roof is its rafters and 望板, wood, not tiles.
-			HutongMeshUtils::RetagDownwardFaces(Mesh, HutongGen::MatSlot_Roof, HutongGen::MatSlot_Wood);
 			if (bSkew) HutongMeshUtils::WarpFootprint(Mesh, Footprint.X, Footprint.Y, FootprintSkew);
 		},
 		OutLODs);
@@ -36,7 +34,7 @@ void UHutongBuildingComponent::BuildLODs(TArray<FDynamicMesh3>& OutLODs) const
 void UHutongBuildingComponent::OnComponentCreated()
 {
 	Super::OnComponentCreated();
-	// Here rather than in the constructor, which also runs for the class default object and would hand every building in the level the same id.
+	// Not in the constructor: it also runs for the CDO, giving every building the same id.
 	if (!BuildingId.IsValid()) { BuildingId = FGuid::NewGuid(); }
 }
 
@@ -54,7 +52,7 @@ void UHutongBuildingComponent::Rebuild()
 
 	if (bPlanOnly)
 	{
-		// Back to the plan: whatever was built comes off, and the outline goes on.
+		// Plan only: remove the built mesh, add the outline.
 		Actor->Modify();
 		if (UStaticMeshComponent* SMC = Actor->GetStaticMeshComponent())
 		{
@@ -66,11 +64,11 @@ void UHutongBuildingComponent::Rebuild()
 	}
 
 	TArray<FDynamicMesh3> LODs;
-	BuildLODs(LODs);
+	const int32 CollisionLOD = BuildLODs(LODs);
 	if (LODs.Num() == 0 || LODs[0].TriangleCount() == 0) return;
 
 	Actor->Modify();
-	HutongGen::BuildAndAssignStaticMesh(Actor, LODs, Palette);
+	HutongGen::BuildAndAssignStaticMesh(Actor, LODs, Palette, CollisionLOD);
 	ApplyPlanOutline();
 }
 
@@ -86,7 +84,7 @@ bool UHutongBuildingComponent::ApplyPresetParams(const FString& Name)
 
 FName UHutongBuildingComponent::GetPresetKey() const
 {
-	// UHutongSiheyuanBuildingComponent -> "Siheyuan", which is the key the house tool saves under.
+	// UHutongSiheyuanBuildingComponent -> "Siheyuan", the house tool's preset key.
 	FString Name = GetClass()->GetName();
 	Name.RemoveFromStart(TEXT("UHutong"));
 	Name.RemoveFromStart(TEXT("Hutong"));
@@ -110,7 +108,7 @@ TArray<FString> UHutongBuildingComponent::GetPresetOptions() const
 	{
 		Names = Library->GetPresetNames(GetPresetKey());
 	}
-	// Empty is a real answer: parameters that match no preset any more.
+	// Empty = parameters match no preset.
 	Names.Insert(FString(), 0);
 	return Names;
 }
@@ -127,11 +125,8 @@ void UHutongBuildingComponent::ApplyPlanOutline()
 	AActor* Owner = GetOwner();
 	if (!Owner) return;
 
-	// **One outline, and any others are destroyed here.** An undo that restores a destroyed outline
-	// onto an actor that has since made itself a new one leaves two, and only the first is ever
-	// found again: the second stands there drawing the footprint as it was when it was made,
-	// following the actor around with nothing left to update it. Which is what a resize looks like
-	// when the old rectangle does not go away.
+	// **One outline; extras destroyed here.** Undo can restore an old outline beside a new one;
+	// only the first is found again, so the second would draw a stale footprint forever.
 	TArray<UHutongPlanOutlineComponent*> Outlines;
 	Owner->GetComponents(Outlines);
 	for (int32 i = bPlanOnly ? 1 : 0; i < Outlines.Num(); ++i)
@@ -151,7 +146,7 @@ void UHutongBuildingComponent::ApplyPlanOutline()
 		Owner->Modify();
 		Outline = NewObject<UHutongPlanOutlineComponent>(Owner, NAME_None, RF_Transactional);
 		Outline->SetupAttachment(Owner->GetRootComponent());
-		// AddInstanceComponent as well as RegisterComponent, or it is neither saved with the actor nor listed on it.
+		// AddInstanceComponent too, or it is neither saved nor listed on the actor.
 		Owner->AddInstanceComponent(Outline);
 		Outline->RegisterComponent();
 	}
@@ -181,18 +176,16 @@ void UHutongBuildingComponent::PostEditChangeProperty(FPropertyChangedEvent& Pro
 	// Skip the stream of updates a slider drag produces.
 	if (PropertyChangedEvent.ChangeType == EPropertyChangeType::Interactive) return;
 
-	// A preset picked here replaces the parameters and nothing else: the footprint, the facing and
-	// the transform are the placement's, so the polygon stays where it was drawn and builds
-	// something else. The preset's own suggested frontage rides along in the params and is only
-	// what a *new* drag would snap to.
+	// A picked preset replaces only the parameters; footprint, facing and transform stay. Its
+	// suggested frontage only affects a *new* drag.
 	const FName Changed = PropertyChangedEvent.GetPropertyName();
 	if (Changed == GET_MEMBER_NAME_CHECKED(UHutongBuildingComponent, Preset) && !Preset.IsEmpty())
 	{
 		ApplyPresetParams(Preset);
 	}
 
-	// A corner typed past the opposite edge folds the quadrilateral and the warp would turn the
-	// building inside out; the panel then shows the rectangle it builds instead.
+	// A corner past the opposite edge folds the quad and would invert the warp; the panel shows the
+	// rectangle built instead.
 	{
 		if (HasFootprintSkew() && !HutongFootprint::IsSkewValid(GetFootprintSize(), FootprintSkew))
 		{
@@ -209,11 +202,8 @@ void UHutongBuildingComponent::PostEditUndo()
 {
 	Super::PostEditUndo();
 
-	// An undo that takes a component *out* of existence still arrives here — undoing a conversion
-	// un-creates the component it added — and that object is restored to its defaults before it
-	// goes. Rebuilding from it bakes a default-parameters building onto the actor, which on a
-	// laid-out plan is geometry appearing where the whole point was that there is none. Only the
-	// component the actor is still carrying may build.
+	// Undoing a conversion also lands here for the removed component, reset to defaults; building
+	// from it would bake a default building. Only a component the actor still carries may build.
 	const AActor* Owner = GetOwner();
 	if (!IsValid(this) || !Owner || !Owner->GetComponents().Contains(this)) return;
 
@@ -233,7 +223,7 @@ void UHutongWallBuildingComponent::BuildWallMesh(const FHutongWallParams& InPara
 
 	HutongGen::Detail::Apply(Detail, P);
 
-	// 牆 has no block form: a run is already thirty boxes and a block would be the same wall.
+	// 牆 has no block form: a run is already boxes.
 	HutongGen::BuildWall(OutMesh, P);
 
 	// BuildWall lays the length along X.
@@ -253,7 +243,7 @@ void UHutongWallBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDeta
 	FHutongWallParams P = Params;
 	P.StartExtend = StartExtend;
 	P.EndExtend = EndExtend;
-	// The footprint's own cross extent when there is one; GetBuiltThickness is the same answer.
+	// Same answer as GetBuiltThickness.
 	const double Cross = (FootprintThickness > 0.0) ? FootprintThickness : P.GetThickness();
 	BuildWallMesh(P, Length, Cross, bLengthAlongY, OutMesh, Level);
 }
@@ -304,7 +294,7 @@ void UHutongEarPassageBuildingComponent::BuildEarPassageMesh(const FHutongEarPas
 	P.Width = bAlongX ? SizeX : SizeY;
 	P.Depth = bAlongX ? SizeY : SizeX;
 
-	// The level is applied inside, part by part.
+	// Detail level applied inside, per part.
 	HutongGen::BuildEarPassage(OutMesh, P, Detail);
 
 	if (Side == EHutongBaySide::MinusY) return;
@@ -434,6 +424,11 @@ void UHutongCorridorBuildingComponent::BuildCorridorMesh(
 	{
 		P.BenchGapAt = 1.0 - FMath::Clamp(P.BenchGapAt, 0.0, 1.0);
 	}
+	if (bFlip)
+	{
+		Swap(P.bOmitLowEndPost, P.bOmitHighEndPost);
+		Swap(P.bNoBenchAtLowEnd, P.bNoBenchAtHighEnd);
+	}
 
 	HutongGen::Detail::Apply(Detail, P);
 
@@ -448,7 +443,7 @@ void UHutongCorridorBuildingComponent::BuildCorridorMesh(
 
 	const double Dep = P.GetFootprintDepth();
 
-	// Which side the colonnade opens onto is a 180 degree yaw about the footprint's centre, not a mirror.
+	// Open side flips by a 180° yaw about the centre, not a mirror.
 	if (bFlip)
 	{
 		HutongMeshUtils::YawVerticesFrom(OutMesh, 0,
@@ -466,6 +461,10 @@ void UHutongCorridorBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutong
 	FHutongCorridorParams P = Params;
 	P.Width = Width;
 	P.BenchGapAt = BenchGapAt;
+	P.bOmitLowEndPost = bOmitLowEndPost;
+	P.bOmitHighEndPost = bOmitHighEndPost;
+	P.bNoBenchAtLowEnd = bNoBenchAtLowEnd;
+	P.bNoBenchAtHighEnd = bNoBenchAtHighEnd;
 	BuildCorridorMesh(P, Length, bLengthAlongY, bFlipOpenSide, OutMesh, Level);
 }
 
@@ -624,7 +623,7 @@ void UHutongPathBuildingComponent::BuildPathMesh(
 
 	HutongGen::Detail::Apply(Detail, P);
 
-	// 甬路 has no block form either: it is a slab with courses across it, and the courses are what the detail level thins.
+	// 甬路 has no block form: detail level only thins its courses.
 	HutongGen::BuildPath(OutMesh, P);
 
 	// Built along X and swung onto Y by a real rotation, not an X/Y swap.
@@ -664,7 +663,7 @@ void UHutongHallBuildingComponent::BuildHallMesh(
 		HutongGen::BuildHall(OutMesh, P);
 	}
 
-	// Built with the facade on -Y and rotated into place, as every faced type here is.
+	// Built facade on -Y, rotated into place.
 	if (Side != EHutongBaySide::MinusY)
 	{
 		for (int32 vid : OutMesh.VertexIndicesItr())
@@ -737,7 +736,6 @@ void UHutongFlowerBedBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHuton
 void UHutongWaterJarBuildingComponent::BuildWaterJarMesh(
 	const FHutongWaterJarParams& InParams, FDynamicMesh3& OutMesh, EHutongDetail Detail)
 {
-	// No footprint to thread through.
 	FHutongWaterJarParams P = InParams;
 	HutongGen::Detail::Apply(Detail, P);
 	HutongGen::BuildWaterJar(OutMesh, P);
@@ -762,7 +760,7 @@ void UHutongFrameBuildingComponent::BuildFrameMesh(const FHutongFrameParams& InP
 	HutongGen::Detail::Apply(Detail, P);
 	HutongGen::BuildFrame(OutMesh, P);
 
-	// Built with its front on -Y, as the house is; turned onto the chosen side.
+	// Built front on -Y, rotated onto the chosen side.
 	if (Side == EHutongBaySide::MinusY) return;
 	for (int32 vid : OutMesh.VertexIndicesItr())
 	{

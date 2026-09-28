@@ -17,7 +17,7 @@ UInteractiveTool* UHutongEarPassageToolBuilder::BuildTool(const FToolBuilderStat
 void UHutongEarPassageToolProperties::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
-	// The same clamps the house tool applies, on the room inside.
+	// Same clamps as the house tool, on the inner room.
 	Params.Room.ClampAfterEdit(PropertyChangedEvent.GetPropertyName());
 }
 
@@ -29,7 +29,7 @@ void UHutongEarPassageTool::GetEffectiveRectBounds(
 	const FHutongEarPassageParams& P = Settings->Params;
 	if (!P.Room.bSnapToSuggested) return;
 
-	// The suggested frontage is the room's plus the passage's strip; the depth the room's own.
+	// Suggested frontage = room + passage strip; depth = room's.
 	auto SnapSide = [&](double& Lo, double& Hi)
 	{
 		const double Want = P.Room.SnapExtent(FMath::Abs(Hi - Lo), P.GetStripWidth());
@@ -46,7 +46,7 @@ void UHutongEarPassageTool::RegisterToolSettings()
 
 	RegisterSettings(Settings);
 
-	// Presets after the parameters they save, as on every tool but the house.
+	// Presets after params, as on every tool but the house.
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("EarPassage"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongEarPassageToolProperties, Params));
@@ -92,7 +92,7 @@ TArray<FText> UHutongEarPassageTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines.Insert(NSLOCTEXT("EarPassageTool", "HelpFacade",
-		"After the footprint, move to pick which side gets the room's facade and the passage's doorway, then click to place. [ and ] swap which end the passage is at."), 1);
+		"After the footprint, move toward the facade side, then click to place. [ and ] swap the passage end."), 1);
 	return Lines;
 }
 
@@ -182,7 +182,7 @@ void UHutongEarPassageTool::Render(IToolsContextRenderAPI* RenderAPI)
 	const double DepthMin = Edge.bAlongX ? MinY : MinX;
 	const double DepthMax = Edge.bAlongX ? MaxY : MaxX;
 
-	// A point at T along the frontage and U across it, in the drag's frame.
+	// Point at T along the frontage, U across, drag frame.
 	auto At = [&](double T, double U) { return Edge.bAlongX ? LocalRectToWorld(SpanMin + T, U) : LocalRectToWorld(U, SpanMin + T); };
 	auto OnEdge = [&](double T) { return At(T, Edge.FixedCoord); };
 	auto DrawTick = [&](double T)
@@ -192,21 +192,20 @@ void UHutongEarPassageTool::Render(IToolsContextRenderAPI* RenderAPI)
 		DrawPreviewLine(PDI, Base - OutDir * TickInset, Base + OutDir * TickLen, TickColor, 5.0f);
 	};
 
-	// Everything is worked out in the build frame, facade on -Y, and turned onto the facade
-	// the way the built mesh is — the one RotateVertex, so the strip's end and the doorway land
-	// where they are built on +Y and -X, which reverse the frontage.
+	// Computed in build frame (facade on -Y), then turned by the same RotateVertex as the mesh, so strip
+	// end and doorway land where built on +Y and -X, which reverse the frontage.
 	auto Facade = [&](double X)
 	{
 		const FVector3d V = HutongGen::BaySide::RotateVertex(BaySide, FVector3d(X, 0.0, 0.0), SizeX, SizeY);
 		return Edge.bAlongX ? V.X : V.Y;
 	};
 
-	// The room's bay ticks along the facade edge, the strip's line among them.
+	// Room bay ticks along the facade edge, strip line included.
 	FHutongPlanBays Bays = UHutongEarPassageBuildingComponent::PlanBaysInBuildFrame(P);
 	HutongGen::PlanBays::OntoFacade(Bays, BaySide, SizeX, SizeY);
 	for (const double T : Bays.Boundaries) DrawTick(T);
 
-	// The passage strip and the clear way dashed across the depth.
+	// Passage strip and clear way, dashed across the depth.
 	const double ClearA = Facade(P.GetClearX0());
 	const double ClearB = Facade(P.GetClearX0() + P.GetClearWidth());
 	const double StripA = Facade(P.bPassageAtFarEnd ? P.GetWidth() - P.GetStripWidth() : 0.0);
@@ -215,7 +214,7 @@ void UHutongEarPassageTool::Render(IToolsContextRenderAPI* RenderAPI)
 	{
 		DrawDashedPreviewLine(PDI, At(T, DepthMin), At(T, DepthMax), StripColor, 2.5f, 28.0);
 	}
-	// The doorway through the closing wall, on the facade edge, as the wall will cut it.
+	// Closing-wall doorway on the facade edge, as the wall cuts it.
 	if (P.HasClosingDoorway())
 	{
 		const FHutongWallParams C = P.ClosingWallParams();

@@ -14,12 +14,9 @@
 #include "Generation/PaifangGenerator.h"
 #include "Generation/EarPassageGenerator.h"
 
-// Where each roofed type's ridge lands: the fold of the roof, under whatever ridge course sits on
-// it — or on a 捲棚 the rounded crown, which sits below the fold by the section's CrownFactor.
-// Every answer goes through the params' own GetEaveHeight/GetRoofRise and the very section the
-// generator builds with — an estimate that reads a different figure from the roof is how a gate
-// was lifted "clear" of a row and built with its ridge below it. HutongLayout.Roofs.RidgeEstimates
-// measures each of these against the built mesh.
+// Each roofed type's ridge Z: the roof fold under any ridge course, or a 捲棚's crown (fold × CrownFactor).
+// Reads the params' own GetRoofBaseHeight/GetRoofRise and the generator's section; any other figure
+// drifts from the built roof. Checked by HutongLayout.Roofs.RidgeEstimates.
 namespace HutongGen::Ridge
 {
 	inline double Crown(EHutongPurlins Purlins, double HalfDepth, double Overhang, double Roll)
@@ -27,39 +24,53 @@ namespace HutongGen::Ridge
 		return Jiajia::MakeSection(Purlins, FMath::Max(HalfDepth, 0.5), FMath::Max(Overhang, 0.0), Roll).CrownFactor();
 	}
 
-	// Both accessors read Params.Width and Params.Depth, which are tool-driven and default to a
-	// different building, so the footprint is filled in first.
+	// Accessors read tool-driven Width/Depth; fill the footprint first.
 	inline double House(FHutongSiheyuanParams P, double Frontage, double Depth)
 	{
 		P.Width = FMath::Max(Frontage, 1.0);
 		P.Depth = FMath::Max(Depth, 1.0);
-		return P.GetEaveHeight() + P.GetRoofRise() * P.GetRoofSection().CrownFactor();
+		return P.GetRoofBaseHeight() + P.GetRoofRise() * P.GetRoofSection().CrownFactor();
 	}
 
 	inline double Gate(const FHutongGateHouseParams& P, double Depth)
 	{
-		return P.GetEaveHeight() + P.GetRoofRise(Depth) * Crown(P.GetPurlins(), 0.5 * Depth, P.GetRoofOverhang(), P.RoofApexRoll);
+		return P.GetRoofBaseHeight() + P.GetRoofRise(Depth) * Crown(P.GetPurlins(), 0.5 * Depth, P.GetRoofOverhang(), P.RoofApexRoll);
 	}
 
-	// Both build their roof over Params.Depth with five purlins.
-	inline double Shop(const FHutongShopfrontParams& P) { return P.GetEaveHeight() + P.GetRoofRise() * Crown(EHutongPurlins::Five, 0.5 * P.Depth, P.RoofOverhang, P.RoofApexRoll); }
-	inline double Storey(const FHutongStoreyParams& P) { return P.GetEaveHeight() + P.GetRoofRise() * Crown(EHutongPurlins::Five, 0.5 * P.Depth, P.RoofOverhang, P.RoofApexRoll); }
+	// 五檁 over Params.Depth.
+	inline double Shop(const FHutongShopfrontParams& P) { return P.GetRoofBaseHeight() + P.GetRoofRise() * Crown(EHutongPurlins::Five, 0.5 * P.Depth, P.RoofOverhang, P.RoofApexRoll); }
+	inline double Storey(const FHutongStoreyParams& P) { return P.GetRoofBaseHeight() + P.GetRoofRise() * Crown(EHutongPurlins::Five, 0.5 * P.Depth, P.RoofOverhang, P.RoofApexRoll); }
 
-	// The 翼角 lift at the corners is not the ridge.
-	inline double Hall(const FHutongHallParams& P, double Depth) { return P.GetEaveHeight() + P.GetRoofRise(Depth) * Crown(P.Purlins, 0.5 * Depth, P.RoofOverhang, P.RoofApexRoll); }
-	inline double Pavilion(const FHutongPavilionParams& P, double Depth) { return P.GetEaveHeight() + P.GetRoofRise(Depth) * Crown(P.Purlins, 0.5 * (Depth + 2.0 * FMath::Max(P.RoofOverhang, 0.0)), 0.0, P.RoofApexRoll); }
+	// Excludes the 翼角 corner lift.
+	inline double Hall(FHutongHallParams P, double Frontage, double Depth)
+	{
+		P.Width = FMath::Max(Frontage, 1.0);
+		P.Depth = FMath::Max(Depth, 1.0);
+		return P.GetRoofBaseHeight() + P.GetRoofRise(Depth) * P.GetRoofSection(Depth).CrownFactor();
+	}
+	inline double Pavilion(FHutongPavilionParams P, double Width, double Depth)
+	{
+		P.Width = FMath::Max(Width, 1.0);
+		P.Depth = FMath::Max(Depth, 1.0);
+		return P.GetRoofBaseHeight() + P.GetRoofRise() * P.GetRoofSection().CrownFactor();
+	}
 
-	// The corridor's roof spans its footprint depth; the inner gate's its Depth; the screen's its thickness. All three purlins.
-	inline double Corridor(const FHutongCorridorParams& P) { return P.GetEaveHeight() + P.GetRoofRise() * Crown(EHutongPurlins::Three, 0.5 * P.GetFootprintDepth(), P.RoofOverhang, P.RoofApexRoll); }
-	inline double InnerGate(const FHutongInnerGateParams& P) { return P.GetEaveHeight() + P.GetRoofRise() * Crown(EHutongPurlins::Three, 0.5 * P.Depth, P.RoofOverhang, P.RoofApexRoll); }
+	// 三檁 over: corridor footprint depth, inner gate Depth, screen thickness.
+	inline double Corridor(const FHutongCorridorParams& P) { return P.GetRoofBaseHeight() + P.GetRoofRise() * Crown(EHutongPurlins::Three, 0.5 * P.GetFootprintDepth(), P.RoofOverhang, P.GetRoofRoll()); }
+	// 一殿一卷: the front 殿's ridge; the 卷's crown is level with it.
+	inline double InnerGate(const FHutongInnerGateParams& P)
+	{
+		if (P.IsHallAndRoll()) return P.GetRoofBaseHeight() + P.GetRoofRise();
+		return P.GetRoofBaseHeight() + P.GetRoofRise() * Crown(EHutongPurlins::Three, 0.5 * P.Depth, P.RoofOverhang, P.RoofApexRoll);
+	}
 	inline double ScreenWall(const FHutongScreenWallParams& P) { return P.GetEaveHeight() + P.GetRoofRise() * Crown(EHutongPurlins::Three, 0.5 * P.Thickness, P.RoofOverhang, P.RoofApexRoll); }
 
-	// Over the roof's span, which is the params' own Width.
+	// Span = params' Width.
 	inline double Passage(const FHutongPassageParams& P) { return P.GetEaveHeight() + P.GetRoofRise(P.GetRoofSpan()); }
 
-	// The central 樓's; the side 樓 sit a drop lower.
+	// Central 樓; side 樓 sit lower.
 	inline double Paifang(const FHutongPaifangParams& P) { return P.GetRoofEaveZ() + P.GetRoofRise(); }
-	// The taller of the room's ridge and the passage roof's, which is the room's in practice.
+	// Taller of room and passage ridges (the room's in practice).
 	inline double EarPassage(FHutongEarPassageParams P, double Frontage, double Depth)
 	{
 		P.Width = FMath::Max(Frontage, 1.0);

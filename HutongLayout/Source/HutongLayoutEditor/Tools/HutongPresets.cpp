@@ -65,7 +65,7 @@ void UHutongPresetLibrary::SavePreset(FName ToolKey, const FString& Name, const 
 
 bool UHutongPresetLibrary::LoadPreset(FName ToolKey, const FString& Name, const UScriptStruct* Type, void* OutData) const
 {
-	// User first, so saving over a built-in's name shadows it rather than being ignored.
+	// User first, so a user preset shadows a built-in of the same name.
 	const FString Key = MakeKey(ToolKey, Name);
 	const FString* Json = Presets.Find(Key);
 	if (!Json) Json = BuiltIns().Find(Key);
@@ -112,11 +112,20 @@ TArray<FString> UHutongPresetProperties::GetPresetNames() const
 	return UHutongPresetLibrary::Get()->GetPresetNames(ToolKey);
 }
 
+void UHutongPresetProperties::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	if (PropertyChangedEvent.GetMemberPropertyName() == GET_MEMBER_NAME_CHECKED(UHutongPresetProperties, Preset))
+	{
+		LoadSelectedPreset();
+	}
+}
+
 void UHutongPresetProperties::SaveCurrentAsPreset()
 {
 	const UScriptStruct* Type = nullptr;
 	void* Data = nullptr;
-	// Fall back to the selected preset name so the Save button still does the obvious thing when the user is overwriting.
+	// Fall back to the selected preset name so Save overwrites it.
 	const FString Name = SaveAs.IsEmpty() ? Preset : SaveAs;
 	if (Name.IsEmpty() || !GetParams(Type, Data)) return;
 

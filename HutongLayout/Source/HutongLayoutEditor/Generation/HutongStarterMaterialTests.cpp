@@ -24,7 +24,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongStarterMaterialNamingTest,
 
 bool FHutongStarterMaterialNamingTest::RunTest(const FString& Parameters)
 {
-	// Every slot has a starter asset of its own, and none is called what another is.
+	// Each slot has its own, uniquely named starter asset.
 	TSet<FString> Names;
 	for (int32 Slot = 0; Slot < HutongGen::MatSlot_Count; ++Slot)
 	{
@@ -39,7 +39,7 @@ bool FHutongStarterMaterialNamingTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a slot outside the enum has no asset"),
 		HutongGen::StarterMaterialAssetName(HutongGen::MatSlot_Count).IsEmpty());
 
-	// Asking for one that is not there is an ordinary answer, not an error, since every spawn asks.
+	// A missing asset is an ordinary answer, not an error: every spawn asks.
 	TestNull(TEXT("an out-of-range slot finds nothing"),
 		HutongGen::FindStarterMaterial(HutongGen::MatSlot_Count));
 	return true;
@@ -51,20 +51,20 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongStarterMaterialCreateTest,
 
 bool FHutongStarterMaterialCreateTest::RunTest(const FString& Parameters)
 {
-	// Into the project's temp mount, so the test writes nothing the project keeps.
+	// Project temp mount: the test leaves nothing the project keeps.
 	const FString Path = FString::Printf(TEXT("/Temp/HutongTests/Materials_%s"), *FGuid::NewGuid().ToString().Left(8));
 	TArray<FString> Created, Skipped;
 	const int32 Count = HutongGen::CreateStarterMaterialsAt(Path, Created, Skipped);
 	TestEqual(TEXT("one material per slot is created"), Count, (int32)HutongGen::MatSlot_Count);
 	TestEqual(TEXT("nothing was skipped on a fresh path"), Skipped.Num(), 0);
 
-	// A second run finds them all and writes none.
+	// Second run finds all, writes none.
 	HutongGen::CreateStarterMaterialsAt(Path, Created, Skipped);
 	TestEqual(TEXT("a second run creates nothing"), Created.Num(), 0);
 	TestEqual(TEXT("a second run skips every slot"), Skipped.Num(), (int32)HutongGen::MatSlot_Count);
 
-	// Each material is wired: a base colour fed from the Color parameter, a roughness, and the
-	// Color default is the palette's own for that slot — the roof darker than the body.
+	// Each material wired: base colour from the Color parameter, a roughness, and the palette's Color
+	// default for its slot (roof darker than body).
 	auto Loaded = [&](int32 Slot) -> UMaterial*
 	{
 		const FString Name = HutongGen::StarterMaterialAssetName(Slot);
@@ -79,8 +79,7 @@ bool FHutongStarterMaterialCreateTest::RunTest(const FString& Parameters)
 			EO ? (UMaterialExpression*)EO->BaseColor.Expression : nullptr);
 		TestNotNull(*FString::Printf(TEXT("slot %d roughness is connected"), Slot),
 			EO ? (UMaterialExpression*)EO->Roughness.Expression : nullptr);
-		// A patterned slot describes its own relief: the normal is the pattern's, and the roughness
-		// runs through the multiply that carries the pattern's own figure.
+		// Patterned slot: normal from the pattern; roughness runs through the multiply carrying its figure.
 		if (HutongGen::StarterMaterialHasRelief(Slot))
 		{
 			TestNotNull(*FString::Printf(TEXT("slot %d's normal is the pattern's"), Slot),
@@ -100,9 +99,8 @@ bool FHutongStarterMaterialCreateTest::RunTest(const FString& Parameters)
 			Colour.Equals(FHutongPalette().GetSlotColor(Slot), 1.0e-4f));
 	}
 
-	// The custom nodes are HLSL the material translator never saw before it was in a test: with a
-	// real RHI the shaders are compiled here and any error in that code is a failure. Under the
-	// null RHI nothing compiles and nothing is claimed.
+	// Custom nodes are HLSL: with a real RHI they compile here and errors fail the test; under the null
+	// RHI nothing compiles and nothing is claimed.
 	if (GShaderCompilingManager)
 	{
 		GShaderCompilingManager->FinishAllCompilation();
@@ -122,7 +120,7 @@ bool FHutongStarterMaterialCreateTest::RunTest(const FString& Parameters)
 			Resource->GetGameThreadShaderMap());
 	}
 
-	// The files go; the loaded packages stay for the session, which a fresh folder name per run allows for.
+	// Files are deleted; loaded packages persist for the session, hence a fresh folder per run.
 	IFileManager::Get().DeleteDirectory(*(FPaths::ProjectSavedDir() / TEXT("HutongTests")), false, true);
 	return true;
 }
@@ -133,7 +131,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongStarterMaterialSlotNamesTest,
 
 bool FHutongStarterMaterialSlotNamesTest::RunTest(const FString& Parameters)
 {
-	// Whatever material a slot wears, the baked mesh names the slot for what it is.
+	// Whatever material a slot wears, the baked mesh names the slot.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
@@ -180,18 +178,17 @@ bool FHutongGablePedimentSlotTest::RunTest(const FString& Parameters)
 		Mesh.HasAttributes() ? Mesh.Attributes()->GetMaterialID() : nullptr;
 	if (!TestNotNull(TEXT("the mesh carries material IDs"), (void*)Mat)) return false;
 
-	// The faces on the +X gable plane through the lower part of the pediment, above the eave
-	// and well under the ridge strip whose own end cap sits at the apex. Primitives are wound
-	// CCW from outside for the bake's ReverseOrientation, so the dynamic mesh's own normal on
-	// an outward face points inward.
-	const double Eave = P.GetEaveHeight();
+	// Faces on the +X gable plane, above the eave and below the apex ridge-strip cap. Primitives are
+	// CCW-from-outside (the bake reverses), so an outward face's dynamic-mesh normal points inward.
+	const double Eave = P.GetRoofBaseHeight();
 	const double Top = Eave + 0.6 * P.GetRoofRise();
 	int32 Brick = 0, Tile = 0;
 	for (int32 tid : Mesh.TriangleIndicesItr())
 	{
 		if (Mesh.GetTriNormal(tid).X > -0.99) continue;
 		const FVector3d C = Mesh.GetTriCentroid(tid);
-		if (FMath::Abs(C.X - P.Width) > 1.0 || C.Z < Eave + 5.0 || C.Z > Top) continue;
+		// Within the gable wall's depth: behind it is the 封護檐 drip course, whose end is tile.
+		if (FMath::Abs(C.X - P.Width) > 1.0 || C.Z < Eave + 5.0 || C.Z > Top || C.Y < 0.0 || C.Y > P.Depth) continue;
 		(Mat->GetValue(tid) == HutongGen::MatSlot_Body ? Brick : Tile)++;
 	}
 	TestTrue(TEXT("the pediment has brick faces"), Brick > 0);

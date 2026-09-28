@@ -17,7 +17,7 @@ public:
 	FHutongHallParams Params;
 };
 
-// Places a 殿, the hall of a small temple and the one type here carrying a 歇山 roof.
+// Places a 殿, a small temple's hall; the only type with a 歇山 roof.
 UCLASS()
 class UHutongHallTool : public URectDragToolBase
 {
@@ -46,6 +46,12 @@ protected:
 
 	virtual void AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse) override;
 	int32 ComputeBayCountForSide() const;
+	// The params at the rect being drawn, facing BaySide: the 大式 hall is sized from it.
+	FHutongHallParams GetSizedParams() const;
+	virtual void GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const override;
+	// Set while the facing is picked: the side is chosen on the rect as dragged, since the held proportion
+	// follows the side and would feed back into the choice.
+	mutable bool bPickingSide = false;
 
 	UPROPERTY()
 	TObjectPtr<UHutongHallToolProperties> Settings;
@@ -55,7 +61,7 @@ protected:
 
 	HutongGen::EBaySide BaySide = HutongGen::EBaySide::MinusY;
 
-	// Zero derives the count from the frontage, as everywhere else.
+	// Zero derives the count from the frontage.
 	int32 BayCountOverride = 0;
 };
 

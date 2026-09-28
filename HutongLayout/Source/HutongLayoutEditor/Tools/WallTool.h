@@ -18,9 +18,8 @@ public:
 	FHutongWallParams Params;
 };
 
-// A set class per tool: RestoreProperties caches on the CDO, so one class shared by two tools is
-// one saved set of settings shared by both, and the lane wall would come back carrying whatever
-// the courtyard wall was last set to.
+// One set class per tool: RestoreProperties caches on the CDO, so a shared class would share
+// saved settings between the lane and court walls.
 UCLASS()
 class UHutongLaneWallToolProperties : public UHutongWallToolProperties
 {
@@ -37,14 +36,12 @@ public:
 	UHutongCourtWallToolProperties();
 };
 
-// Everything both walls do. The role is the subclass's, and it is the only thing the panel does
-// not offer: a run drawn with the lane tool is a 院牆 and one drawn with the court tool is a 隔牆.
+// Everything both walls do; the subclass fixes the role (lane tool 院牆, court tool 隔牆).
 //
-// A wall is drawn as a run of segments: the first click anchors it, every click after ends one
-// segment and starts the next at any angle, and a click on the last end again finishes. Each
-// segment is its own actor; where two meet, both ends are cut on the bisector so they meld, and
-// an outer end that rests on a neighbour's face is cut flush against it. The geometry is
-// HutongWallChain's, read once for the preview and once for the spawn.
+// Drawn as a run of segments: the first click anchors, each click ends a segment and starts the
+// next at any angle, a click on the last end finishes. One actor per segment; joins are cut on
+// the bisector, an outer end resting on a neighbour's face is cut flush. Geometry from
+// HutongWallChain, for preview and spawn.
 UCLASS(Abstract)
 class UHutongWallTool : public URectDragToolBase
 {
@@ -56,35 +53,37 @@ public:
 	virtual FText GetStagePromptText() const override;
 	virtual TArray<FText> GetStageNames() const override;
 
-	// Half the wall's thickness: the drag draws the run's centre line, and the face the lane is measured to sits that far off it.
+	// Half the thickness: the drag draws the centre line; the lane is measured to the face.
 	virtual double GetLaneFaceOffset() const override;
 
 	// [ and ] slide whichever opening the run carries along it.
 	virtual void AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse) override;
 	virtual TArray<FText> GetToolHelpLines() const override;
+	// Segments follow the cursor; the wall has no R key.
+	virtual bool HasRotateKey() const override { return false; }
 	virtual FText GetKeyHintText() const override;
 	virtual void Render(IToolsContextRenderAPI* RenderAPI) override;
 
-	// What this tool draws. The role is forced onto the settings, including after a preset load,
-	// so a preset saved from the other tool arrives as this kind of wall.
+	// The role this tool draws, forced onto the settings (also after a preset load) so the other
+	// tool's presets arrive as this wall.
 	virtual EHutongWallRole GetWallRole() const PURE_VIRTUAL(UHutongWallTool::GetWallRole, return EHutongWallRole::Perimeter;);
 
 protected:
 	virtual void RegisterToolSettings() override;
-	// The set class is the subclass's, so its saved settings are its own.
+	// Per-subclass set class, so its saved settings are its own.
 	virtual UHutongWallToolProperties* NewWallSettings() PURE_VIRTUAL(UHutongWallTool::NewWallSettings, return nullptr;);
 
-	// The opening the keys move and the preview draws: the 牆垣式門 if the run has one, otherwise
-	// the garden doorway. Returns false when the run carries neither.
+	// The opening the keys move and the preview draws: the 牆垣式門, else the garden doorway;
+	// false if neither.
 	bool GetPreviewOpening(const FHutongWallParams& P, double Run, double& OutCentreAlong, double& OutWidth, double& OutHead,
 		bool& bOutIsGate) const;
 
-	// The run being drawn: every clicked point, and for each the bearing of what it snapped to.
+	// The run: every clicked point, each with the bearing it snapped to.
 	virtual void OnPlacementStarted(const FVector& HitWorld) override;
 	virtual bool OnRectCommitted(const FVector& HitWorld) override;
 	virtual void OnPlacementHover(const FVector& HitWorld) override;
 
-	// Whether the raw cursor is over the last end placed, within the snap radius: the closing click.
+	// Whether the raw cursor is within snap radius of the last end: the closing click.
 	bool IsOnRunEnd(const FVector& RawCursor) const;
 	virtual void SpawnFinalActor() override;
 	// The segment under the cursor, for the readout: its length and the wall's thickness.
@@ -101,17 +100,16 @@ protected:
 
 	// Where the drawn line sits across the wall: its centre, or the face the anchor snapped onto.
 	double GetDrawnY() const;
-	// Whether the cursor's segment decided the side last frame, for the wider tolerance that keeps it.
+	// Whether the cursor's segment decided the side last frame (wider tolerance keeps it).
 	mutable bool bCursorSideOn = false;
-	// Whether the segment being drawn sat on a frame axis last frame, for the wider tolerance that keeps it there.
+	// Whether the drawn segment sat on a frame axis last frame (wider tolerance keeps it).
 	bool bAxisSnapOn = false;
 	// The segments as they stand, with the cursor's unfinished one when asked.
 	bool BuildChain(bool bWithCursor, TArray<HutongWallChain::FSegment>& OutSegments) const;
 	// The bearing of the current segment, for the lane readout and the angle snap.
 	double CurrentSegmentYawDeg() const;
-	// The parameters segment i is built with: the tool's, with the run's opening on the legs
-	// G marked, or on the longest leg when none was, and a plain 牆垣式門 where G asked for a
-	// gate on a run whose settings carry no opening. bCursorLeg reads G live for the leg being drawn.
+	// Params for segment i: the tool's, with the run's opening on G-marked legs (else the longest),
+	// or a plain 牆垣式門 where G asked for a gate the settings lack. bCursorLeg reads G live.
 	FHutongWallParams SegmentParams(int32 Index, int32 NumSegments, bool bCursorLeg) const;
 
 	UPROPERTY()
@@ -121,8 +119,8 @@ protected:
 	TObjectPtr<UHutongPresetProperties> Presets;
 };
 
-// 院牆 — the boundary wall onto the lane. Blank by rule, and the only wall that is measured
-// against the street it forms: it keeps the lane readout and the snap onto a canonical width.
+// 院牆, the boundary wall onto the lane. Blank by rule; the only wall measured against its
+// street (lane readout, canonical-width snap).
 UCLASS()
 class UHutongLaneWallTool : public UHutongWallTool
 {
@@ -139,8 +137,8 @@ protected:
 	virtual FString GetActorNameBase() const override { return TEXT("Hutong_LaneWall"); }
 };
 
-// 隔牆 — the dividing wall inside the compound: lower, thinner, and the run that carries the
-// openings. Nothing here forms a street, so the lane width neither snaps nor reads out.
+// 隔牆, the dividing wall inside the compound: lower, thinner, carries the openings. Forms no
+// street, so no lane snap or readout.
 UCLASS()
 class UHutongCourtWallTool : public UHutongWallTool
 {

@@ -8,7 +8,7 @@ using UE::Geometry::FDynamicMesh3;
 FHutongEarPassageParams::FHutongEarPassageParams()
 {
 	Room = HutongPresets::MakeHouse(HutongCanon::House::EarRoom);
-	// Both walls are the compound's 隔牆: the passage is an inside way, not the plot's edge.
+	// Both walls are 隔牆: the passage is an inner way, not the plot edge.
 	OuterWall.Role = EHutongWallRole::Courtyard;
 	OuterWall.bHasWindows = false;
 	ClosingWall.Role = EHutongWallRole::Courtyard;
@@ -26,7 +26,18 @@ namespace HutongGen
 		const double ClearX0 = P.GetClearX0();
 		const bool bBlock = Detail::IsMassing(Detail);
 
-		// The room, at its own end of the frontage.
+		// One roof over room and passage reads as one block at a distance.
+		if (bBlock && P.bRoofOverPassage)
+		{
+			FHutongSiheyuanParams Whole = P.RoomParams();
+			Whole.Width = P.GetWidth();
+			Whole.bRoofRunsOnLow = Whole.bRoofRunsOnHigh = false;
+			Detail::Apply(Detail, Whole);
+			Massing::AppendBlock(Mesh, Massing::From(Whole));
+			return;
+		}
+
+		// Room, at its own end of the frontage.
 		{
 			FHutongSiheyuanParams R = P.RoomParams();
 			Detail::Apply(Detail, R);
@@ -36,10 +47,17 @@ namespace HutongGen
 			HutongMeshUtils::TransformVerticesFrom(Mesh, V0, FTransform(FVector(P.GetRoomX0(), 0.0, 0.0)));
 		}
 
-		// The wall the passage runs along, the full depth, on the outer side.
+		// Outer wall along the passage, full depth.
 		if (P.bHasOuterWall)
 		{
 			FHutongWallParams Wp = P.OuterWall;
+			if (P.bRoofOverPassage)
+			{
+				// The roof end closes over it as the gable: wall stops at the eave, capless.
+				Wp.PinHeight(P.GetPassageEaveHeight());
+				Wp.CapSlabHeight = 0.0;
+				Wp.CapRidgeHeight = 0.0;
+			}
 			Wp.Length = D;
 			Wp.FootprintThickness = Tw;
 			Wp.bHasGate = false;
@@ -47,12 +65,12 @@ namespace HutongGen
 			Detail::Apply(Detail, Wp);
 			const int32 V0 = Mesh.MaxVertexID();
 			BuildWall(Mesh, Wp);
-			// Built along X; turned onto Y it lands at x in [-T, 0], then slid to the outer edge.
+			// Built along X; yawed onto Y it lands at x in [-T, 0], then slid to the outer edge.
 			HutongMeshUtils::YawVerticesFrom(Mesh, V0, FVector2d::ZeroVector, 90.0);
 			HutongMeshUtils::TransformVerticesFrom(Mesh, V0, FTransform(FVector(P.GetOuterWallX0() + Tw, 0.0, 0.0)));
 		}
 
-		// The 隔牆 across the front of the way through, with the doorway it was given.
+		// 隔牆 across the front of the way, with its doorway.
 		if (P.bHasClosingWall)
 		{
 			FHutongWallParams Cw = P.ClosingWallParams();
@@ -62,7 +80,22 @@ namespace HutongGen
 			HutongMeshUtils::TransformVerticesFrom(Mesh, V0, FTransform(FVector(ClearX0, 0.0, 0.0)));
 		}
 
-		// The roof over the way through: run along the depth, bearing into the wall and the gable.
+		// Room roof carried over the way, tile rows in step with the room's.
+		if (P.bRoofOverPassage)
+		{
+			FHutongSiheyuanParams R = P.RoomParams();
+			Detail::Apply(Detail, R);
+			const double Pitch = FMath::Max(R.TileRowSpacing, 4.0);
+			const double RoomX0 = P.GetRoomX0();
+			// The room lays rows from its closed gable; the passage continues from there.
+			const double Phase = P.bPassageAtFarEnd ? RoomX0 + 0.5 * Pitch : RoomX0 + P.GetRoomWidth() - 0.5 * Pitch;
+			const double SX0 = P.GetStripX0();
+			AppendHouseRoofRun(Mesh, R, SX0, SX0 + P.GetStripWidth(),
+				/*bOpenLow*/ P.bPassageAtFarEnd, /*bOpenHigh*/ !P.bPassageAtFarEnd, Phase);
+			return;
+		}
+
+		// Passage roof along the depth, bearing into wall and gable.
 		{
 			FHutongPassageParams Pass = P.PassageParams();
 			Detail::Apply(Detail, Pass);
@@ -71,7 +104,7 @@ namespace HutongGen
 			const int32 V0 = Mesh.MaxVertexID();
 			if (bBlock) Massing::AppendBlock(Mesh, Massing::From(Pass));
 			else BuildPassage(Mesh, Pass);
-			// Built with the run along X and the span along Y; turned onto Y the span lands at x in [-Span, 0].
+			// Built run along X, span along Y; yawed onto Y the span lands at x in [-Span, 0].
 			HutongMeshUtils::YawVerticesFrom(Mesh, V0, FVector2d::ZeroVector, 90.0);
 			HutongMeshUtils::TransformVerticesFrom(Mesh, V0, FTransform(FVector(ClearX0 - Bear + Span, 0.0, 0.0)));
 		}

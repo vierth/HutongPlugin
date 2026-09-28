@@ -31,7 +31,7 @@ namespace
 
 	FString EscapeCsv(const FString& In)
 	{
-		// Quote whenever the value could otherwise break the row, and double any quote inside it.
+		// Quote if the value could break the row; double inner quotes.
 		if (!In.Contains(TEXT(",")) && !In.Contains(TEXT("\"")) && !In.Contains(TEXT("\n"))
 			&& !In.Contains(TEXT("\r")))
 		{
@@ -135,9 +135,7 @@ namespace
 		return In.IsEmpty() ? FText::GetEmpty() : FText::FromString(In);
 	}
 
-	// Confidence travels as its own number, 1 to 5. An empty cell leaves the region's answer
-	// alone: a spreadsheet is edited a column at a time, and a blank there means "not my column"
-	// rather than "no evidence".
+	// Confidence is a number, 1–5. Empty cell keeps the current value: "not my column", not "no evidence".
 	EPlaceConfidence ParseConfidence(const FString& Field, EPlaceConfidence Current)
 	{
 		const FString Trimmed = Field.TrimStartAndEnd();
@@ -210,7 +208,7 @@ namespace
 		if (Owner)
 		{
 			Owner->Modify();
-			// Actor origin at the outline's centre keeps LocalPoints small, which matters for float precision a long way from the world origin, and gives the gizmo something to grab.
+			// Origin at the outline centre: small LocalPoints (float precision far out), gizmo on the region.
 			Owner->SetActorLocation(FVector(Centre.X, Centre.Y, Z));
 		}
 
@@ -327,8 +325,7 @@ void ExportGeoJson(UWorld* World, const FString& FilePath, FResult& OutResult)
 		Properties->SetStringField(TEXT("english"), TextOrEmpty(Region->Name.English));
 		Properties->SetStringField(TEXT("note"), TextOrEmpty(Region->Note));
 
-		// Metadata travels as the number, which is the scale itself — a display name would be a
-		// translation of it and would not survive a round trip through another language.
+		// Confidence as its number: a display name would not survive another language.
 		Properties->SetStringField(TEXT("source"), TextOrEmpty(Region->Source));
 		Properties->SetNumberField(TEXT("confidence"), static_cast<int32>(Region->Confidence));
 		Properties->SetNumberField(TEXT("z"), Region->GetComponentLocation().Z);
@@ -372,7 +369,7 @@ void ExportGeoJson(UWorld* World, const FString& FilePath, FResult& OutResult)
 		return;
 	}
 
-	// No BOM: RFC 8259 says JSON text is UTF-8 and a byte order mark is not part of it, and some strict readers choke on one.
+	// No BOM: RFC 8259 excludes it; strict readers choke.
 	if (!FFileHelper::SaveStringToFile(Output, *FilePath,
 			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
 	{
@@ -591,7 +588,7 @@ void ImportGeoJson(UWorld* World, const FString& FilePath, FResult& OutResult)
 			}
 			Region = Actor->Region;
 
-			// Keep the file's id rather than the one OnComponentCreated just minted, or a second import of the same file makes a second copy of every region.
+			// File's id, not the one OnComponentCreated minted, or re-import duplicates every region.
 			Region->Modify();
 			Region->RegionId = Id.IsValid() ? Id : FGuid::NewGuid();
 			Existing.Add(Region);
@@ -719,7 +716,7 @@ void ImportCsv(UWorld* World, const FString& FilePath, FResult& OutResult)
 	{
 		++RowNumber;
 
-		// A trailing newline produces one empty record; that is not a problem worth reporting.
+		// Trailing newline yields an empty record; not reported.
 		if (Row.Num() == 0 || (Row.Num() == 1 && Row[0].TrimStartAndEnd().IsEmpty()))
 		{
 			continue;
@@ -780,7 +777,7 @@ void ImportCsv(UWorld* World, const FString& FilePath, FResult& OutResult)
 			Owner->SetActorLabel(Owner->GetDefaultActorLabel());
 		}
 
-		// The type drives parenting and the outline colour, and both may just have changed.
+		// Type drives parenting and outline colour.
 		Region->MarkRenderStateDirty();
 		++OutResult.Updated;
 	}

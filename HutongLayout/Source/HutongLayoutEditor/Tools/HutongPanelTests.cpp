@@ -4,6 +4,8 @@
 #include "Tools/StreetRowTool.h"
 #include "Tools/HutongPresets.h"
 #include "Tools/HutongPresetDefaults.h"
+#include "Tools/HutongPanelFilter.h"
+#include "Tools/CompoundTool.h"
 #include "Generation/HutongBuildingComponent.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
@@ -26,8 +28,7 @@ namespace
 		for (const TSharedRef<IDetailTreeNode>& Child : Children) GatherRows(Child, Out);
 	}
 
-	// The rows a details panel would build for this object, customizations and all: the row
-	// generator runs the same QueryCustomDetailLayout pass the mode panel's view does.
+	// Rows a details panel builds for this object, customizations included (same QueryCustomDetailLayout pass as the mode panel).
 	UHutongPresetProperties* PickerOf(UInteractiveTool* Tool)
 	{
 		for (UObject* Set : Tool->GetToolProperties())
@@ -52,9 +53,8 @@ namespace
 	}
 }
 
-// The wall is two tools, not a picker, and a hidden row has no visible failure mode: registered
-// against the wrong class the customization simply never runs and the dropdown is back, which is
-// how the role sat on both panels through the split. Asked of the panel rather than of the table.
+// Wall role is chosen by tool, not picker. A customization on the wrong class fails silently and the
+// dropdown returns (as it did through the split), so this asks the panel, not the table.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongWallRolePanelTest, "HutongLayout.Walls.RoleNotOffered",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -63,22 +63,21 @@ bool FHutongWallRolePanelTest::RunTest(const FString& Parameters)
 	const TSet<FName> Lane = RowsFor(NewObject<UHutongLaneWallToolProperties>());
 	const TSet<FName> Court = RowsFor(NewObject<UHutongCourtWallToolProperties>());
 
-	// The walk really reached the params, or "no Role row" would be true of an empty panel.
+	// Params reached, else "no Role row" holds for an empty panel.
 	TestTrue(TEXT("院牆 panel shows the wall's parameters"), Lane.Contains(TEXT("Height")));
 	TestTrue(TEXT("隔牆 panel shows the wall's parameters"), Court.Contains(TEXT("Height")));
 
 	TestFalse(TEXT("院牆 tool does not offer the role"), Lane.Contains(TEXT("Role")));
 	TestFalse(TEXT("隔牆 tool does not offer the role"), Court.Contains(TEXT("Role")));
 
-	// Retyping a placed run is a Details edit: the placed wall is where the role stays.
+	// Placed wall keeps Role: retyping a run is a Details edit.
 	const TSet<FName> Placed = RowsFor(NewObject<UHutongWallBuildingComponent>());
 	TestTrue(TEXT("a placed wall keeps its role"), Placed.Contains(TEXT("Role")));
 	return true;
 }
 
-// Setup and Shutdown are the whole of what a tool does with its property cache, and neither
-// needs a tool manager, so the cache can be driven here as the editor drives it: one tool up,
-// a preset picked, the tool closed, the next tool up.
+// Setup/Shutdown are all a tool does with its property cache and need no tool manager, so the cache
+// is driven as the editor does: tool up, preset picked, tool closed, next tool up.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPresetPickerCacheTest, "HutongLayout.Panel.PresetPickerPerTool",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -86,8 +85,7 @@ bool FHutongPresetPickerCacheTest::RunTest(const FString& Parameters)
 {
 	HutongPresets::RegisterBuiltInPresets();
 
-	// The house opens on its default; the street row's picker, though it lists the same house
-	// presets, opens on its own default rather than on the house's choice.
+	// Street row lists the house presets but opens on its own default, not the house's choice.
 	UHutongSiheyuanTool* House = NewObject<UHutongSiheyuanTool>();
 	House->Setup();
 	UHutongPresetProperties* HousePicker = PickerOf(House);
@@ -106,11 +104,67 @@ bool FHutongPresetPickerCacheTest::RunTest(const FString& Parameters)
 	RowPicker->Preset = TEXT("Front Row (倒座房)");
 	Row->Shutdown(EToolShutdownType::Completed);
 
-	// And the house comes back with its own.
+	// House reopens with its own choice.
 	UHutongSiheyuanTool* HouseAgain = NewObject<UHutongSiheyuanTool>();
 	HouseAgain->Setup();
 	TestEqual(TEXT("house tool restores its own choice"), PickerOf(HouseAgain)->Preset, FString(TEXT("Main Hall (正房)")));
 	HouseAgain->Shutdown(EToolShutdownType::Completed);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPanelSimpleViewTest,
+	"HutongLayout.Panel.SimpleView",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// Simple view keeps a few params per tool, advanced keeps all; nested structs opt in per level, so
+// the compound's twelve building sets stay shut.
+bool FHutongPanelSimpleViewTest::RunTest(const FString& Parameters)
+{
+	auto Count = [](const UStruct* Type, bool bAdvanced, const FProperty* Parent = nullptr)
+	{
+		int32 N = 0;
+		TArray<const FProperty*> Chain;
+		if (Parent) Chain.Add(Parent);
+		for (TFieldIterator<FProperty> It(Type, EFieldIteratorFlags::ExcludeSuper); It; ++It)
+		{
+			if (It->HasAnyPropertyFlags(CPF_Edit) && HutongPanel::IsVisible(**It, Chain, bAdvanced)) ++N;
+		}
+		return N;
+	};
+
+	const UScriptStruct* Tools[] = {
+		FHutongSiheyuanParams::StaticStruct(), FHutongCorridorParams::StaticStruct(), FHutongGateHouseParams::StaticStruct(),
+		FHutongInnerGateParams::StaticStruct(), FHutongWallParams::StaticStruct(), FHutongHallParams::StaticStruct(),
+		FHutongShopfrontParams::StaticStruct(), FHutongStoreyParams::StaticStruct(), FHutongPavilionParams::StaticStruct(),
+		FHutongPaifangParams::StaticStruct(), FHutongScreenWallParams::StaticStruct(), FHutongEarPassageParams::StaticStruct(),
+	};
+	for (const UScriptStruct* T : Tools)
+	{
+		const int32 Simple = Count(T, false), All = Count(T, true);
+		// The house carries two more: its 檻牆 face and 封護檐 cornice are a student's choice (user, 2026-09-27).
+		const int32 Handful = (T == FHutongSiheyuanParams::StaticStruct()) ? 8 : 6;
+		TestTrue(FString::Printf(TEXT("%s: a handful in the simple view (%d of %d, at most %d)"), *T->GetName(), Simple, All, Handful),
+			Simple >= 1 && Simple <= Handful && All > Simple);
+	}
+
+	const UClass* Compound = UHutongCompoundToolProperties::StaticClass();
+	const int32 CompoundSimple = Count(Compound, false);
+	TestTrue(FString::Printf(TEXT("compound: plan choices only (%d of %d)"), CompoundSimple, Count(Compound, true)),
+		CompoundSimple >= 4 && CompoundSimple <= 12);
+	const FProperty* MainHall = Compound->FindPropertyByName(TEXT("MainHall"));
+	if (TestNotNull(TEXT("compound has its main hall set"), MainHall))
+	{
+		TestEqual(TEXT("compound: the main hall's own basics stay hidden with its set"),
+			Count(FHutongSiheyuanParams::StaticStruct(), false, MainHall), 0);
+	}
+
+	// A basic struct field opens only its basic fields.
+	const FProperty* Stones = FHutongGateHouseParams::StaticStruct()->FindPropertyByName(TEXT("DoorStones"));
+	if (TestNotNull(TEXT("gate has its door stones"), Stones))
+	{
+		const int32 Inner = Count(FHutongDoorStoneParams::StaticStruct(), false, Stones);
+		TestTrue(FString::Printf(TEXT("door stones: on/off and style (%d)"), Inner), Inner == 2);
+	}
 	return true;
 }
 

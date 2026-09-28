@@ -18,6 +18,6 @@ namespace PlaceLabelsHierarchy
 	PLACELABELS_API bool WouldCreateCycle(
 		const UPlaceRegionComponent* Child, const UPlaceRegionComponent* Proposed);
 
-	// Re-resolves every region in the world, coarsest type first so a fine region never consults a parent that has not been resolved yet.
+	// Re-resolves every region, coarsest type first so no region consults an unresolved parent.
 	PLACELABELS_API int32 RecomputeAll(UWorld* World);
 }

@@ -21,7 +21,7 @@ namespace PlaceLabelsEditorUtils
 			const TCHAR* Pinyin;
 			const TCHAR* English;
 			int32 Priority;
-			// Comma-separated Type Ids, in preference order. First one that matches wins.
+			// Comma-separated Type Ids in preference order; first match wins.
 			const TCHAR* ParentTypes;
 			EPlaceParentRelation Relation;
 			FLinearColor OutlineColor;
@@ -49,22 +49,18 @@ namespace PlaceLabelsEditorUtils
 			{ TEXT("DA_Type_Temple"), TEXT("temple"), TEXT("寺"), TEXT("si"), TEXT("Temple"),
 			  55, TEXT("hutong,avenue"), EPlaceParentRelation::Adjacent, FLinearColor(1.0f, 0.5f, 0.15f) },
 
-			// Water, between the street types and the lane: a named watercourse is read at about the
-			// scale of an avenue, and outranks it where the two outlines meet at a bank.
+			// Water ranks between street types and lane: avenue-scale, outranks an avenue at a bank.
 			{ TEXT("DA_Type_River"), TEXT("river"), TEXT("河"), TEXT("he"), TEXT("River"),
 			  34, TEXT("area,district"), EPlaceParentRelation::Containing, FLinearColor(0.3f, 0.65f, 0.95f) },
 
 			{ TEXT("DA_Type_Lake"), TEXT("lake"), TEXT("湖"), TEXT("hu"), TEXT("Lake"),
 			  36, TEXT("area,district"), EPlaceParentRelation::Containing, FLinearColor(0.2f, 0.5f, 0.9f) },
 
-			// 護城河 runs along the wall rather than inside anything, so Adjacent — and it is the
-			// most specific of the three: a moat is one named stretch of water, not a kind of water.
+			// 護城河 runs along the wall, inside nothing: Adjacent. Most specific water type.
 			{ TEXT("DA_Type_Moat"), TEXT("moat"), TEXT("護城河"), TEXT("huchenghe"), TEXT("Moat"),
 			  38, TEXT("district,area"), EPlaceParentRelation::Adjacent, FLinearColor(0.15f, 0.4f, 0.75f) },
 
-			// Adjacent for the same reason a compound is, and a stronger one: a bridge carries the
-			// street across the water, and the street's own outline usually stops at the bank. It
-			// outranks what it stands in — standing on 銀錠橋 reads as the bridge, not as the lane.
+			// Adjacent: the street's outline usually stops at the bank. Outranks it: on 銀錠橋 reads as the bridge.
 			{ TEXT("DA_Type_Bridge"), TEXT("bridge"), TEXT("橋"), TEXT("qiao"), TEXT("Bridge"),
 			  58, TEXT("avenue,hutong"), EPlaceParentRelation::Adjacent, FLinearColor(0.7f, 0.9f, 1.0f) },
 
@@ -85,7 +81,7 @@ namespace PlaceLabelsEditorUtils
 			const FString PackageName =
 				FString::Printf(TEXT("%s/%s"), StarterTypePackagePath, Def.AssetName);
 
-			// Never clobber an existing asset: the whole point of these is that you tune them.
+			// Never overwrite: these are meant to be tuned.
 			if (FindPackage(nullptr, *PackageName)
 				|| FPackageName::DoesPackageExist(PackageName))
 			{

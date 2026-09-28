@@ -9,74 +9,76 @@ namespace HutongGen
 {
 	namespace Passage
 	{
-		// The clear height a doorway keeps, from the top of the 門檻 to the underside of the head.
+		// Clear height, 門檻 top to head underside.
 		inline constexpr double MinClearHeight = HutongCanon::Openings::MinClearHeightCm;
 
-		// Lowest the underside of a door head may sit, given its floor and its 門檻.
+		// Lowest allowed head underside.
 		inline double MinHeadZ(double FloorZ, double ThresholdHeight)
 		{
 			return FloorZ + FMath::Clamp(ThresholdHeight, 0.0, 40.0) + MinClearHeight;
 		}
 	}
 
-	// A doorway's woodwork: 抱框 jambs, a head over the leaves, a 門檻 and the leaves themselves.
+	// Doorway woodwork: 抱框 jambs, head, 門檻, leaves.
 	struct FHutongDoorAssembly
 	{
-		// The clear doorway. Jambs are appended *outside* this, so it is what you walk through.
+		// Clear opening; jambs go outside it.
 		double OpeningX0 = 0.0;
 		double OpeningX1 = 150.0;
 
-		// Faces of the wall the door sits in. Leaves swing out toward FrontY.
+		// Wall faces. Leaves swing toward FrontY.
 		double FrontY = 0.0;
 		double BackY = 30.0;
 
 		double BottomZ = 0.0;
-		// Top of the leaves, and top of the jambs. Everything between is the caller's transom.
+		// Leaf top and jamb top; the caller fills the transom between.
 		double LeafTopZ = 210.0;
 		double JambTopZ = 240.0;
 
 		double FrameThickness = 9.0;
 		double ThresholdHeight = 12.0;
 
-		// How far the 門枕石 comes into the opening past the jamb.
+		// 門枕石 reach into the opening past the jamb.
 		double StoneReveal = 0.0;
 
-		// Clear height held under the head.
 		double MinClearHeight = Passage::MinClearHeight;
 
-		// The mesh is its own collision, so shut leaves are a wall the player cannot walk through.
+		// Mesh is its own collision: shut leaves block the doorway.
 		bool bLeavesOpen = true;
 
-		// How much clear wall each leaf has to fold back onto.
+		// Clear wall each leaf can fold back onto.
 		double SwingClearance = 1.0e6;
 
-		// 門簪: the pegs through the head.
+		// 門簪 pegs through the head.
 		int32 PegCount = 0;
 
-		// Drives each leaf's angle directly instead of folding both flat.
+		// Use explicit leaf angles instead of folding flat.
 		bool bUseLeafAngles = false;
 		double LeftLeafAngleDeg = 0.0;
 		double RightLeafAngleDeg = -85.0;
 	};
 
-	// OutLeafFirstTriangle receives the triangle the leaves start at — everything from there on is door rather than frame.
-	void AppendDoorAssembly(UE::Geometry::FDynamicMesh3& Mesh, const FHutongDoorAssembly& D,
-		int32* OutLeafFirstTriangle = nullptr);
+	// Frame in whatever slot the caller's scope gives; leaves tag themselves 門漆.
+	void AppendDoorAssembly(UE::Geometry::FDynamicMesh3& Mesh, const FHutongDoorAssembly& D);
 
-	// 抱鼓石: a round drum on a plinth at the foot of a gate jamb.
+	// Free width a body has through the doorway as AppendDoorAssembly builds it: between the leaves at their
+	// angles (bUseLeafAngles) — thickness, rails and the pivot's set-in counted — and the 門枕石 reveal.
+	double LeafClearWidth(const FHutongDoorAssembly& D);
+
+	// 抱鼓石: drum on a plinth at a gate jamb.
 	void AppendDrumStone(
 		UE::Geometry::FDynamicMesh3& Mesh,
 		double X0, double X1,          // across the wall
 		double Y0, double Y1,          // through it
-		double BaseZ,                  // what it stands on: 0 for a wall, the 臺基 for a gate house
+		double BaseZ,                  // 0 for a wall, 臺基 top for a gate house
 		double Height,
 		double DrumFraction,           // drum diameter as a fraction of Height
 		int32 Sides = 16);
 
-	// How far a 門墩 overshoots into the opening past its jamb.
+	// 門墩 overshoot into the opening past its jamb.
 	double DoorStoneReveal(double JambThickness, double DoorWidth);
 
-	// The pair of 門墩 at the foot of a doorway's jambs, either form.
+	// 門墩 pair at a doorway's jambs, either form.
 	void AppendDoorStonePair(
 		UE::Geometry::FDynamicMesh3& Mesh,
 		const FHutongDoorStoneParams& Stones,

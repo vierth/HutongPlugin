@@ -38,7 +38,6 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UHutongPathToolProperties> Settings;
 
-	// Which side the colonnade opens onto.
 	UPROPERTY()
 	TObjectPtr<UHutongPresetProperties> Presets;
 };

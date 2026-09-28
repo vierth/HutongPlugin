@@ -4,6 +4,7 @@
 #include "Generation/HutongCanon.h"
 #include "Generation/BaySide.h"
 #include "Generation/WallGenerator.h"
+#include "Generation/HutongFootprint.h"
 #include "CompoundLayout.generated.h"
 
 UENUM()
@@ -18,8 +19,7 @@ enum class EHutongCourtWalk : uint8
 	None UMETA(DisplayName = "Neither", ToolTip="No verandas and no corridor."),
 };
 
-// 北京四合院有小型、中型、大型之分 (四合院建築及其構造 p.83): the plot's width, and with it every
-// building on it. The three are stamped at their own width; Custom is the plot the drag sizes.
+// Plot size: 小型/中型/大型 (四合院建築及其構造 p.83) at their own widths; Custom takes the drag.
 UENUM()
 enum class EHutongCompoundSize : uint8
 {
@@ -28,6 +28,8 @@ enum class EHutongCompoundSize : uint8
 	Medium UMETA(DisplayName = "Medium (中型) — 20 m wide"),
 
 	Large UMETA(DisplayName = "Large (大型) — 25 m wide"),
+
+	Standard UMETA(DisplayName = "Standard (標准) — Fig 2-9.1, 22 m wide", ToolTip="The standard three-court compound of Fig 2-9.1 in Siheyuan Architecture and Its Construction (四合院建築及其構造), at the page's own proportions."),
 
 	Custom UMETA(DisplayName = "Custom — sized by dragging"),
 };
@@ -63,7 +65,7 @@ enum class EHutongCompoundPiece : uint8
 	WaterJar UMETA(ToolTip="The water jar (魚缸)."),
 };
 
-// One building's place in the compound: what to build, where, and which way it faces.
+// One building's place in the compound: what, where, which way it faces.
 struct FHutongCompoundSlot
 {
 	EHutongCompoundPiece Piece = EHutongCompoundPiece::Wall;
@@ -72,13 +74,13 @@ struct FHutongCompoundSlot
 	FVector2D Min = FVector2D::ZeroVector;
 	FVector2D Size = FVector2D::ZeroVector;
 
-	// Which side of its own footprint the facade is on. Ignored by the pieces that have no front.
+	// Side of the footprint the facade is on; ignored by pieces with no front.
 	EHutongBaySide Facing = EHutongBaySide::MinusY;
 
-	// For the line-like pieces, whether the run lies along the footprint's Y rather than its X.
+	// Line-like pieces: the run lies along Y rather than X.
 	bool bLengthAlongY = false;
 
-	// Wall slots only: a run either bounds the plot or crosses it, and that is the whole difference.
+	// Wall slots only: a run bounds the plot or crosses it.
 	EHutongWallRole WallRole = EHutongWallRole::Perimeter;
 
 	// 遊廊 slots only.
@@ -90,9 +92,23 @@ struct FHutongCompoundSlot
 	// Wall slots only.
 	double WallGateAt = -1.0;
 
+	// Wall slots only: under a 遊廊 roof, so it stops at that eave, uncapped.
+	bool bUnderEave = false;
+
+	// 遊廊 run ends cut on the diagonal at a corner, so the two roofs mitre into one 轉角.
+	FHutongFootprintSkew Skew;
+
+	// 遊廊 slots only: this end's post belongs to the other run at the corner; not built twice.
+	bool bOmitLowEndPost = false;
+	bool bOmitHighEndPost = false;
+
+	// 遊廊 slots only: no bench in the end bay where the walk turns through a gable doorway.
+	bool bNoBenchAtLowEnd = false;
+	bool bNoBenchAtHighEnd = false;
+
 };
 
-// The plan itself, over a plot with the street at Y = 0 and the back at Y = Depth.
+// Plot frame: street at Y = 0, back at Y = Depth.
 namespace HutongGen
 {
 	struct FCompoundInput
@@ -102,86 +118,93 @@ namespace HutongGen
 
 		EHutongCompoundPlan Plan = EHutongCompoundPlan::ThreeCourtyards;
 
-		// Depths taken from the building presets, so the two agree.
+		// Match the building presets.
 		double HallDepth = 600.0;
 
-		// 正房三間兩耳: the hall does not run the plot's width.
+		// 正房三間兩耳: the hall does not span the plot.
 		double HallFrontage = HutongCanon::Compound::HallFrontageCm;
 		double EarRoomDepth = 340.0;
 		bool bHasEarRooms = true;
 
-		// Below this an 耳房 stops being a room; the hall takes the whole width instead.
+		// Below this an 耳房 is not a room; the hall takes the whole width.
 		double MinEarRoomFrontage = HutongCanon::Compound::MinEarRoomFrontageCm;
 
-		// 小天井: the shallowest light well worth walling off.
+		// 小天井: shallowest light well worth walling off.
 		double MinLightWellDepth = HutongCanon::Compound::MinLightWellDepthCm;
 
-		// 廂房 likewise do not run the court's full length.
+		// 廂房 do not span the court's full length either.
 		double WingFrontage = HutongCanon::Compound::WingFrontageCm;
 		double MaxWingFrontage = HutongCanon::Compound::MaxWingFrontageCm;
 
-		// What a 廂耳房 wants to be, rather than whatever the wing leaves over.
+		// Preferred 廂耳房 frontage, not whatever the wing leaves.
 		double WingEarRoomFrontage = HutongCanon::Compound::WingEarRoomFrontageCm;
 		bool bHasWingEarRooms = true;
 		double WingDepth = 450.0;
 		double FrontRowDepth = 360.0;
 
-		// 後罩房 and the 後院 it closes, on a 三進 plan only.
+		// 後罩房 and its 後院; 三進 only.
 		double RearRowDepth = HutongCanon::Compound::RearRowDepthCm;
 		double RearCourtDepth = HutongCanon::Compound::RearCourtDepthCm;
 
-		// 過道: the way through to the 後院, at the plot edge past the 耳房 on the gate's own side.
+		// 過道 to the 後院, at the plot edge past the 耳房 on the gate side.
 		double PassageWidth = HutongCanon::Compound::PassageWidthCm;
 
-		// How far the 過道's roof runs into the wall at each side.
+		// How far the 過道 roof runs into each side wall.
 		double PassageBearing = HutongCanon::Compound::PassageBearingCm;
 
 		double GateFrontage = 360.0;
 
-		// 門房: the room carrying the street row past the gate to the corner.
+		// 門房: carries the street row from the gate to the corner.
 		double GateLodgeFrontage = HutongCanon::Compound::GateLodgeFrontageCm;
 		double GateDepth = 320.0;
 		double InnerGateFrontage = 330.0;
 		double InnerGateDepth = 140.0;
+
+		// 垂花門 position across the cross wall's depth (negative: middle), and how far its rear platform and steps reach into the court.
+		double InnerGateWallAt = -1.0;
+		double InnerGateRearReach = 0.0;
 		double WallThickness = HutongCanon::Wall::PerimeterThicknessCm;
 
-		// The cross wall the 垂花門 stands in is a 隔牆 and is thinner.
+		// The 垂花門's cross wall is a thinner 隔牆.
 		double CourtyardWallThickness = HutongCanon::Wall::CourtyardThicknessCm;
 		double CorridorDepth = 175.0;
 
-		// The clear walk the ring is built at.
+		// Clear walk width of the ring.
 		double CorridorWalkWidth = HutongCanon::Compound::CorridorWalkWidthCm;
+
+		// Link veranda offset past the 廂房 front: posts on its 檐柱 line, walk continues its 前廊 (Fig 2-9.1).
+		double LinkShift = 0.0;
 		double PathWidth = 130.0;
 		double ScreenLength = 300.0;
 		double ScreenDepth = 60.0;
 
-		// How far the 影壁's own mesh runs past its footprint at each end.
+		// 影壁 mesh overhang past its footprint at each end.
 		double ScreenSideProjection = 20.0;
 
-		// The 須彌座's projection across the run: how far the screen's body sits inside its own footprint.
+		// 須彌座 projection: how far the screen body sits inside its footprint.
 		double ScreenPlinthProjection = HutongCanon::Screen::PlinthProjectionCm;
 
-		// The least standing room between the 大門 and the 影壁 it faces.
+		// Least standing room between the 大門 and the 影壁.
 		double ScreenClearance = 320.0;
 
-		// How much of the 外院's far end is partitioned off as a service yard — where the well, the store and the privy go.
+		// Service yard at the 外院's far end: well, store, privy.
 		double OuterYardWidth = HutongCanon::Compound::OuterYardWidthCm;
 		bool bHasOuterYard = true;
 
-		// Gaps left between a building and its neighbours, so nothing is drawn touching.
+		// Gap between neighbouring buildings so none touch.
 		double Gap = HutongCanon::Compound::GapCm;
 
 		// 巽位: the southeast corner.
 		bool bGateAtEastEnd = true;
 
-		// The 廂房's own depth already carries its 前廊 when there is one.
+		// The 廂房 depth already includes its 前廊 when present.
 		EHutongCourtWalk CourtWalk = EHutongCourtWalk::WingVerandas;
 		bool bHasPath = true;
 
 		bool HasRingCorridor() const { return CourtWalk == EHutongCourtWalk::Corridor; }
 		bool HasLinkedVerandas() const { return CourtWalk == EHutongCourtWalk::Linked; }
 
-		// 天棚魚缸石榴樹: the jar on the axis before the 正房 with a bed either side of it.
+		// 天棚魚缸石榴樹: jar on the axis before the 正房, a bed either side.
 		bool bHasCourtyardFurnishing = true;
 		double WaterJarSpan = 92.0;
 		double FlowerBedSizeX = 200.0;
@@ -189,82 +212,91 @@ namespace HutongGen
 		bool bHasScreenWall = true;
 		bool bHasGateLodge = true;
 
-		// 內院, and the number the whole minimum derives from.
+		// 內院; the whole minimum derives from it.
 		double MinCourtyardWidth = HutongCanon::Compound::MinCourtyardWidthCm;
 		double MinCourtyardDepth = HutongCanon::Compound::MinCourtyardDepthCm;
 
-		// The 廂房's frontage runs along the plot's depth, so it is as long as the courtyard beside it.
+		// 廂房 frontage runs along the plot depth, as long as the court beside it.
 		double MinWingFrontage = 560.0;
 
 		// 外院: the forecourt between the gate and the 垂花門.
 		double OuterCourtDepth = HutongCanon::Compound::OuterCourtDepthCm;
 
-		// What each court is on an ordinary compound rather than the least it can be.
+		// Ordinary court sizes, not minimums.
 		double CourtyardWidth = HutongCanon::Compound::CourtyardWidthCm;
 		double CourtyardDepth = HutongCanon::Compound::CourtyardDepthCm;
 
-		// The 外院 is a shallow strip, not a second courtyard. It is the space between the gate row and the 垂花門.
+		// The 外院 is a shallow strip between the gate row and the 垂花門, not a second court.
 		double TypicalOuterCourtDepth = HutongCanon::Compound::TypicalOuterCourtDepthCm;
 		double TypicalRearCourtDepth = HutongCanon::Compound::TypicalRearCourtDepthCm;
 
-		// Every plan but the smallest is entered through a 垂花門 in a cross wall; only the largest has a court behind the hall.
+		// All plans but the smallest enter through a 垂花門; only the largest has a court behind the hall.
 		bool HasInnerGate() const { return Plan != EHutongCompoundPlan::OneCourtyard; }
 		bool HasRearCourt() const { return Plan == EHutongCompoundPlan::ThreeCourtyards; }
 
-		// The forecourt this plan needs, which the 影壁 can push past the nominal one.
+		// Part of the 垂花門 on the 外院 side: to its door line plus half the wall. The rest lies inside the
+		// 內院 depth; counting it whole grew the plot by the gate's projection (21 m deep for 15.5).
+		double GetInnerGateOuterPart() const
+		{
+			if (InnerGateWallAt < 0.0) return InnerGateDepth;
+			return FMath::Min(InnerGateWallAt, InnerGateDepth) + 0.5 * FMath::Max(CourtyardWallThickness, 0.0);
+		}
+
+		// Forecourt this plan needs; the 影壁 can push it past the nominal one.
 		double GetOuterCourtDepth() const
 		{
 			if (!bHasScreenWall) return OuterCourtDepth;
-			// Room to come in, meet the screen, and walk round it.
+			// Room to enter, meet the screen, walk round it.
 			return FMath::Max(OuterCourtDepth,
 				ScreenClearance + ScreenDepth + 2.0 * FMath::Max(Gap, 0.0) + 60.0);
 		}
 
-		// The plot these settings lay out on with the courts at the sizes given.
+		// Plot for these settings with courts at the given sizes.
 		void GetPlotFor(double CourtW, double CourtD, double OuterD, double RearD,
 			double& OutWidth, double& OutDepth) const
 		{
 			const double G = FMath::Max(Gap, 0.0);
 
-			// Across: the courtyard itself, plus the two 廂房 and the colonnades in front of them.
+			// Across: court plus both 廂房 and their colonnades.
 			double Between = CourtW;
 			if (HasRingCorridor()) Between += 2.0 * (CorridorDepth + G);
 			const double CourtWidth = 2.0 * WingDepth + Between;
 
-			// The street frontage has to seat the gate, the 門房 past it, and a 倒座房 worth having on the other side.
+			// Street frontage seats the gate, the 門房, and a usable 倒座房.
 			const double StreetWidth = GateFrontage + (bHasGateLodge ? GateLodgeFrontage : 0.0) + 500.0;
 			OutWidth = FMath::Max(CourtWidth, StreetWidth);
 
-			// Front to back: street row, courtyard, hall, plus the forecourt and 垂花門 wherever there is one, and the 後院 and 後罩房 on a 三進.
+			// Front to back: street row, court, hall, plus forecourt and 垂花門 if any, plus 後院 and 後罩房 on 三進.
+			// Wing run: 廂房 plus one 廂耳房 at the south; the rest of the court is 小天井.
 			double WingRun = MinWingFrontage;
 			if (bHasWingEarRooms)
 			{
-				WingRun = FMath::Max(WingRun, WingFrontage + 2.0 * (MinEarRoomFrontage + G));
+				WingRun = FMath::Max(WingRun, WingFrontage + MinEarRoomFrontage + G);
 			}
-			double Court = FMath::Max(WingRun, CourtD) + 2.0 * G;
+			// Court = wall to hall front, gaps included; the wing range adds its own gaps.
+			double Court = FMath::Max(WingRun + 2.0 * G, CourtD);
 			if (HasRingCorridor()) Court += 2.0 * (CorridorDepth + G);
 			if (HasInnerGate())
 			{
-				Court += FMath::Max(OuterD, GetOuterCourtDepth()) + InnerGateDepth + G;
+				Court += FMath::Max(OuterD, GetOuterCourtDepth()) + GetInnerGateOuterPart() + G;
 			}
-			// With no forecourt the screen stands in the courtyard, which still has to be a court beyond it.
+			// No forecourt: the screen stands in the court, which must still be a court beyond it.
 			if (Plan == EHutongCompoundPlan::OneCourtyard && bHasScreenWall)
 			{
 				Court += ScreenClearance + ScreenDepth + G;
 			}
 			OutDepth = FMath::Max(FrontRowDepth, GateDepth) + G + Court + G + HallDepth;
-			// The back court is behind the hall.
 			if (HasRearCourt()) OutDepth += FMath::Max(RearD, RearCourtDepth) + RearRowDepth;
 		}
 
-		// The smallest plot these settings lay out on, which the tool holds the drag to.
+		// Smallest plot for these settings; the tool clamps the drag to it.
 		void GetMinimumPlot(double& OutWidth, double& OutDepth) const
 		{
 			GetPlotFor(MinCourtyardWidth, MinCourtyardDepth, OuterCourtDepth, RearCourtDepth,
 				OutWidth, OutDepth);
 		}
 
-		// The plot an ordinary compound of this plan stood on, which is what the drag snaps to.
+		// Ordinary plot for this plan; the drag snaps to it.
 		void GetSuggestedPlot(double& OutWidth, double& OutDepth) const
 		{
 			GetPlotFor(CourtyardWidth, CourtyardDepth, TypicalOuterCourtDepth,
@@ -277,9 +309,9 @@ namespace HutongGen
 		}
 	};
 
-	// Lays the plot out, in build order. May be empty if the plot is tiny.
+	// Lays out the plot in build order; empty if too small.
 	TArray<FHutongCompoundSlot> LayOutCompound(const FCompoundInput& In);
 
-	// The doorway a wall slot carries, written onto that run's own params.
+	// Writes a wall slot's doorway onto that run's params.
 	void ApplySlotDoorway(FHutongWallParams& P, const FHutongCompoundSlot& Slot, double RunLength);
 }

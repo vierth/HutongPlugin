@@ -65,7 +65,7 @@ void DrawDiamondHandle(FPrimitiveDrawInterface* PDI, const FVector& P, const FLi
 void DrawCrossOutHandle(FPrimitiveDrawInterface* PDI, const FVector& P, const FLinearColor& Color,
 	double Size, float Thickness)
 {
-	// Rotated 45 degrees off DrawCrossHandle, so a removal never reads as a corner at a glance.
+	// DrawCrossHandle rotated 45 degrees, so a removal never reads as a corner.
 	const double H = Size * 0.5 * UE_INV_SQRT_2;
 	DrawLine(PDI, P + FVector(-H, -H, 0), P + FVector(H, H, 0), Color, Thickness);
 	DrawLine(PDI, P + FVector(-H, H, 0), P + FVector(H, -H, 0), Color, Thickness);
@@ -206,7 +206,7 @@ FSnapResult ResolveSnap(const FVector& TracedHit, const FSnapSettings& Settings,
 				if (DistSq < BestDistSq)
 				{
 					BestDistSq = DistSq;
-					// Z from the trace, not the snap target: a snapped point still has to sit on the ground where it landed.
+					// Z from the trace, not the target: the point stays on the ground it landed on.
 					Result.Point = FVector(Points[i].X, Points[i].Y, TracedHit.Z);
 					Result.bSnapped = true;
 					Result.Detail = FString::Printf(TEXT("%s corner %d"),

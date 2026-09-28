@@ -4,7 +4,7 @@
 #include "DynamicMesh/DynamicMesh3.h"
 #include "WaterJarGenerator.generated.h"
 
-// 魚缸: the water jar on its 缸座, standing on the axis before the 正房 — the middle term of 天棚魚缸石榴樹.
+// 魚缸: water jar on its 缸座 on the axis before the 正房 (天棚魚缸石榴樹).
 USTRUCT(BlueprintType)
 struct FHutongWaterJarParams
 {
@@ -28,7 +28,7 @@ struct FHutongWaterJarParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Jar", meta=(DisplayName="Sides", UIMin="8", UIMax="48", ClampMin="6", ClampMax="96", ToolTip="Number of sides round the jar's circumference."))
 	int32 Sides = 20;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Base", meta=(DisplayName="Has Stone Base (缸座)", ToolTip="Adds a square stone base (缸座) under the jar."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Base", meta=(HutongBasic, DisplayName="Has Stone Base (缸座)", ToolTip="Adds a square stone base (缸座) under the jar."))
 	bool bHasBase = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Base", meta=(DisplayName="Base Height", EditCondition="bHasBase", UIMin="4", UIMax="40", ClampMin="1", Units="cm", ToolTip="Height of the stone base, in cm."))
@@ -37,7 +37,7 @@ struct FHutongWaterJarParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Base", meta=(DisplayName="Base Margin", EditCondition="bHasBase", UIMin="0", UIMax="30", ClampMin="0", Units="cm", ToolTip="How far the base extends past the jar's foot on each side, in cm."))
 	double BaseMargin = 7.0;
 
-	// The footprint this jar occupies, which is what the drag is held square at.
+	// Footprint the drag is held square at.
 	double GetFootprint() const
 	{
 		const double Belly = FMath::Max(BellyDiameter, 1.0);

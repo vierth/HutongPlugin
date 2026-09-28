@@ -19,14 +19,13 @@ namespace
 	// Hatch ticks along the facade: this far apart, this deep into the footprint.
 	constexpr double HatchSpacing = 60.0;
 	constexpr double HatchDepth = 45.0;
-	// Drawn a touch above the ground so the fill does not fight a flat map plane at Z = 0.
+	// Slightly above ground to avoid z-fighting a map plane at Z = 0.
 	constexpr double Lift = 2.0;
 
 	const TCHAR* VisibilitySection = TEXT("/Script/HutongLayoutEditor.HutongPlanOutlineComponent");
 	const TCHAR* VisibilityKey = TEXT("bShowPlanOutlines");
 
-	// The proxy is built once and cannot be told to stop drawing, so a change to the switch is a
-	// rebuild of every plan's proxy — the same shape as PlaceLabels' editor fill.
+	// The proxy cannot stop drawing, so toggling rebuilds every plan's proxy (as PlaceLabels' fill).
 	void OnPlanVisibilityChanged(IConsoleVariable* Var)
 	{
 		GConfig->SetBool(VisibilitySection, VisibilityKey, Var->GetBool(), GEditorPerProjectIni);
@@ -95,13 +94,12 @@ public:
 		, FootingSize(C->FootingSize)
 	{
 		OutlineColor = C->Colour;
-		// The facade marks are the same hue turned toward the front: one colour per type, two
-		// weights of it, so a plan says both what it is and which way it faces.
+		// Facade marks: same hue, heavier, so a plan shows type and facing.
 		FacadeColor = C->Colour * FLinearColor(1.0f, 0.72f, 0.45f, 1.0f);
 		bWillEverBeLit = false;
 	}
 
-	// The default hit proxy is the owning actor's, which is what makes a click on the fill select the building.
+	// Default hit proxy is the owning actor's, so clicking the fill selects the building.
 	virtual HHitProxy* CreateHitProxies(UPrimitiveComponent* Component,
 		TArray<TRefCountPtr<HHitProxy>>& OutHitProxies) override
 	{
@@ -116,8 +114,7 @@ public:
 	{
 		const FMatrix& L2W = GetLocalToWorld();
 		const double W = Footprint.X, D = Footprint.Y;
-		// Every point is worked out on the rectangle and then put where the corner offsets take it,
-		// so the bays, the openings and the hatch follow an angled edge without knowing about it.
+		// Points computed on the rectangle, then warped by the corner offsets.
 		FVector2D Quad[4];
 		HutongFootprint::Corners(Footprint, Skew, Quad);
 		auto At = [&](double X, double Y)
@@ -139,7 +136,7 @@ public:
 			FPrimitiveDrawInterface* PDI = Collector.GetPDI(ViewIndex);
 			constexpr uint8 DPG = SDPG_Foreground;
 
-			// The fill: faint, so a whole street of them reads as a tint on the ground rather than a floor.
+			// Faint fill: a street of them reads as a tint.
 			if (GEngine && GEngine->DebugMeshMaterial)
 			{
 				FLinearColor Fill = OutlineColor;
@@ -151,12 +148,11 @@ public:
 				FDynamicMeshBuilder Builder(Views[ViewIndex]->GetFeatureLevel());
 				for (int32 i = 0; i < 4; ++i)
 				{
-					// The fill sits a step under the lines: on one plane the two fought for depth,
-					// and the thin bay divisions lost it at some zooms and not others.
+					// Fill a step below the lines, or thin bay lines z-fight it.
 					Builder.AddVertex(FVector3f(World[i] - FVector(0.0, 0.0, 1.5)), FVector2f::ZeroVector,
 						FVector3f(1, 0, 0), FVector3f(0, 1, 0), FVector3f(0, 0, 1), FColor::White);
 				}
-				// A convex quadrilateral either diagonal splits.
+				// Convex quad: either diagonal splits it.
 				Builder.AddTriangle(0, 1, 2);
 				Builder.AddTriangle(0, 2, 3);
 				Builder.GetMesh(FMatrix::Identity, Material, DPG,
@@ -169,7 +165,7 @@ public:
 				PDI->DrawLine(World[j], World[i], Line, DPG, Thickness, 0.0f, true);
 			}
 
-			// Openings: the jambs across the thickness and a bar between them, in the door colour.
+			// Openings: jambs across the thickness, bar between, in door colour.
 			for (const FVector2D& O : Openings)
 			{
 				const double A = O.X - 0.5 * O.Y, B = O.X + 0.5 * O.Y;
@@ -185,10 +181,7 @@ public:
 				PDI->DrawLine(Run(A, 0.5 * Across), Run(B, 0.5 * Across), Door, DPG, Thickness + 2.0f, 0.0f, true);
 			}
 
-			// The bays, drawn where the columns stand. How many 間 a building is is the first
-			// thing said about it, and on a plan the rectangle is otherwise silent about it.
-			// The end boundaries are the corner columns' own inset and are left to the outline;
-			// what is drawn is the divisions between one bay and the next.
+			// Bay divisions (間) at the columns; end boundaries are left to the outline.
 			for (int32 i = 1; i + 1 < BayBoundaries.Num(); ++i)
 			{
 				const double T = BayBoundaries[i];
@@ -199,8 +192,7 @@ public:
 				PDI->DrawLine(A, B, Division, DPG, FMath::Max(Thickness - 1.0f, 1.5f), 0.0f, true);
 			}
 
-			// Where the columns will stand: each 柱頂石 as a square, the column's own section as a
-			// circle in it. The rows say what the frame is — 前廊, 後廊, how deep — before it is built.
+			// Columns: 柱頂石 square with the column circle inside; rows show 前廊/後廊 before building.
 			for (const double Row : ColumnRows)
 			{
 				for (const double T : BayBoundaries)
@@ -240,12 +232,11 @@ public:
 					const FVector2D B = A - E.OutDir * Depth;
 					PDI->DrawLine(At(A.X, A.Y), At(B.X, B.Y), Hatch, DPG, Thickness, 0.0f, true);
 				}
-				// And the facade edge itself, heavier, in the street colour the placement previews use.
+				// Facade edge, heavier, in the preview street colour.
 				const FVector2D F0 = OnEdge(0.0), F1 = OnEdge(Along);
 				PDI->DrawLine(At(F0.X, F0.Y), At(F1.X, F1.Y), Hatch, DPG, Thickness + 1.5f, 0.0f, true);
 
-				// The door bay, heavier still over its own stretch of that edge: the 明間 is not
-				// always the middle one, and which bay the door is in decides where the steps go.
+				// Door bay heavier still: the 明間 is not always central, and it places the steps.
 				if (BayBoundaries.IsValidIndex(DoorBay) && BayBoundaries.IsValidIndex(DoorBay + 1))
 				{
 					const FVector2D D0 = OnEdge(BayBoundaries[DoorBay]), D1 = OnEdge(BayBoundaries[DoorBay + 1]);
@@ -313,7 +304,7 @@ void UHutongPlanOutlineComponent::SetPlan(const FVector2D& InFootprint, const FH
 	ColumnRadius = InBays.ColumnRadius;
 	FootingSize = InBays.FootingSize;
 	Colour = InColour;
-	// The proxy bakes the colour with the rest of the plan, so a retint is a rebuild like a resize.
+	// Colour is baked into the proxy: a retint rebuilds it.
 	MarkRenderStateDirty();
 }
 

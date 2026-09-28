@@ -3,24 +3,21 @@
 #include "CoreMinimal.h"
 #include "Generation/HutongFootprint.h"
 
-// A run of wall drawn as a polyline: one rectangle per segment, the ends where two segments meet
-// cut on the bisector so they meld, and the two outer ends cut flush against whatever face they
-// rest on. Pure arithmetic on ground points, so the tool's preview, its spawn and the tests all
-// read the same corners.
+// Polyline wall: one rectangle per segment, joins mitred on the bisector, outer ends cut flush on
+// the face they rest on. Pure ground-plane arithmetic shared by preview, spawn and tests.
 namespace HutongWallChain
 {
 	struct FSegment
 	{
-		// World XY of the rectangle's min corner: the segment builds along its own +X from here,
-		// thickness along +Y, which is what the actor's transform then places.
+		// World XY of the min corner; segment builds along local +X, thickness along +Y.
 		FVector2D Origin = FVector2D::ZeroVector;
 		double YawDeg = 0.0;
 		double Length = 0.0;
-		// Along-run corner offsets — the miters at the joins, the flush cuts at the outer ends.
+		// Along-run corner offsets: miters at joins, flush cuts at outer ends.
 		FHutongFootprintSkew Skew;
 	};
 
-	// A neighbour's face line an outer end rests on: the snapped point and the face's direction.
+	// Neighbour face an outer end rests on: snapped point and face direction.
 	struct FEndFace
 	{
 		bool bSet = false;
@@ -28,32 +25,26 @@ namespace HutongWallChain
 		FVector2D Dir = FVector2D::ZeroVector;
 	};
 
-	// Points: the drawn polyline, on the ground. DrawnY: where that line sits across the wall, as
-	// the local Y of the rectangle it is drawn inside — half the thickness for a centre line, 0 or
-	// the thickness when the line is one face. Segments shorter than MinLength are dropped, so a
-	// repeated point costs nothing. Returns false when fewer than one segment remains.
+	// Points: ground polyline. DrawnY: the line's local Y across the wall (half thickness = centre line,
+	// 0 or thickness = a face). Segments under MinLength drop, so repeated points are harmless. False
+	// when no segment remains.
 	bool Build(const TArray<FVector2D>& Points, double Thickness, double DrawnY,
 		const FEndFace& StartFace, const FEndFace& EndFace, TArray<FSegment>& OutSegments,
 		double MinLength = 10.0);
 
-	// The four world corners of a segment, offsets applied, from its origin anticlockwise.
+	// Segment's four world corners, offsets applied, anticlockwise from origin.
 	void Corners(const FSegment& Segment, double Thickness, FVector2D OutCorners[4]);
 
-	// The turn between two directions, signed the way yaw is, in degrees.
+	// Signed turn between directions, yaw convention, degrees.
 	double TurnDeg(const FVector2D& From, const FVector2D& To);
 
-	// Where a run's drawn line sits across the wall when a vertex of it snapped to a neighbour:
-	// if one of the edges meeting there runs along the segment (within AlongFaceDeg), the wall's outer
-	// face goes on that edge's line and the body on the neighbour's side of it — a wall
-	// continuing a house's front wall stands flush with it, not centred on it. Yaw2 is the other
-	// edge at a corner, or a large negative; Inward points from the snapped point into the
-	// neighbour. Returns false when no edge runs along the segment, leaving the line centred.
-	// ToleranceDeg is how far off the segment an edge may run and still count; a caller that
-	// decided "along" last frame passes the wider WithinDegAfter, so a segment near the limit does
-	// not flip the whole run half a thickness sideways with every pixel of mouse movement.
-	// Setback holds the outer face that far inside the neighbour's face — the drawn line then
-	// lies outside the wall, at -Setback or Thickness + Setback — so the run reads as a piece
-	// set against the house rather than the same slab continued.
+	// Where the drawn line sits when a vertex snapped to a neighbour: if an edge there runs along the
+	// segment (within ToleranceDeg), the outer face goes on that edge's line, body on the neighbour's side,
+	// so a wall continuing a house front stands flush, not centred. Yaw2: other edge at a corner, else a
+	// large negative. Inward: from snapped point into the neighbour. False = no such edge, line centred.
+	// A caller that chose "along" last frame passes WithinDegAfter (hysteresis) so the run does not jump
+	// half a thickness per pixel near the limit. Setback holds the outer face that far inside the
+	// neighbour's face (drawn line at -Setback or Thickness + Setback), so the wall reads as a separate piece.
 	inline constexpr double AlongFaceDeg = 10.0;
 	inline constexpr double AlongFaceDegAfter = 16.0;
 	bool SideAlongFace(const FVector2D& SegmentDir, double EdgeYawDeg, double EdgeYaw2Deg,

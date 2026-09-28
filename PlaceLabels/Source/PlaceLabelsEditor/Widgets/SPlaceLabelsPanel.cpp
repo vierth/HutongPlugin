@@ -58,8 +58,7 @@ namespace
 
 	const FString AllTypesLabel(TEXT("All types"));
 
-	// The Place Labels tools, if that mode is up. Declared here rather than beside its first
-	// caller: the inline editor asks it which region the form is on.
+	// The Place Labels tools, if that mode is up. Here because the inline editor needs it early.
 	UInteractiveTool* GetActivePlaceLabelsTool()
 	{
 		UEdMode* Mode = GLevelEditorModeTools().GetActiveScriptableMode(
@@ -72,10 +71,8 @@ namespace
 		return ToolManager ? ToolManager->GetActiveTool(EToolSide::Left) : nullptr;
 	}
 
-	// HutongLayout draws a coloured polygon on the ground for each of its laid-out buildings, over
-	// exactly the ground a region is traced onto. Its console variable is the switch rather than a
-	// call into the plugin: the two share no code, and what is being asked for is one bool. Absent
-	// HutongLayout the variable is not registered and the checkbox is not offered.
+	// HutongLayout's plan outlines cover the ground regions are traced on. Toggled via its console
+	// variable (the plugins share no code); without HutongLayout the checkbox is not offered.
 	const TCHAR* HutongPlansVarName = TEXT("hutong.ShowPlanOutlines");
 
 	IConsoleVariable* FindHutongPlansVar()
@@ -87,7 +84,7 @@ namespace
 	constexpr float RegionListMaxHeight = 260.0f;
 	constexpr float ProblemListMaxHeight = 170.0f;
 
-	// Cheap enough to run every second: it walks loaded actors and reads cached data off each.
+	// Cheap enough per second: walks loaded actors, reads cached data.
 	constexpr float RefreshIntervalSeconds = 1.0f;
 }
 
@@ -215,9 +212,7 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 			.AutoWrapText(true)
 		]
 
-		// ---- The two halves of the panel. Drawing regions and naming them is the work; welding,
-		// exporting, importing and creating the type assets are done once a session, and eight
-		// buttons standing over the browser are eight buttons in the way of it.
+		// ---- The two halves: drawing and naming, and the set-once tools kept out of its way.
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(FMargin(8.0f, 2.0f, 8.0f, 4.0f))
@@ -238,14 +233,14 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 				"viewport draws. Set once and left alone."))
 		]
 
-		// ---- Regions: what the session is actually spent on.
+		// ---- Regions.
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		[
 			SNew(SVerticalBox)
 			.Visibility(this, &SPlaceLabelsPanel::GetRegionsTabVisibility)
 
-			// ---- Help, folded away. It is worth reading once and worth hiding forever after.
+			// ---- Help, collapsed.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(FMargin(4.0f, 0.0f, 4.0f, 4.0f))
@@ -386,7 +381,7 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 					.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
 					{
 						bProblemsOnly = (State == ECheckBoxState::Checked);
-						// Filtering on problems is meaningless until the report has been run at least once, and the report only runs on demand when the section is collapsed.
+						// Needs a report run; it only runs on demand while the section is collapsed.
 						if (bProblemsOnly)
 						{
 							RebuildProblemRows();
@@ -451,7 +446,7 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 				.Text(this, &SPlaceLabelsPanel::GetSummaryText)
 			]
 
-			// ---- The inline editor, right under the list that sends you here.
+			// ---- The inline editor, under the list.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(FMargin(8.0f, 0.0f, 8.0f, 4.0f))
@@ -511,7 +506,7 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 			SNew(SVerticalBox)
 			.Visibility(this, &SPlaceLabelsPanel::GetToolsTabVisibility)
 
-			// ---- Actions, wrapped rather than stacked. Eight full-width buttons is a wall.
+			// ---- Actions, wrapped rather than stacked.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(FMargin(8.0f, 0.0f, 4.0f, 2.0f))
@@ -594,7 +589,7 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 				]
 			]
 
-			// ---- The other plugin's plans, which are drawn on the same ground these regions are.
+			// ---- HutongLayout's plans, drawn on the same ground.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(FMargin(8.0f, 2.0f, 8.0f, 0.0f))
@@ -697,7 +692,7 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 
 TSharedRef<SWidget> SPlaceLabelsPanel::BuildRegionEditor()
 {
-	// One row of the editor: a label of fixed width so the three name fields line up, and the widget beside it.
+	// Editor row: fixed-width label so the fields line up, widget beside it.
 	auto MakeField = [](const FText& Label, TSharedRef<SWidget> Field)
 	{
 		return SNew(SHorizontalBox)
@@ -729,7 +724,7 @@ TSharedRef<SWidget> SPlaceLabelsPanel::BuildRegionEditor()
 	{
 		return SNew(SEditableTextBox)
 			.HintText(Hint)
-			// Bound rather than set once, so selecting a different region in the list refills the form.
+			// Bound, so a new selection refills the form.
 			.Text(this, &SPlaceLabelsPanel::GetEditorName, Field)
 			.OnTextCommitted(this, &SPlaceLabelsPanel::CommitEditorName, Field);
 	};
@@ -768,7 +763,7 @@ TSharedRef<SWidget> SPlaceLabelsPanel::BuildRegionEditor()
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 1.0f)
 			[
 				// 大柵欄, not 大柵欄胡同 — the type supplies the 胡同.
-				MakeField(LOCTEXT("FieldChinese", "中文"),
+				MakeField(LOCTEXT("FieldChinese", "Chinese (中文)"),
 					MakeNameBox(ENameField::Chinese, LOCTEXT("HintChinese", "the name as written")))
 			]
 
@@ -793,14 +788,14 @@ TSharedRef<SWidget> SPlaceLabelsPanel::BuildRegionEditor()
 					.OnTextCommitted(this, &SPlaceLabelsPanel::CommitEditorNote))
 			]
 
-			// Metadata: the half of the answer the outline cannot give.
+			// Metadata.
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 1.0f)
 			[
 				MakeField(LOCTEXT("FieldSource", "Source"),
 					SNew(SEditableTextBox)
 					.HintText(LOCTEXT("HintSource", "where this name was read"))
 					.ToolTipText(LOCTEXT("FieldSourceTip",
-						"Where this region's name and extent came from: a sheet of the 乾隆京城全圖, "
+						"Where this region's name and extent came from: a sheet of the Qianlong map of the capital (乾隆京城全圖), "
 						"a gazetteer, a street sign, somebody who lives there. Free text, so a page "
 						"or plate number belongs here too."))
 					.Text(this, &SPlaceLabelsPanel::GetEditorSource)
@@ -823,7 +818,7 @@ TSharedRef<SWidget> SPlaceLabelsPanel::BuildRegionEditor()
 					])
 			]
 
-			// The region about to be placed: the same form, and the buttons that finish it.
+			// Pending region: same form, plus the finishing buttons.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0.0f, 6.0f, 0.0f, 0.0f)
@@ -890,7 +885,7 @@ TSharedRef<SWidget> SPlaceLabelsPanel::BuildRegionEditor()
 
 EVisibility SPlaceLabelsPanel::GetEditorVisibility() const
 {
-	// Collapsed, not hidden: an empty form taking up a third of the panel while nothing is selected is worse than no form.
+	// Collapsed with nothing selected, rather than an empty form.
 	return (SelectedRegion.IsValid() || IsAuthoringNewRegion())
 		? EVisibility::Visible : EVisibility::Collapsed;
 }
@@ -966,7 +961,7 @@ void SPlaceLabelsPanel::SetSelectedRegion(UPlaceRegionComponent* Region)
 	}
 	SelectedRegion = Region;
 
-	// Only on a selection change — this loads every type asset in the project.
+	// Selection change only: loads every type asset.
 	RebuildTypeOptions();
 	SyncConfidenceSelection();
 }
@@ -1056,7 +1051,7 @@ FText SPlaceLabelsPanel::GetEditorTypeLabel() const
 void SPlaceLabelsPanel::OnEditorTypeChanged(TSharedPtr<FPlaceTypeOption> NewValue,
 	ESelectInfo::Type SelectInfo)
 {
-	// Direct is the programmatic SetSelectedItem in RebuildTypeOptions, which is loading the form, not editing it.
+	// Direct = SetSelectedItem in RebuildTypeOptions loading the form, not an edit.
 	if (SelectInfo == ESelectInfo::Direct || !NewValue.IsValid())
 	{
 		return;
@@ -1094,22 +1089,21 @@ void SPlaceLabelsPanel::OnEditorTypeChanged(TSharedPtr<FPlaceTypeOption> NewValu
 			Owner->SetActorLabel(Owner->GetDefaultActorLabel());
 		}
 
-		// The type decides the parenting rule as well as the colour.
+		// Type drives parenting and colour.
 		if (Region->bAutoParent && !Region->ExplicitParent)
 		{
 			Region->RecomputeDerivedParent();
 		}
 	}
 
-	// The outline colour is a function of the type, and it just changed.
+	// Outline colour follows type.
 	Region->MarkRenderStateDirty();
 	GEditor->RedrawLevelEditingViewports(true);
 
 	RefreshNow();
 }
 
-// One accessor for the three name fields, so the region about to be placed and the one already
-// placed are the same three lines rather than two forms that can disagree.
+// One accessor for the name fields, pending or placed, so the two cannot disagree.
 FText& SPlaceLabelsPanel::NameFieldOf(FPlaceName& Name, ENameField Field)
 {
 	return Field == ENameField::Chinese ? Name.Chinese
@@ -1141,8 +1135,7 @@ FText SPlaceLabelsPanel::GetEditorName(ENameField Field) const
 void SPlaceLabelsPanel::CommitEditorName(const FText& NewText, ETextCommit::Type CommitType,
 	ENameField Field)
 {
-	// Nothing is placed yet, so there is nothing to transact: the name is held on the tool until
-	// Create Region, and that is what carries it onto the region it makes.
+	// Nothing placed, no transaction: the tool holds the name until Create Region.
 	if (UPlaceRegionPenToolProperties* Pending = GetAuthoringSettings())
 	{
 		FText& PendingTarget = NameFieldOf(Pending->Name, Field);
@@ -1174,7 +1167,7 @@ void SPlaceLabelsPanel::CommitEditorName(const FText& NewText, ETextCommit::Type
 		Region->Modify();
 		Target = NewText;
 
-		// The actor label follows the name, so the outliner and the browser agree with the field that was just typed into.
+		// Actor label follows the name, keeping outliner and browser in sync.
 		if (AActor* Owner = Region->GetOwner())
 		{
 			Owner->Modify();
@@ -1187,8 +1180,7 @@ void SPlaceLabelsPanel::CommitEditorName(const FText& NewText, ETextCommit::Type
 
 FText SPlaceLabelsPanel::GetEditorNote() const
 {
-	// A pending region has no note field of its own: the tool carries the name, type and metadata,
-	// and a note about a place is written once the place exists.
+	// No note on a pending region; written once it exists.
 	if (IsAuthoringNewRegion())
 	{
 		return FText::GetEmpty();
@@ -1253,7 +1245,7 @@ void SPlaceLabelsPanel::BuildConfidenceOptions()
 		return;
 	}
 
-	// Highest first: the ordinary answer is at the top of the list, where it can be picked without reading.
+	// Highest first: the common answer on top.
 	for (int32 i = Enum->NumEnums() - 1; i >= 0; --i)
 	{
 		const int64 Value = Enum->GetValueByIndex(i);
@@ -1315,7 +1307,7 @@ FText SPlaceLabelsPanel::GetEditorConfidenceLabel() const
 void SPlaceLabelsPanel::OnEditorConfidenceChanged(TSharedPtr<FPlaceConfidenceOption> NewValue,
 	ESelectInfo::Type SelectInfo)
 {
-	// Direct is SetSelectedItem loading the form, not somebody choosing.
+	// Direct = SetSelectedItem loading the form, not a user choice.
 	if (SelectInfo == ESelectInfo::Direct || !NewValue.IsValid())
 	{
 		return;
@@ -1422,7 +1414,7 @@ FText SPlaceLabelsPanel::GetPromptText() const
 
 FSlateColor SPlaceLabelsPanel::GetPromptColour() const
 {
-	// Warm yellow only while something is actually in hand.
+	// Warm yellow only while something is in hand.
 	UInteractiveTool* Tool = GetActivePlaceLabelsTool();
 	const UPlaceRegionPenTool* Pen = Cast<UPlaceRegionPenTool>(Tool);
 	const UPlaceRegionEditTool* Edit = Cast<UPlaceRegionEditTool>(Tool);
@@ -1440,8 +1432,7 @@ EActiveTimerReturnType SPlaceLabelsPanel::OnRefreshTimer(double, float)
 	}
 	SyncSelectionFromEditor();
 
-	// The dropdowns are loaded once per change of subject rather than every tick, so the moment
-	// the form switches between the pending region and the selected one is the moment to reload them.
+	// Dropdowns reload once per change of subject (pending vs selected), not per tick.
 	const bool bAuthoring = IsAuthoringNewRegion();
 	if (bAuthoring != bWasAuthoring)
 	{
@@ -1455,7 +1446,7 @@ EActiveTimerReturnType SPlaceLabelsPanel::OnRefreshTimer(double, float)
 
 void SPlaceLabelsPanel::SyncSelectionFromEditor()
 {
-	// Clicking a region in the viewport should fill in the form, not just highlight an outline.
+	// A viewport click on a region fills the form.
 	if (!GEditor)
 	{
 		return;
@@ -1467,15 +1458,13 @@ void SPlaceLabelsPanel::SyncSelectionFromEditor()
 		return;
 	}
 
-	// And never while the pen has an outline in hand: the form belongs to the region being drawn,
-	// and the region that would be adopted here is the one just placed.
+	// Nor while the pen holds an outline: the form is the drawing's, and the selection is the last region.
 	if (IsAuthoringNewRegion())
 	{
 		return;
 	}
 
-	// The Edit tool takes clicks itself, so a region picked up there never reaches the level
-	// editor's selection. It is still the region being worked on, and the form should be on it.
+	// The Edit tool's pick never reaches the editor selection; follow it here.
 	if (const UPlaceRegionEditTool* Edit = Cast<UPlaceRegionEditTool>(GetActivePlaceLabelsTool()))
 	{
 		if (UPlaceRegionComponent* Target = Edit->GetTargetRegion())
@@ -1565,7 +1554,7 @@ void SPlaceLabelsPanel::RebuildRegionRows()
 		Row->Region = Weak;
 		Row->bHasSevereIssue = false;
 
-		// An unnamed region still has to be findable, and "" is not a row anyone can click on.
+		// Unnamed regions still need a clickable label.
 		Row->DisplayName = Region->Name.IsEmpty()
 			? FText::Format(LOCTEXT("UnnamedRegion", "(unnamed) {0}"),
 				FText::FromString(Region->GetOwner() ? Region->GetOwner()->GetActorLabel()
@@ -1628,7 +1617,7 @@ void SPlaceLabelsPanel::RebuildRegionRows()
 		return A->DisplayName.CompareTo(B->DisplayName) < 0;
 	});
 
-	// Rebuild the filter list only when the set of types actually changed, or the combo would drop its selection every second.
+	// Only when the type set changes, or the combo drops its selection every second.
 	TArray<FString> SortedTypes = TypesPresent.Array();
 	SortedTypes.Sort();
 
@@ -1702,7 +1691,7 @@ void SPlaceLabelsPanel::ApplyFilter()
 		NextVisible.Add(Row);
 	}
 
-	// Pointer-wise comparison, which is exactly the identity the list view itself uses.
+	// Pointer comparison: the list view's own identity.
 	if (NextVisible == VisibleRegionRows)
 	{
 		return;
@@ -1720,10 +1709,9 @@ void SPlaceLabelsPanel::RebuildProblemRows()
 {
 	PlaceLabelsValidation::ValidateWorld(GetEditorWorld(), WeldTolerance, Report);
 
-	// Built into a fresh array and only swapped in if it differs, for the same reason the region list is.
+	// Fresh array, swapped in only if it differs (as the region list).
 	TArray<TSharedPtr<FPlaceLabelsProblemRow>> NextProblemRows;
 
-	// Aliased so the body below reads the same as before the change.
 	TArray<TSharedPtr<FPlaceLabelsProblemRow>>& ProblemRowsBuilder = NextProblemRows;
 
 	for (const PlaceLabelsValidation::FRegionIssue& Issue : Report.Issues)
@@ -1774,7 +1762,7 @@ void SPlaceLabelsPanel::RebuildProblemRows()
 		ProblemRowsBuilder.Add(Row);
 	}
 
-	// Same problems as last time means the rows on screen are already right.
+	// Unchanged problems: rows already right.
 	bool bProblemsChanged = (NextProblemRows.Num() != ProblemRows.Num());
 	if (!bProblemsChanged)
 	{
@@ -1798,7 +1786,7 @@ void SPlaceLabelsPanel::RebuildProblemRows()
 		}
 	}
 
-	// The badges in the browser come out of this report, so they are only right once it has run.
+	// Browser badges come from this report.
 	for (TSharedPtr<FPlaceRegionRow>& Row : AllRegionRows)
 	{
 		Row->IssueCount = Report.IssueCountFor(Row->Region.Get());
@@ -1909,7 +1897,7 @@ void SPlaceLabelsPanel::OnRegionDoubleClicked(TSharedPtr<FPlaceRegionRow> Item)
 
 void SPlaceLabelsPanel::OnProblemClicked(TSharedPtr<FPlaceLabelsProblemRow> Item)
 {
-	// Fly to the offending region *and* load it into the editor above.
+	// Fly to the region and load it into the editor.
 	if (!Item.IsValid())
 	{
 		return;
@@ -1919,7 +1907,7 @@ void SPlaceLabelsPanel::OnProblemClicked(TSharedPtr<FPlaceLabelsProblemRow> Item
 	SetSelectedRegion(Region);
 	SelectRegion(Region, /*bFocusViewport*/ true);
 
-	// Highlight the same region in the browser, so the two lists agree about what is in hand.
+	// Highlight it in the browser too.
 	if (RegionListView.IsValid())
 	{
 		if (TSharedPtr<FPlaceRegionRow>* Row = RowByRegion.Find(Region))
@@ -2045,7 +2033,7 @@ FReply SPlaceLabelsPanel::OnCreateStarterTypes()
 FReply SPlaceLabelsPanel::OnWeldAll()
 {
 	TArray<TWeakObjectPtr<UPlaceRegionComponent>> Weak;
-	// The weld reshapes outlines, so it takes only the ones it can reshape.
+	// The weld takes only usable outlines.
 	PlaceLabelsEdit::GatherRegions(GetEditorWorld(), Weak, /*bOnlyWithUsableOutline*/ true);
 
 	TArray<UPlaceRegionComponent*> Regions;
@@ -2069,7 +2057,7 @@ FReply SPlaceLabelsPanel::OnWeldAll()
 			WeldReport.RegionsChanged, WeldReport.CornersMoved, WeldReport.CornersInserted,
 			WeldReport.CornersRemoved);
 
-	// A refusal is worth saying out loud.
+	// Report refusals.
 	if (WeldReport.ClustersRefused > 0)
 	{
 		Message += FString::Printf(

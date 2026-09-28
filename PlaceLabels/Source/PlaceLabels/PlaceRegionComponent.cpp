@@ -21,15 +21,13 @@
 
 namespace
 {
-	// Set while the Place Labels editor mode is active. Nothing about a region is drawn otherwise.
+	// Set while the Place Labels mode is active; nothing draws otherwise.
 	bool GPlaceRegionDrawingVisible = false;
 
-	// Enough to read as coverage at a glance without turning the viewport into soup when a district, an area and a hutong all overlap.
+	// Reads as coverage without muddying overlapping district/area/hutong fills.
 	constexpr float FillAlpha = 0.12f;
 
-	// **Drawn a touch above the ground it is traced on.** A region traced onto a flat map plane
-	// sits exactly on it, and coplanar is a fight the map plane wins — in the hit proxy buffer as
-	// well as on screen, which is what made clicking a region select the plane under it.
+	// Lift above the traced ground: coplanar loses to the map plane, on screen and in hit proxies.
 	constexpr double DrawLift = 2.0;
 }
 
@@ -62,9 +60,8 @@ public:
 		}
 	}
 
-	// A region has no mesh and no collision, so without this the only thing in the viewport that
-	// can be clicked to select it is its billboard. The default proxy is the owning actor's; the
-	// scene keeps it alive through OutHitProxies, which is why the raw pointer is safe to hold.
+	// No mesh or collision: without this only the billboard is clickable. Uses the actor's proxy;
+	// the scene keeps it alive via OutHitProxies, so the raw pointer is safe.
 	virtual HHitProxy* CreateHitProxies(UPrimitiveComponent* Component,
 		TArray<TRefCountPtr<HHitProxy>>& OutHitProxies) override
 	{
@@ -82,7 +79,7 @@ public:
 			return;
 		}
 
-		// Selected regions read at full strength; the rest stay quiet enough to draw a whole city without the viewport turning into a wireframe soup.
+		// Selected at full strength; the rest faint enough to draw a whole city.
 		const bool bSelected = IsSelected();
 		FLinearColor Color = OutlineColor;
 		Color.A = bSelected ? 1.0f : 0.5f;
@@ -100,13 +97,13 @@ public:
 			// Foreground, not the primitive's own group.
 			constexpr uint8 DPG = SDPG_Foreground;
 
-			// Interior fill, so it is obvious at a glance which ground already has a label on it.
+			// Fill shows which ground is already labelled.
 			if (bDrawFill && FillIndices.Num() >= 3 && GEngine && GEngine->DebugMeshMaterial)
 			{
 				FLinearColor FillColor = OutlineColor;
 				FillColor.A = bSelected ? FillAlpha * 2.0f : FillAlpha;
 
-				// The engine's debug mesh material is the standard translucent-capable path for this; FColoredMaterialRenderProxy feeds it the tint.
+				// Debug mesh material: translucent-capable; FColoredMaterialRenderProxy tints it.
 				FMaterialRenderProxy* MaterialProxy =
 					&Collector.AllocateOneFrameResource<FColoredMaterialRenderProxy>(
 						GEngine->DebugMeshMaterial->GetRenderProxy(), FillColor);
@@ -130,17 +127,14 @@ public:
 					MeshBuilder.AddTriangle(FillIndices[i], FillIndices[i + 1], FillIndices[i + 2]);
 				}
 
-				// Vertices are already in world space, so the transform is identity. The fill
-				// carries the actor's hit proxy: it is the only part of a region big enough to
-				// aim at, and clicking the ground a region covers is how it gets selected.
+				// World-space vertices → identity. Fill carries the hit proxy: the main click target.
 				MeshBuilder.GetMesh(FMatrix::Identity, MaterialProxy, DPG,
 					/*bDisableBackfaceCulling*/ true, /*bReceivesDecals*/ false,
 					/*bUseSelectionOutline*/ false, ViewIndex, Collector,
 					ActorHitProxy ? ActorHitProxy->Id : FHitProxyId());
 			}
 
-			// The outline is clickable too, which is what selects a region with the fill off —
-			// outside the mode there is nothing else of it on screen.
+			// Outline clickable too: the only target when fill is off.
 			PDI->SetHitProxy(ActorHitProxy);
 
 			auto DrawLoop = [&](double Z)
@@ -220,18 +214,14 @@ UPlaceRegionComponent::UPlaceRegionComponent()
 	SetGenerateOverlapEvents(false);
 
 #if WITH_EDITORONLY_DATA
-	// The viewport picks the highest-priority hit proxy in the pick region rather than the nearest
-	// one, so this is what makes a click on a region select the region rather than the ground it
-	// is drawn over. Foreground, not UI: the transform gizmo is HPP_UI and must still win.
+	// Picking takes highest priority, not nearest: beats the ground. Not UI: the gizmo (HPP_UI) must win.
 	HitProxyPriority = HPP_Foreground;
 #endif
 }
 
 FPrimitiveSceneProxy* UPlaceRegionComponent::CreateSceneProxy()
 {
-	// Outline and fill go together. Drawing the outline with the mode down left a city of coloured
-	// polygons over every other job done in the level, and half of a drawing is not a lighter
-	// version of it — it is the same clutter with the part that says what the region covers gone.
+	// Outline and fill together, and only while the mode is up.
 	if (!bDrawOutline || !IsEditorDrawingVisible() || CachedWorldPoints.Num() < 2)
 	{
 		return nullptr;
@@ -241,7 +231,7 @@ FPrimitiveSceneProxy* UPlaceRegionComponent::CreateSceneProxy()
 
 FLinearColor UPlaceRegionComponent::GetOutlineColor() const
 {
-	// The colour says what kind of place this is and nothing else.
+	// Colour encodes type only.
 	if (!Type)
 	{
 		return FLinearColor(1.0f, 0.55f, 0.1f);
@@ -264,7 +254,7 @@ void UPlaceRegionComponent::OnComponentCreated()
 {
 	Super::OnComponentCreated();
 
-	// Here rather than in the constructor, which also runs for the class default object and would give every region in the level one guid.
+	// Not in the constructor: it runs for the CDO too, giving every region one guid.
 	if (!RegionId.IsValid())
 	{
 		RegionId = FGuid::NewGuid();
@@ -284,8 +274,7 @@ void UPlaceRegionComponent::SetEditorDrawingVisible(bool bVisible)
 	}
 	GPlaceRegionDrawingVisible = bVisible;
 
-	// The proxy bakes the flag and its triangle list at creation — and with the mode down there is
-	// no proxy at all, so this is what makes and unmakes them.
+	// Proxy bakes the flag and triangles at creation, and none exists with the mode down: recreate.
 	for (TObjectIterator<UPlaceRegionComponent> It; It; ++It)
 	{
 		if (It->IsRegistered())
@@ -393,7 +382,7 @@ void UPlaceRegionComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// The cache is normally built at registration, but a region spawned at runtime may not have had its transform applied yet.
+	// Built at registration, but a runtime-spawned region may not have its transform yet.
 	RebuildCache();
 
 	if (UWorld* World = GetWorld())
@@ -440,7 +429,7 @@ FBoxSphereBounds UPlaceRegionComponent::CalcBounds(const FTransform& LocalToWorl
 	}
 	else
 	{
-		// Flat footprints give a zero-thickness box, which some editor paths treat as degenerate.
+		// Zero-thickness box reads as degenerate in some editor paths.
 		Box = Box.ExpandBy(FVector(0.0, 0.0, 1.0));
 	}
 

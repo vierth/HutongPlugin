@@ -25,13 +25,13 @@
 namespace
 {
 	// Sized and picked in pixels, then converted per point.
-	constexpr double HandlePickPixels = 13.0;
-	constexpr double HandleDrawPixels = 8.0;
+	constexpr double PenHandlePickPixels = 13.0;
+	constexpr double PenHandleDrawPixels = 8.0;
 
 	// How far the cursor may travel between press and release and still count as a click.
 	constexpr double ClickSlopPixels = PlaceLabelsEdit::ClickSlopPixels;
 
-	// Footprint tracing reaches this far past a building's edge, so you need only click near one.
+	// Footprint tracing reach past a building's edge.
 	constexpr double FootprintSearchRadiusCm = 400.0;
 }
 
@@ -48,7 +48,7 @@ void UPlaceRegionPenTool::Setup()
 	HoverBehavior->Initialize(this);
 	AddInputBehavior(HoverBehavior);
 
-	// Registration order is panel order: the settings you edit, then the readout you watch.
+	// Registration order is panel order.
 	Settings = NewObject<UPlaceRegionPenToolProperties>(this);
 	RegisterSettings(Settings);
 	Settings->OwningTool = this;
@@ -121,7 +121,7 @@ void UPlaceRegionPenTool::OnTick(float DeltaTime)
 	}
 	TimeSinceCacheRefresh = 0.0;
 
-	// Never mid-drag: rebuilding the snap set while a corner follows the cursor would change what it snaps to underneath the hand holding it.
+	// Not mid-drag: the dragged corner's snap targets would change under it.
 	if (!bDraggingPoint)
 	{
 		RefreshCachedRegions();
@@ -157,7 +157,7 @@ double UPlaceRegionPenTool::PickRadiusAt(const FVector& WorldPoint) const
 	const double WorldPerPixel = bCameraIsOrthographic
 		? WorldPerPixelOrtho
 		: FVector::Dist(WorldPoint, CameraPosition) * WorldPerPixelPerUnitDistance;
-	return FMath::Max(WorldPerPixel * HandlePickPixels, 1.0);
+	return FMath::Max(WorldPerPixel * PenHandlePickPixels, 1.0);
 }
 
 double UPlaceRegionPenTool::HandleSizeAt(const FVector& WorldPoint) const
@@ -165,7 +165,7 @@ double UPlaceRegionPenTool::HandleSizeAt(const FVector& WorldPoint) const
 	const double WorldPerPixel = bCameraIsOrthographic
 		? WorldPerPixelOrtho
 		: FVector::Dist(WorldPoint, CameraPosition) * WorldPerPixelPerUnitDistance;
-	return FMath::Max(WorldPerPixel * HandleDrawPixels * 2.0, 2.0);
+	return FMath::Max(WorldPerPixel * PenHandleDrawPixels * 2.0, 2.0);
 }
 
 FVector UPlaceRegionPenTool::ResolveCandidatePoint(const FVector& TracedHit, int32 IgnorePointIndex)
@@ -244,7 +244,7 @@ void UPlaceRegionPenTool::UpdateHoverState(const FVector& TracedHit)
 		Flat.Emplace(P.X, P.Y);
 	}
 
-	// A corner beats everything: it lies on two segments and, for the first corner, on the close target too.
+	// Corner beats all: it lies on two segments and, if first, on the close target.
 	if (Flat.Num() > 0)
 	{
 		double CornerDistSq = TNumericLimits<double>::Max();
@@ -368,7 +368,7 @@ void UPlaceRegionPenTool::OnClickDrag(const FInputDeviceRay& DragPos)
 		return;
 	}
 
-	// The point being dragged is excluded from its own snap query, or it sticks to where it started and refuses to move.
+	// Exclude the dragged point from its own snap query, or it sticks in place.
 	PendingPoints[DraggedPointIndex] = ResolveCandidatePoint(Hit, DraggedPointIndex);
 	HoverPoint = PendingPoints[DraggedPointIndex];
 	UpdateReadout();
@@ -423,7 +423,7 @@ void UPlaceRegionPenTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 		{
 			return;
 		}
-		// At the click position, not the midpoint: following a bend means putting the corner where the bend is.
+		// At the click position, not the midpoint.
 		PendingPoints.Insert(HoverPoint, HoverSegmentIndex + 1);
 		HoverKind = EHover::Point;
 		HoverPointIndex = HoverSegmentIndex + 1;
@@ -440,7 +440,7 @@ void UPlaceRegionPenTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 		break;
 	}
 
-	// The outline is finished and waiting to be named; a click on open ground must not extend it.
+	// Outline closed: open-ground clicks must not extend it.
 	if (bAwaitingConfirm)
 	{
 		return;
@@ -448,7 +448,7 @@ void UPlaceRegionPenTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 
 	const FVector Candidate = ResolveCandidatePoint(Hit);
 
-	// Reject a click that landed on the previous point; two coincident vertices produce a zero-length edge that every downstream predicate has to special-case.
+	// Reject a click on the previous point: zero-length edges break downstream predicates.
 	if (PendingPoints.Num() > 0)
 	{
 		const FVector& Prev = PendingPoints.Last();
@@ -584,7 +584,7 @@ void UPlaceRegionPenTool::UpdateReadout()
 	Readout->Perimeter = PlaceLabelsGeo::Perimeter2D(Flat);
 	Readout->AreaSquareMetres = FMath::Abs(PlaceLabelsGeo::SignedArea2D(Flat)) / 10000.0;
 
-	// No NotifyOfPropertyChangeByTool: that rebuilds the whole details panel, and this runs on every hover tick.
+	// No NotifyOfPropertyChangeByTool: rebuilds the details panel, and this runs per hover tick.
 }
 
 void UPlaceRegionPenTool::CloseOutline()
@@ -599,7 +599,7 @@ void UPlaceRegionPenTool::CloseOutline()
 	HoverKind = EHover::Ground;
 	UpdateReadout();
 
-	// Bring the panel forward: the name and type fields are what the user is being asked for now, and they may well have been edited by the tool since the panel last read them.
+	// Refresh the panel: name and type are now asked for, and the tool may have changed them.
 	if (Settings)
 	{
 		NotifyOfPropertyChangeByTool(Settings);
@@ -648,7 +648,7 @@ void UPlaceRegionPenTool::ConfirmRegion()
 		return;
 	}
 
-	// Actor origin at the footprint centre keeps LocalPoints small, which matters for float precision far from the world origin and gives the transform gizmo something to grab.
+	// Origin at the footprint centre: small LocalPoints (float precision far out), gizmo on the region.
 	FVector Origin = FVector::ZeroVector;
 	for (const FVector& P : Points)
 	{
@@ -685,7 +685,7 @@ void UPlaceRegionPenTool::ConfirmRegion()
 			Region->LocalPoints.Emplace(P.X - Origin.X, P.Y - Origin.Y);
 		}
 
-		// Normalise winding at author time so the sign of SignedArea2D means something to everything downstream.
+		// Normalise winding so SignedArea2D's sign is meaningful downstream.
 		if (PlaceLabelsGeo::SignedArea2D(Region->LocalPoints) < 0.0)
 		{
 			Algo::Reverse(Region->LocalPoints);
@@ -720,7 +720,7 @@ void UPlaceRegionPenTool::ConfirmRegion()
 
 		Actor->SetActorLabel(Actor->GetDefaultActorLabel());
 
-		// Filed away in the outliner so a city's worth of regions does not bury everything else.
+		// Outliner folder, so regions do not bury everything else.
 		if (Settings && !Settings->OutlinerFolder.IsNone())
 		{
 			Actor->SetFolderPath(Settings->OutlinerFolder);
@@ -734,7 +734,7 @@ void UPlaceRegionPenTool::ConfirmRegion()
 	HoverPointIndex = INDEX_NONE;
 	bAwaitingConfirm = false;
 
-	// The name is cleared and the type is kept, which is not the same decision twice.
+	// Clear the name, keep the type.
 	if (Settings)
 	{
 		Settings->Name = FPlaceName();
@@ -765,7 +765,7 @@ void UPlaceRegionPenTool::Render(IToolsContextRenderAPI* RenderAPI)
 		return;
 	}
 
-	// Cache the camera so hover picking sizes handles exactly the way they are drawn.
+	// Cache the camera so hover picking sizes handles as drawn.
 	{
 		const FViewCameraState Camera = RenderAPI->GetCameraState();
 		CameraPosition = Camera.Position;
@@ -895,7 +895,7 @@ void UPlaceRegionPenTool::Render(IToolsContextRenderAPI* RenderAPI)
 		return;
 	}
 
-	// The rubber band, plus the segment that would close the polygon — dashed and thinner, because neither exists yet.
+	// Rubber band and closing segment: dashed and thinner, as neither exists yet.
 	if (bHoverValid && HoverKind == EHover::Ground)
 	{
 		PlaceLabelsEdit::DrawDashedLine(PDI, PendingPoints.Last(), HoverPoint,
@@ -921,7 +921,7 @@ void UPlaceRegionPenTool::DrawHUD(FCanvas* Canvas, IToolsContextRenderAPI* Rende
 		return;
 	}
 
-	// The cursor while drawing; the last corner once the outline is frozen and the cursor has stopped meaning anything.
+	// Cursor while drawing; last corner once the outline is closed.
 	FVector Anchor;
 	if (bHoverValid)
 	{

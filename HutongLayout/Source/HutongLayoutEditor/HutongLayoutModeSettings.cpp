@@ -1,4 +1,7 @@
 #include "HutongLayoutModeSettings.h"
+#include "ObjectTools.h"
+#include "Engine/StaticMesh.h"
+#include "Generation/HutongActorSpawn.h"
 #include "HutongLayoutEdMode.h"
 
 #include "Tools/HutongDetailOps.h"
@@ -29,13 +32,9 @@ namespace
 		return GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
 	}
 
-	const TCHAR* SceneFileTypes = TEXT("Hutong scene (*.hutong.json)|*.hutong.json|JSON (*.json)|*.json");
-
-	// Where a dialog should open and on what name: the file this button last used, so the second
-	// export of a street offers the first one's name to be bumped rather than the shipped default.
-	// The folder is taken only while it is still there — a file moved away must not send the
-	// dialog to a folder that no longer exists — while the name is offered whatever became of it,
-	// since a name is what is being remembered and the file it named may deliberately be gone.
+	// Open the dialog on the file this button last used, so a second export offers the first's
+	// name to bump. The folder only if it still exists; the name regardless, since the name is
+	// what is remembered.
 	void DialogDefaults(const FString& Remembered, const TCHAR* FallbackName,
 		FString& OutDir, FString& OutName)
 	{
@@ -57,7 +56,7 @@ namespace
 		const void* Parent = FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr);
 		TArray<FString> Files;
 		if (!Platform->SaveFileDialog(Parent, TEXT("Export Hutong buildings"),
-			DefaultDir, DefaultName, SceneFileTypes, EFileDialogFlags::None, Files))
+			DefaultDir, DefaultName, HutongExchange::SceneFileTypes, EFileDialogFlags::None, Files))
 		{
 			return false;
 		}
@@ -74,7 +73,7 @@ namespace
 		const void* Parent = FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr);
 		TArray<FString> Files;
 		if (!Platform->OpenFileDialog(Parent, TEXT("Import a Hutong scene"),
-			DefaultDir, FString(), SceneFileTypes, EFileDialogFlags::None, Files))
+			DefaultDir, FString(), HutongExchange::SceneFileTypes, EFileDialogFlags::None, Files))
 		{
 			return false;
 		}
@@ -83,23 +82,6 @@ namespace
 		return true;
 	}
 
-	// Every problem to the log, the summary to a toast.
-	void Report(const HutongExchange::FResult& Result, const TCHAR* What)
-	{
-		for (const FString& Problem : Result.Problems)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Hutong %s: %s"), What, *Problem);
-		}
-
-		FNotificationInfo Info(Result.Summarise());
-		Info.ExpireDuration = Result.bSucceeded ? 5.0f : 8.0f;
-		TSharedPtr<SNotificationItem> Item = FSlateNotificationManager::Get().AddNotification(Info);
-		if (Item.IsValid())
-		{
-			Item->SetCompletionState(Result.bSucceeded
-				? SNotificationItem::CS_Success : SNotificationItem::CS_Fail);
-		}
-	}
 }
 
 void UHutongLayoutModeSettings::CreateStarterMaterials()
@@ -129,6 +111,15 @@ void UHutongLayoutModeSettings::PromoteSelection()
 	const int32 Changed = HutongDetailOps::SetLevel(HutongDetailOps::CollectSelected(), TargetLevel);
 	UE_LOG(LogTemp, Display, TEXT("Hutong: %d building(s) rebuilt at the target detail."), Changed);
 	RefreshCounts();
+}
+
+void UHutongLayoutModeSettings::DeleteUnusedGeneratedMeshes()
+{
+	const TArray<UStaticMesh*> Unused = HutongGen::FindUnusedLibraryMeshes();
+	UE_LOG(LogTemp, Display, TEXT("Hutong: %d unused generated mesh(es)."), Unused.Num());
+	if (Unused.Num() == 0) return;
+	TArray<UObject*> Objects(Unused);
+	ObjectTools::DeleteObjects(Objects, /*bShowConfirmation*/ true);
 }
 
 TArray<FString> UHutongLayoutModeSettings::GetConvertOptions() const
@@ -286,10 +277,10 @@ void UHutongLayoutModeSettings::DoExport(bool bSelection, const TCHAR* FallbackN
 	HutongExchange::FResult Result;
 	if (bSelection) HutongExchange::ExportSelection(EditorWorld(), Path, Result);
 	else            HutongExchange::ExportLoaded(EditorWorld(), Path, Result);
-	Report(Result, TEXT("export"));
+	HutongExchange::Report(Result, TEXT("export"));
 
-	// Remembered only on a write that happened: a failed export must not aim the next dialog at a
-	// file that was never written.
+	// Remember only after a successful write, so a failed export does not aim the next dialog at
+	// a file never written.
 	if (Result.bSucceeded)
 	{
 		Remembered = Path;
@@ -320,13 +311,12 @@ void UHutongLayoutModeSettings::ImportAtRecordedCoordinates()
 	HutongExchange::ImportAtRecordedTransforms(EditorWorld(), Path,
 		bUpdateMatchingPlacements ? HutongExchange::EMode::Sync : HutongExchange::EMode::Additive,
 		ImportFolder, Result, &HutongImportTypes::ResolveUnknownTypes);
-	Report(Result, TEXT("import"));
+	HutongExchange::Report(Result, TEXT("import"));
 
 	if (Result.bSucceeded) { LastSceneFile = Path; SaveConfig(); }
 
-	// The set is selected as it lands, so the ordinary move and rotate gizmos turn the whole of it
-	// at once: a file written in one level arrives in another at coordinates that mean nothing
-	// there, and being able to drag and turn it into place is the point of the import.
+	// Select the set as it lands so the move/rotate gizmos turn it as one: coordinates from
+	// another level mean nothing here.
 	if (Result.bSucceeded && Result.Placed.Num() > 0 && GEditor)
 	{
 		GEditor->SelectNone(/*bNoteSelectionChange*/ false, /*bDeselectBSPSurfs*/ true);
@@ -354,8 +344,8 @@ void UHutongLayoutModeSettings::PlaceSceneByHand()
 	FString Path;
 	if (!PickOpenFile(Dir, Path)) return;
 
-	// The Import tool seeds itself from this when it starts, so the file is chosen here and the
-	// placement is the tool's.
+	// The Import tool seeds itself from this on start: the file is chosen here, the placement
+	// is the tool's.
 	LastSceneFile = Path;
 	SaveConfig();
 	if (!UHutongLayoutEdMode::StartTool(TEXT("HutongImportTool")))

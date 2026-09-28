@@ -12,36 +12,11 @@
 #include "Editor.h"
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
-#include "Framework/Notifications/NotificationManager.h"
 #include "Misc/Paths.h"
-#include "Widgets/Notifications/SNotificationList.h"
 
 #define LOCTEXT_NAMESPACE "HutongImportTool"
 
-namespace
-{
-	const TCHAR* SceneFileTypes =
-		TEXT("Hutong scene (*.hutong.json)|*.hutong.json|JSON (*.json)|*.json");
-
-	void Report(const HutongExchange::FResult& Result, const TCHAR* What)
-	{
-		for (const FString& Problem : Result.Problems)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Hutong %s: %s"), What, *Problem);
-		}
-
-		FNotificationInfo Info(Result.Summarise());
-		Info.ExpireDuration = Result.bSucceeded ? 5.0f : 8.0f;
-		TSharedPtr<SNotificationItem> Item = FSlateNotificationManager::Get().AddNotification(Info);
-		if (Item.IsValid())
-		{
-			Item->SetCompletionState(Result.bSucceeded
-				? SNotificationItem::CS_Success : SNotificationItem::CS_Fail);
-		}
-	}
-}
-
-// --- the property set's buttons, which are only ever forwarding ---
+// --- property set buttons, forwarding only ---
 
 void UHutongImportToolProperties::Browse()
 {
@@ -82,7 +57,7 @@ void UHutongImportTool::BrowseForFile()
 	const void* Parent = FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr);
 	TArray<FString> Files;
 	if (!Platform->OpenFileDialog(Parent, TEXT("Import a Hutong scene"),
-		FPaths::ProjectSavedDir(), FString(), SceneFileTypes, EFileDialogFlags::None, Files))
+		FPaths::ProjectSavedDir(), FString(), HutongExchange::SceneFileTypes, EFileDialogFlags::None, Files))
 	{
 		return;
 	}
@@ -99,8 +74,8 @@ void UHutongImportTool::LoadFile(const FString& InPath, bool bPrompt)
 
 	HutongExchange::FResult Result;
 	bool bOk = HutongExchange::Read(FilePath, Loaded, Result);
-	// Asked once, at load: both placement paths then run off the resolved file, and the preview
-	// draws what will actually be laid down.
+	// Resolved once at load: both placement paths use the resolved file, and the preview draws
+	// what will be laid down.
 	if (bOk && bPrompt && !HutongImportTypes::ResolveUnknownTypes(Loaded))
 	{
 		bOk = false;
@@ -110,11 +85,11 @@ void UHutongImportTool::LoadFile(const FString& InPath, bool bPrompt)
 	{
 		Loaded = HutongExchange::FSceneFile();
 	}
-	// Problems on a successful read are per-record and worth saying; a failure is worth saying twice as loudly.
+	// Per-record problems on success are worth reporting; a failure louder.
 	Result.bSucceeded = bOk;
 	if (!bOk || Result.Problems.Num() > 0)
 	{
-		Report(Result, TEXT("import"));
+		HutongExchange::Report(Result, TEXT("import"));
 	}
 
 	RebuildPreview();
@@ -124,8 +99,8 @@ void UHutongImportTool::LoadFile(const FString& InPath, bool bPrompt)
 		Settings->FileName = FilePath;
 		Settings->RecordCount = Loaded.Records.Num();
 		Settings->SourceLevel = Loaded.LevelName;
-		// A layout-only file builds from the types' current defaults, which is worth saying before
-		// somebody imports one and reads the shipped parameters as lost work.
+		// A layout-only file builds from current type defaults; say so, lest the shipped parameters
+		// be read as lost work.
 		Settings->Contents = !bOk ? FString()
 			: (Loaded.bLayoutOnly
 				? TEXT("Layout only — each building is rebuilt from its type's current defaults")
@@ -138,7 +113,7 @@ void UHutongImportTool::LoadFile(const FString& InPath, bool bPrompt)
 
 	if (bOk)
 	{
-		// Remembered for the next session, and shared with the mode panel's own import button.
+		// Remembered across sessions; shared with the mode panel's import button.
 		if (UHutongLayoutModeSettings* Mode = GetMutableDefault<UHutongLayoutModeSettings>())
 		{
 			Mode->LastSceneFile = FilePath;
@@ -231,13 +206,13 @@ TArray<FText> UHutongImportTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = LOCTEXT("HelpImport",
-		"Browse for a scene file in the panel below, then click to anchor and click again to place it. The blue outlines are the footprints it will lay down.");
+		"Browse for a scene file below, then click to anchor and click to place; blue outlines preview it.");
 	Lines.Insert(LOCTEXT("HelpImportSet",
-		"The drag only positions and turns the set — its size is the file's own, and each building keeps its own angle within it."), 1);
+		"The drag moves and turns the set; its size comes from the file."), 1);
 	Lines.Insert(LOCTEXT("HelpImportSync",
-		"Update Matching Placements reshapes buildings already in the level that the file names, rather than adding a second copy. It never deletes: a building dropped from the file stays standing."), 2);
+		"Update Matching Placements reshapes buildings the file names instead of adding copies; it never deletes."), 2);
 	Lines.Insert(LOCTEXT("HelpImportRecorded",
-		"Place At Recorded Coordinates skips the drag and puts the set back where it was exported from — right for the level it came from, and meaningless in a level whose coordinates are not its own. There, drag it into place instead: hold R to turn the whole set, Option or ⌘ to ignore snapping."), 3);
+		"Place At Recorded Coordinates puts the set back where it was exported: right only in its own level."), 3);
 	return Lines;
 }
 
@@ -251,15 +226,14 @@ void UHutongImportTool::PlaceAtRecordedCoordinates()
 		(Settings && Settings->bUpdateMatchingPlacements)
 			? HutongExchange::EMode::Sync : HutongExchange::EMode::Additive,
 		Settings ? Settings->OutlinerFolder : NAME_None, Result,
-		// The file was resolved when it was loaded; this path re-reads it from disk, so the answer
-		// is carried over rather than asked for again, and the dialog appears only if the file has
-		// changed under us and names something new.
+		// Resolved at load; this path re-reads from disk, so reuse the answer. The dialog appears
+		// only if the file changed and names something new.
 		[this](HutongExchange::FSceneFile& File)
 		{
 			File.TypeRemap = Loaded.TypeRemap;
 			return HutongImportTypes::ResolveUnknownTypes(File);
 		});
-	Report(Result, TEXT("import"));
+	HutongExchange::Report(Result, TEXT("import"));
 }
 
 void UHutongImportTool::SpawnFinalActor()
@@ -269,8 +243,8 @@ void UHutongImportTool::SpawnFinalActor()
 	UWorld* World = GetToolManager()->GetContextQueriesAPI()->GetCurrentEditingWorld();
 	if (!World) return;
 
-	// Anything the file names that this build cannot build, answered before a placement rather
-	// than reported after one. Already-answered types cost nothing here.
+	// Unbuildable types the file names, answered before placement rather than reported after.
+	// Already-answered types cost nothing.
 	if (!HutongImportTypes::ResolveUnknownTypes(Loaded)) return;
 
 	double MinX, MinY, MaxX, MaxY;
@@ -292,7 +266,7 @@ void UHutongImportTool::SpawnFinalActor()
 
 	ToolManager->EndUndoTransaction();
 
-	Report(Result, TEXT("import"));
+	HutongExchange::Report(Result, TEXT("import"));
 }
 
 UInteractiveTool* UHutongImportToolBuilder::BuildTool(const FToolBuilderState& SceneState) const

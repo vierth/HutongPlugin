@@ -55,7 +55,7 @@ bool ResolveUnknownTypes(HutongExchange::FSceneFile& File)
 	{
 		if (File.TypeRemap.Contains(It.Key())) It.RemoveCurrent();
 	}
-	// Nothing to ask about is the ordinary case, and it must not cost a dialog.
+	// Usually nothing to ask; that must not cost a dialog.
 	if (Unknown.Num() == 0) return true;
 
 	if (!FSlateApplication::IsInitialized() || GEditor == nullptr)
@@ -87,7 +87,7 @@ bool ResolveUnknownTypes(HutongExchange::FSceneFile& File)
 		TSharedRef<FRow> Row = MakeShared<FRow>();
 		Row->Unknown = Name;
 		Row->Count = Unknown[Name];
-		// Skipping is the default: a wrong type placed silently is worse than one left out loudly.
+		// Skip by default: a wrong type placed silently is worse than one visibly left out.
 		Row->Choice = (*Options)[0];
 		Rows->Add(Row);
 	}

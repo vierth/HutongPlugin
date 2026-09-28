@@ -44,16 +44,14 @@ namespace
 	}
 }
 
-// A polygon traced off the map and one put there to close a gap in a street are the same
-// rectangle, and only the placement can say which it is. So the confidence and the note are facts
-// about the placement, travel with it, and default to the honest answer for the common case.
+// A traced polygon and a gap-filler are the same rectangle; only the placement knows which, so
+// confidence and note live on the placement and default to the common case.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongConfidenceTest, "HutongLayout.Metadata.Confidence",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FHutongConfidenceTest::RunTest(const FString& Parameters)
 {
-	// The numbers are the scale, and they are what anyone reading a scene file or a spreadsheet
-	// sees. 5 is attested, 1 is nothing but the need to fill the block.
+	// The values are what scene files and spreadsheets show: 5 attested, 1 pure infill.
 	TestEqual(TEXT("attested is 5"), (int32)EHutongConfidence::Attested, 5);
 	TestEqual(TEXT("not present is 1"), (int32)EHutongConfidence::Absent, 1);
 	TestTrue(TEXT("and the scale is ordered"),
@@ -68,7 +66,7 @@ bool FHutongConfidenceTest::RunTest(const FString& Parameters)
 			Label.StartsWith(FString::FromInt(Value)));
 	}
 
-	// A placement nobody has said anything about is attested: the ordinary act is tracing.
+	// Default is attested: tracing is the ordinary act.
 	const UHutongSiheyuanBuildingComponent* Fresh =
 		NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
 	TestEqual(TEXT("a new placement is attested"), Fresh->Confidence, EHutongConfidence::Attested);
@@ -83,7 +81,7 @@ bool FHutongConfidenceTest::RunTest(const FString& Parameters)
 		B->Confidence = EHutongConfidence::Inferred;
 		B->Notes = Note;
 	});
-	// One nobody touched, to hold the delta rule: what was not decided is not in the file.
+	// One untouched placement, for the delta rule: undecided values stay out of the file.
 	PlaceHouse(World, FTransform(FRotator::ZeroRotator, FVector(6000.0, 0.0, 0.0)),
 		[](UHutongBuildingComponent*) {});
 
@@ -99,7 +97,7 @@ bool FHutongConfidenceTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(TEXT("the confidence travels"), Text.Contains(TEXT("Inferred")));
 		TestTrue(TEXT("and so does the note"), Text.Contains(TEXT("sheet 12")));
-		// The untouched one says nothing: a default confidence is not a decision.
+		// A default confidence is not a decision, so nothing is written.
 		int32 Count = 0, From = 0;
 		while (true)
 		{

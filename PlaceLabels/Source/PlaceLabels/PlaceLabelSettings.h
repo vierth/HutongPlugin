@@ -23,7 +23,7 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = "HUD")
 	bool bAutoCreateHUDWidget = true;
 
-	// Soft class pointer on purpose.
+	// Readout widget class; loaded once at level start.
 	UPROPERTY(config, EditAnywhere, Category = "HUD",
 		meta = (EditCondition = "bAutoCreateHUDWidget"))
 	TSoftClassPtr<UPlaceLabelHUDWidget> HUDWidgetClass;

@@ -3,14 +3,11 @@
 #include "CoreMinimal.h"
 #include "Generation/SiheyuanGenerator.h"
 
-// A street row: one drag divided into equal bays, some of them gates. What the Street Row tool
-// spawns is one house or shop per unbroken run of ordinary bays and one gate house per gate
-// bay, so the arithmetic is a partition of [0, Length] and nothing else — plain scalars, so
-// HutongLayout.Row.Layout runs it without a world.
-//
-// The bays are equal because the pieces are separate buildings: each house lays its own 明間
-// and 次間 out inside its run, and the row's ticks are only where one building ends and the
-// next begins.
+// Street row: one drag split into equal bays, some gates. Spawns one house/shop per unbroken run of
+// ordinary bays and one gate house per gate bay: a pure partition of [0, Length], plain scalars so
+// HutongLayout.Row.Layout runs without a world.
+// Bays are equal because pieces are separate buildings: each lays out its own 明間/次間; row ticks
+// mark only building boundaries.
 namespace HutongGen::StreetRow
 {
 	enum class EPiece : uint8 { Building, Gate };
@@ -20,7 +17,7 @@ namespace HutongGen::StreetRow
 		EPiece Piece = EPiece::Building;
 		int32 FirstBay = 0;
 		int32 BayCount = 1;
-		// Along the run, from the row's start, in cm.
+		// Along the run from the row start, cm.
 		double From = 0.0;
 		double To = 0.0;
 	};
@@ -30,17 +27,16 @@ namespace HutongGen::StreetRow
 		return Length / FMath::Max(BayCount, 1);
 	}
 
-	// The bay under a point along the run, or INDEX_NONE outside the row.
+	// Bay under a point along the run; INDEX_NONE outside.
 	inline int32 BayAt(double Along, double Length, int32 BayCount)
 	{
 		if (Along < 0.0 || Along > Length || Length <= 0.0) return INDEX_NONE;
 		return FMath::Clamp((int32)(Along / BayWidth(Length, BayCount)), 0, FMath::Max(BayCount, 1) - 1);
 	}
 
-	// The house every ordinary piece is built from. A house derives its eave from its own 明間,
-	// so a one-bay piece beside a three-bay piece came out a storey lower: the row is one
-	// building cut into pieces and takes one eave, derived once over the whole run and written
-	// onto the params the way the height keys write it. Left alone when nothing is derived.
+	// House params for every ordinary piece. Each house derives its eave from its own 明間, so a one-bay
+	// piece sat a storey below a three-bay one; the row takes one eave derived over the whole run and
+	// written like the height keys write it. Unchanged when nothing is derived.
 	inline FHutongSiheyuanParams RowHouse(const FHutongSiheyuanParams& House, double Length,
 		double Depth, int32 BayCount)
 	{
@@ -55,7 +51,7 @@ namespace HutongGen::StreetRow
 		return P;
 	}
 
-	// Gate bays outside the row are ignored. Every bay lands in exactly one piece.
+	// Gate bays outside the row are ignored; every bay lands in exactly one piece.
 	inline TArray<FPiece> LayOut(double Length, int32 BayCount, const TSet<int32>& GateBays)
 	{
 		TArray<FPiece> Out;
@@ -66,7 +62,7 @@ namespace HutongGen::StreetRow
 		{
 			P.BayCount = EndBay - P.FirstBay;
 			P.From = P.FirstBay * W;
-			// The last piece lands exactly on the row's end.
+			// Last piece ends exactly at the row end.
 			P.To = (EndBay == N) ? Length : EndBay * W;
 			Out.Add(P);
 		};

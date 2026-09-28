@@ -131,7 +131,7 @@ namespace PlaceLabelsGeo
 			return Best;
 		};
 
-		// Both directions: a short edge poking at the middle of a long one is missed by either direction alone.
+		// Both directions: one alone misses a short edge touching a long one's middle.
 		return FMath::Min(MinVertexToEdge(A, B), MinVertexToEdge(B, A));
 	}
 

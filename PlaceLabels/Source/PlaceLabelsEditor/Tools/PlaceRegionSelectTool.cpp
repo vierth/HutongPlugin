@@ -7,7 +7,7 @@
 void UPlaceRegionSelectTool::Setup()
 {
 	UInteractiveTool::Setup();
-	// No behaviours and no property sets: everything this tool does, it does by not being in the way.
+	// No behaviours or property sets: clicks fall through to the level editor.
 }
 
 FText UPlaceRegionSelectTool::GetStagePromptText() const

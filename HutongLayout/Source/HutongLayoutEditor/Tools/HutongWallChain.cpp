@@ -4,16 +4,14 @@ namespace
 {
 	double Cross(const FVector2D& A, const FVector2D& B) { return A.X * B.Y - A.Y * B.X; }
 
-	// Local +Y for a run along Dir: the direction yaw + 90° points, which is what the actor's
-	// rotation makes of the rectangle's own Y.
+	// Local +Y for a run along Dir: yaw + 90°, what the actor's rotation makes of the rect's Y.
 	FVector2D LeftOf(const FVector2D& Dir) { return FVector2D(-Dir.Y, Dir.X); }
 
-	// A join is mitered only while the miter stays a sane length: past this turn the bisector cut
-	// runs out along the wall, and past the skew's own validity the end would fold over the body.
+	// Miter a join only while the miter stays sane: past this turn the bisector cut runs along
+	// the wall, and past the skew's validity the end folds over the body.
 	constexpr double MaxMiterTurnDeg = 150.0;
-	// An outer end is cut flush only when the face is well off the run: nearer parallel than this
-	// the cut would run metres along the wall, and a run meeting a face that nearly continues it
-	// is the side-alignment case, not a flush end.
+	// Cut an outer end flush only when the face is well off the run: nearer parallel the cut runs
+	// metres along the wall, and it is the side-alignment case.
 	constexpr double MinFaceCross = 0.2;
 }
 
@@ -41,7 +39,7 @@ namespace HutongWallChain
 			if (Dot > BestDot) { BestDot = Dot; Edge = E; }
 		}
 		if (BestDot < FMath::Cos(FMath::DegreesToRadians(ToleranceDeg))) return false;
-		// The edge's perpendicular that points into the neighbour, read against the wall's own +Y.
+		// Edge normal pointing into the neighbour, relative to the wall's +Y.
 		FVector2D Perp(-Edge.Y, Edge.X);
 		if (FVector2D::DotProduct(Perp, Inward) < 0.0) Perp = -Perp;
 		const FVector2D Left = LeftOf(D);
@@ -57,7 +55,7 @@ namespace HutongWallChain
 		OutSegments.Reset();
 		const double T = FMath::Max(Thickness, 1.0);
 
-		// Too-short steps dropped, so a repeated click leaves no zero-length segment behind.
+		// Drop too-short steps so a repeated click leaves no zero-length segment.
 		TArray<FVector2D> Points;
 		for (const FVector2D& P : InPoints)
 		{
@@ -74,8 +72,8 @@ namespace HutongWallChain
 			Left[i] = LeftOf(Dir[i]);
 		}
 
-		// The centre line: the drawn line moved across by what puts it at half the thickness, the
-		// interior vertices along their bisectors so the offset segments still meet.
+		// Centre line: the drawn line offset by half the thickness, interior vertices along their
+		// bisectors so the offset segments still meet.
 		const double Shift = 0.5 * T - DrawnY;
 		TArray<FVector2D> Centre;
 		Centre.SetNum(N + 1);
@@ -98,17 +96,17 @@ namespace HutongWallChain
 			S.Length = FVector2D::Distance(Centre[i], Centre[i + 1]);
 		}
 
-		// Joins: both ends cut on the bisector of the turn, the outer corner reaching and the inner
-		// one giving way by the same half-thickness times the tangent of half the turn.
+		// Joins: both ends cut on the turn's bisector, outer corner reaching and inner giving way by
+		// half-thickness * tan(half turn).
 		for (int32 i = 0; i + 1 < N; ++i)
 		{
 			const double Turn = TurnDeg(Dir[i], Dir[i + 1]);
 			if (FMath::Abs(Turn) < 0.05 || FMath::Abs(Turn) > MaxMiterTurnDeg) continue;
 			const double K = 0.5 * T * FMath::Tan(FMath::DegreesToRadians(0.5 * Turn));
-			// This segment's end: local y = 0 reaches by K when the turn is towards +Y.
+			// This segment's end: local y = 0 reaches by K when turning towards +Y.
 			OutSegments[i].Skew.Corner10 = FVector2D(K, 0.0);
 			OutSegments[i].Skew.Corner11 = FVector2D(-K, 0.0);
-			// The next one's start: the mirror, so the two faces are one line.
+			// Next segment's start mirrors it, so the two faces are one line.
 			OutSegments[i + 1].Skew.Corner00 = FVector2D(-K, 0.0);
 			OutSegments[i + 1].Skew.Corner01 = FVector2D(K, 0.0);
 		}
@@ -135,7 +133,7 @@ namespace HutongWallChain
 		CutOnFace(OutSegments[0], Centre[0], Dir[0], Left[0], StartFace, true);
 		CutOnFace(OutSegments[N - 1], Centre[N], Dir[N - 1], Left[N - 1], EndFace, false);
 
-		// A cut the warp would refuse — a short segment between two sharp turns — is not made.
+		// Skip a cut the warp would refuse (a short segment between two sharp turns).
 		for (FSegment& S : OutSegments)
 		{
 			if (!S.Skew.IsZero() && !HutongFootprint::IsSkewValid(FVector2D(S.Length, T), S.Skew))

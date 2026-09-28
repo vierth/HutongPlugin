@@ -35,7 +35,7 @@ protected:
 	virtual FString GetPlacementDetail() const override;
 	virtual void GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const override;
 
-	// Depth of the collapsed axis: the 夾杆石 spread, which is the widest thing at ground level.
+	// Collapsed-axis depth: the 夾杆石 spread, widest thing at ground level.
 	double GetFootprintDepth() const;
 
 	UPROPERTY()

@@ -65,8 +65,7 @@ void UPlaceRegionEditTargetProperties::PostEditChangeProperty(FPropertyChangedEv
 	}
 	if (UPlaceRegionEditTool* Tool = OwningTool.Get())
 	{
-		// Which field, not all of them: the same region is also edited from the mode panel's form,
-		// and writing back a whole snapshot would carry two stale fields over that edit.
+		// Only this field: a whole snapshot would overwrite the mode panel's edits with stale values.
 		Tool->ApplyTargetProperties(PropertyChangedEvent.GetPropertyName());
 	}
 }
@@ -79,7 +78,7 @@ void UPlaceRegionEditTool::Setup()
 	ClickDragBehavior = NewObject<UClickDragInputBehavior>(this);
 	ClickDragBehavior->Initialize(this);
 
-	// Without this the release is hit-tested again, and a release over nothing.
+	// Track modifiers through the drag, not just at press.
 	ClickDragBehavior->bUpdateModifiersDuringDrag = true;
 	AddInputBehavior(ClickDragBehavior);
 
@@ -91,7 +90,7 @@ void UPlaceRegionEditTool::Setup()
 	RegisterSettings(Settings);
 	Settings->OwningTool = this;
 
-	// Output-ish: it mirrors whichever region is being edited.
+	// Mirrors the region being edited.
 	TargetPanel = NewObject<UPlaceRegionEditTargetProperties>(this);
 	RegisterSettings(TargetPanel, /*bPersist*/ false);
 	TargetPanel->OwningTool = this;
@@ -142,7 +141,7 @@ void UPlaceRegionEditTool::OnTick(float DeltaTime)
 	}
 	TimeSinceCacheRefresh = 0.0;
 
-	// Not mid-drag: rebuilding the snap set while a corner is following the cursor would change what it snaps to underneath the hand holding it.
+	// Not mid-drag: the dragged corner's snap targets would change under it.
 	if (bDragging)
 	{
 		return;
@@ -151,13 +150,13 @@ void UPlaceRegionEditTool::OnTick(float DeltaTime)
 	RefreshCachedRegions();
 	RefreshSeams();
 
-	// The mode panel's form edits the same region, so this snapshot goes stale between clicks.
+	// The mode panel edits the same region, so this goes stale between clicks.
 	if (TargetRegion.IsValid())
 	{
 		PushTargetToPanel();
 	}
 
-	// The region being edited can be deleted out from under the tool, and a dangling target leaves the panel describing a place that is no longer there.
+	// The target can be deleted under the tool; drop it so the panel does not describe a dead region.
 	if (!TargetRegion.IsValid() && TargetPanel && TargetPanel->CornerCount > 0)
 	{
 		ClearTarget();
@@ -231,7 +230,7 @@ UPlaceRegionComponent* UPlaceRegionEditTool::PickRegionAt(const FVector& WorldPo
 			BestContaining = Region;
 		}
 
-		// A region you are on the edge of but not inside still has to be clickable, or the outline of a region drawn round a courtyard is unselectable from the courtyard.
+		// Near the edge but outside still counts, or a ring around a courtyard is unselectable from inside it.
 		const PlaceLabelsEdit::FEdgeHit Hit =
 			PlaceLabelsEdit::ClosestEdge(Region->GetWorldPoints2D(), XY, /*bClosed*/ true);
 		if (Hit.EdgeIndex != INDEX_NONE && Hit.DistSq < BestNearDistSq
@@ -293,7 +292,7 @@ void UPlaceRegionEditTool::PushTargetToPanel()
 		TargetPanel->AreaSquareMetres = Region->GetWorldArea() / 10000.0;
 	}
 
-	// A genuine stage change — which region the panel is describing — so the details view does have to be rebuilt.
+	// Genuine stage change (target region): rebuild the details view.
 	NotifyOfPropertyChangeByTool(TargetPanel);
 }
 
@@ -311,7 +310,7 @@ void UPlaceRegionEditTool::ApplyTargetProperties(FName ChangedProperty)
 		return;
 	}
 
-	// NAME_None means "everything", which is what the tool's own callers want.
+	// NAME_None: everything.
 	auto Wants = [&ChangedProperty](const TCHAR* Field)
 	{
 		return ChangedProperty.IsNone() || ChangedProperty == FName(Field);
@@ -336,13 +335,13 @@ void UPlaceRegionEditTool::ApplyTargetProperties(FName ChangedProperty)
 		Owner->SetActorLabel(Owner->GetDefaultActorLabel());
 	}
 
-	// The type drives the parenting rule, so changing it can change what this region hangs off.
+	// Type drives the parenting rule.
 	if (bTypeChanged && Region->bAutoParent && !Region->ExplicitParent)
 	{
 		Region->RecomputeDerivedParent();
 	}
 
-	// The outline colour is a function of the type and of whether anything is missing, and both just moved.
+	// Outline colour depends on type and completeness.
 	Region->MarkRenderStateDirty();
 
 	ToolManager->EndUndoTransaction();
@@ -366,7 +365,7 @@ void UPlaceRegionEditTool::CommitPointEdit(const FText& TransactionName)
 		return;
 	}
 
-	// The edit has already been applied straight to LocalPoints so the viewport could show it happening.
+	// Already applied to LocalPoints for live preview.
 	TArray<FVector2D> Final = Region->LocalPoints;
 	if (Final == PreEditLocalPoints)
 	{
@@ -412,7 +411,7 @@ void UPlaceRegionEditTool::DeleteSelectedCorners()
 		return;
 	}
 
-	// Refusing to make a degenerate polygon beats repairing one afterwards, and the author gets to see which corners they had selected.
+	// Refuse rather than repair a degenerate polygon; the selection stays visible.
 	if (Region->LocalPoints.Num() - SelectedCorners.Num() < MinCorners)
 	{
 		GetToolManager()->DisplayMessage(
@@ -425,7 +424,7 @@ void UPlaceRegionEditTool::DeleteSelectedCorners()
 	BeginPointEdit();
 
 	TArray<int32> Indices = SelectedCorners.Array();
-	// Descending, so an earlier removal never shifts an index still to be removed.
+	// Descending, so removals do not shift pending indices.
 	Indices.Sort([](int32 A, int32 B) { return A > B; });
 	for (int32 Index : Indices)
 	{
@@ -541,7 +540,7 @@ void UPlaceRegionEditTool::UpdateHoverState(const FVector& WorldHit)
 	const double PickRadius = PickRadiusAt(WorldHit);
 	const double PickRadiusSq = PickRadius * PickRadius;
 
-	// Corner beats edge: a corner is on two edges, and at a corner the edge insert handle and the corner handle sit on top of one another.
+	// Corner beats edge: at a corner both handles overlap.
 	double CornerDistSq = TNumericLimits<double>::Max();
 	const int32 NearestCorner = PlaceLabelsEdit::ClosestVertex(World, XY, CornerDistSq);
 	if (NearestCorner != INDEX_NONE && CornerDistSq <= PickRadiusSq)
@@ -562,7 +561,7 @@ void UPlaceRegionEditTool::UpdateHoverState(const FVector& WorldHit)
 		return;
 	}
 
-	// Nowhere near this region's boundary — is there another one under the cursor to switch to?
+	// Not near this boundary: try switching to another region under the cursor.
 	if (UPlaceRegionComponent* Under = PickRegionAt(WorldHit))
 	{
 		if (Under != Region)
@@ -608,8 +607,7 @@ void UPlaceRegionEditTool::OnClickPress(const FInputDeviceRay& PressPos)
 		? FSlateApplication::Get().GetModifierKeys()
 		: FModifierKeysState();
 
-	// Alt+click removes a corner, and the removal lands on the release. Beginning a drag here
-	// would make the release early-out and the gesture unreachable.
+	// Alt+click removes on release; starting a drag here would make release early-out.
 	if (Mods.IsAltDown())
 	{
 		return;
@@ -819,7 +817,7 @@ void UPlaceRegionEditTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 
 	case EHover::None:
 	default:
-		// Clicking clear ground drops the region rather than doing nothing, so getting out is the same gesture as getting in.
+		// Clear ground drops the region: out is the same gesture as in.
 		SelectedCorners.Reset();
 		ClearTarget();
 		break;
@@ -828,7 +826,7 @@ void UPlaceRegionEditTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 
 void UPlaceRegionEditTool::OnTerminateDragSequence()
 {
-	// Aborted mid-drag — put the geometry back the way it was rather than leaving it wherever the cursor happened to die.
+	// Aborted mid-drag: restore the geometry.
 	if (bDragging && bDragMoved)
 	{
 		if (UPlaceRegionComponent* Region = TargetRegion.Get())
@@ -898,7 +896,7 @@ void UPlaceRegionEditTool::Render(IToolsContextRenderAPI* RenderAPI)
 		return;
 	}
 
-	// Cache the camera so hover picking sizes handles exactly the way they are drawn.
+	// Cache the camera so hover picking sizes handles as drawn.
 	{
 		const FViewCameraState Camera = RenderAPI->GetCameraState();
 		CameraPosition = Camera.Position;
@@ -981,7 +979,7 @@ void UPlaceRegionEditTool::Render(IToolsContextRenderAPI* RenderAPI)
 				const FVector From(Mark.From.X, Mark.From.Y, Z);
 				const FVector To(Mark.To.X, Mark.To.Y, Z);
 
-				// The gap itself is far too small to see from map height.
+				// Gap too small to see from map height.
 				PlaceLabelsEdit::DrawCrossOutHandle(PDI, From, PlaceLabelsEdit::WarningColor,
 					HandleSizeAt(From) * 1.2, 3.0f);
 				PlaceLabelsEdit::DrawCrossOutHandle(PDI, To, PlaceLabelsEdit::WarningColor,

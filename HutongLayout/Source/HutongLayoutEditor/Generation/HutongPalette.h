@@ -6,37 +6,48 @@
 
 namespace HutongGen
 {
-	// 青磚: the cool medium grey of fired brick in Beijing hutong walls.
+	// Starter Brick pattern unit: one 停泥磚 face, running bond. Other brick sizes (博縫 方磚) scale against it.
+	namespace BrickPattern
+	{
+		inline constexpr double FaceLength = 24.0;
+		inline constexpr double CourseHeight = 6.4;
+	}
+
+	// 青磚: cool medium grey.
 	extern const FLinearColor DefaultBrickColor;
 
-	// Grey tile, a shade down from the brick.
+	// Grey tile, a shade below the brick.
 	extern const FLinearColor DefaultRoofColor;
 
-	// Dark oxblood for the woodwork.
+	// Dark oxblood woodwork.
 	extern const FLinearColor DefaultWoodColor;
 
-	// 青白石: the cool grey limestone a lane is built from.
+	// 青白石: cool grey limestone.
 	extern const FLinearColor DefaultStoneColor;
 
-	// 彩畫: the blue-green of 旋子 and 蘇式 beam painting.
+	// 彩畫: 旋子 / 蘇式 blue-green.
 	extern const FLinearColor DefaultPaintColor;
 
-	// 下鹼: the same clay as the wall above, better made — a shade darker and cooler.
+	// 下鹼: a shade darker and cooler than the wall.
 	extern const FLinearColor DefaultBaseCourseColor;
 
-	// 黑漆: the ordinary door lacquer.
+	// 黑漆 door lacquer.
 	extern const FLinearColor DefaultDoorPaintColor;
 
-	// 窗欞, a shade off the doors: lattice and leaves are painted in the same campaign but rarely out of the same pot.
+	// 窗欞: a shade off the doors.
 	extern const FLinearColor DefaultLatticeColor;
 
-	// 高麗紙, warm and off-white.
+	// 高麗紙: warm off-white.
 	extern const FLinearColor DefaultPaperColor;
 
-	// 白灰: the lime plaster a room is finished in. Bare brick out, whitewash in.
+	// 白灰: interior lime plaster.
 	extern const FLinearColor DefaultPlasterColor;
 	extern const FLinearColor DefaultEarthColor;
 	extern const FLinearColor DefaultPartitionColor;
+	// 方磚: floor paving, a shade lighter than the wall's brick.
+	extern const FLinearColor DefaultFloorColor;
+	// 尺二方磚: the Floor pattern's brick, which a generator authoring floor UVs lays out in.
+	inline constexpr double FloorPaverCm = 38.4;
 
 	// Material slots on the spawned mesh.
 	enum EMaterialSlot : int32
@@ -47,34 +58,40 @@ namespace HutongGen
 		MatSlot_Stone = 3,   // paifang plinths, 抱鼓石, 階條石
 		MatSlot_Paint = 4,   // 彩畫 on 額枋 and 走馬板
 
-		// 下鹼: better brick than the wall above, laid and dressed differently, reading a shade darker.
+		// 下鹼: finer brick, a shade darker than the wall.
 		MatSlot_BaseCourse = 5,
 
-		// 板門 and 隔扇 leaves: the most saturated thing on the street, and the reason a hutong is not monochrome.
+		// 板門 and 隔扇 leaves.
 		MatSlot_DoorPaint = 6,
 
-		// 窗欞: lattice and leaves are painted in the same campaign but rarely out of the same pot.
+		// 窗欞: separate from door paint so it can sit a shade off.
 		MatSlot_Lattice = 7,
 
-		// 窗紙: 高麗紙 over the lattice.
+		// 窗紙 over the lattice.
 		MatSlot_Paper = 8,
 
-		// 白灰: the inside of a room. Bare 青磚 outside, whitewash in.
+		// 白灰: room interiors.
 		MatSlot_Plaster = 9,
 
-		// The soil a 花池 retains and the swept ground of the courtyard.
+		// 花池 soil and courtyard ground.
 		MatSlot_Earth = 10,
 
-		// 板壁: plain boarding, waxed or oiled at best, of a piece with the floor rather than with the painted frame.
+		// 板壁: plain unpainted boarding.
 		MatSlot_Partition = 11,
 
-		// 正脊: stacked 瓦條 and brick along the top of the roof, laid in courses rather than in 壟.
+		// 正脊: stacked 瓦條 and brick, coursed rather than in 壟.
 		MatSlot_Ridge = 12,
+
+		// 花甎寶頂: moulded brick finials, whole pieces rather than courses.
+		MatSlot_Finial = 13,
+
+		// 尺二方磚墁地: the square floor paving of a 臺明.
+		MatSlot_Floor = 14,
 
 		MatSlot_Count        // must stay last
 	};
 
-	// What the slot is called on the baked mesh.
+	// Slot name on the baked mesh.
 	inline FName MaterialSlotName(int32 Slot)
 	{
 		switch (Slot)
@@ -92,12 +109,14 @@ namespace HutongGen
 		case MatSlot_Earth:      return TEXT("Bare Earth (素土)");
 		case MatSlot_Partition:  return TEXT("Partitions (板壁)");
 		case MatSlot_Ridge:      return TEXT("Ridge (正脊)");
+		case MatSlot_Finial:     return TEXT("Finial (寶頂)");
+		case MatSlot_Floor:      return TEXT("Floor Paving (方磚)");
 		default:                 return TEXT("Unnamed");
 		}
 	}
 }
 
-// Every surface a spawned building wears: a colour per slot, and optionally a material instead.
+// Colour per material slot, optionally overridden by a material.
 USTRUCT(BlueprintType)
 struct FHutongPalette
 {
@@ -107,12 +126,10 @@ struct FHutongPalette
 		meta = (DisplayName = "Body (青磚)", HideAlphaChannel, ToolTip="Colour of the brick body."))
 	FLinearColor Body = HutongGen::DefaultBrickColor;
 
-	// How much darker the roof and wall cap are than the body.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance",
 		meta = (UIMin = "0", UIMax = "0.6", ClampMin = "0", ClampMax = "0.9", ToolTip="How much darker the roof and wall cap are than the body, from 0 to 0.9."))
 	float RoofDarkening = 0.35f;
 
-	// Columns and lintels.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance",
 		meta = (DisplayName = "Wood (木作)", HideAlphaChannel, ToolTip="Colour of the columns, lintels and other woodwork."))
 	FLinearColor Wood = HutongGen::DefaultWoodColor;
@@ -153,12 +170,16 @@ struct FHutongPalette
 		meta = (DisplayName = "Partitions (板壁)", HideAlphaChannel, ToolTip="Colour of the interior timber partitions."))
 	FLinearColor Partition = HutongGen::DefaultPartitionColor;
 
-	// Empty is the ordinary case: the slot gets a tinted BasicShapeMaterial instance in the colour above.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance",
+		meta = (DisplayName = "Floor Paving (方磚)", HideAlphaChannel, ToolTip="Colour of the square floor paving."))
+	FLinearColor Floor = HutongGen::DefaultFloorColor;
+
+	// Null (usual): slot gets a BasicShapeMaterial instance tinted with the colour.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Materials",
 		meta = (DisplayName = "Body Material (青磚)", ToolTip="Material for the brick body; replaces the body colour when set."))
 	TObjectPtr<UMaterialInterface> BodyMaterial = nullptr;
 
-	// Its own slot rather than derived from the body the way the colour is.
+	// Own material, though the roof colour derives from Body.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Materials",
 		meta = (DisplayName = "Roof Material (瓦)", ToolTip="Material for the roof tiles; replaces the derived roof colour when set."))
 	TObjectPtr<UMaterialInterface> RoofMaterial = nullptr;
@@ -187,7 +208,7 @@ struct FHutongPalette
 		meta = (DisplayName = "Lattice Material (窗欞)", ToolTip="Material for the window lattice; replaces the lattice colour when set."))
 	TObjectPtr<UMaterialInterface> LatticeMaterial = nullptr;
 
-	// Translucent, if you want the light through it.
+	// Use a translucent material to let light through.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Materials",
 		meta = (DisplayName = "Window Paper Material (窗紙)", ToolTip="Material for the window paper; replaces the paper colour when set."))
 	TObjectPtr<UMaterialInterface> PaperMaterial = nullptr;
@@ -204,25 +225,36 @@ struct FHutongPalette
 		meta = (DisplayName = "Partition Material (板壁)", ToolTip="Material for the interior partitions; replaces the partition colour when set."))
 	TObjectPtr<UMaterialInterface> PartitionMaterial = nullptr;
 
-	// The roof's colour, its own material: the ridge is coursed, not laid in 壟.
+	// Roof colour but own material: the ridge is coursed, not in 壟.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Materials",
 		meta = (DisplayName = "Ridge Material (正脊)", ToolTip="Material for the main ridge (正脊); replaces the derived roof colour there when set."))
 	TObjectPtr<UMaterialInterface> RidgeMaterial = nullptr;
 
-	// The body scaled in linear space, alpha untouched.
+	// Roof colour, own material: moulded 花甎, not coursed.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Materials",
+		meta = (DisplayName = "Finial Material (寶頂)", ToolTip="Material for the roof finials (寶頂); replaces the derived roof colour there when set."))
+	TObjectPtr<UMaterialInterface> FinialMaterial = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Materials",
+		meta = (DisplayName = "Floor Paving Material (方磚)", ToolTip="Material for the floor paving; replaces the paving colour when set."))
+	TObjectPtr<UMaterialInterface> FloorMaterial = nullptr;
+
+	// Body scaled in linear space, alpha kept.
 	FLinearColor GetRoofColor() const
 	{
 		const float Scale = 1.0f - FMath::Clamp(RoofDarkening, 0.0f, 0.9f);
 		return FLinearColor(Body.R * Scale, Body.G * Scale, Body.B * Scale, Body.A);
 	}
 
-	// The only place a slot maps to a colour.
+	// Sole slot → colour map.
 	FLinearColor GetSlotColor(int32 Slot) const
 	{
 		switch (Slot)
 		{
 		case HutongGen::MatSlot_Roof:
-		case HutongGen::MatSlot_Ridge: return GetRoofColor();
+		case HutongGen::MatSlot_Ridge:
+		case HutongGen::MatSlot_Finial: return GetRoofColor();
+		case HutongGen::MatSlot_Floor: return Floor;
 		case HutongGen::MatSlot_Wood:  return Wood;
 		case HutongGen::MatSlot_Stone: return Stone;
 		case HutongGen::MatSlot_Paint: return Paint;
@@ -237,7 +269,7 @@ struct FHutongPalette
 		}
 	}
 
-	// The only place a slot maps to a material. Null means tint the default instead.
+	// Sole slot → material map. Null = tint the default.
 	UMaterialInterface* GetSlotMaterial(int32 Slot) const
 	{
 		switch (Slot)
@@ -254,6 +286,8 @@ struct FHutongPalette
 		case HutongGen::MatSlot_Earth:      return EarthMaterial;
 		case HutongGen::MatSlot_Partition:  return PartitionMaterial;
 		case HutongGen::MatSlot_Ridge:      return RidgeMaterial;
+		case HutongGen::MatSlot_Finial:     return FinialMaterial;
+		case HutongGen::MatSlot_Floor:      return FloorMaterial;
 		default:                       return BodyMaterial;
 		}
 	}

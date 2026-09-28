@@ -13,6 +13,7 @@ public class HutongLayoutEditor : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"PhysicsCore",
 			"InputCore",
 			"GeometryCore",
 			"GeometryFramework",

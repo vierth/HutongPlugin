@@ -14,12 +14,11 @@ void UHutongScreenWallTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongScreenWallToolProperties>(this);
 
-	// Registered before the params, and the order here is the panel order.
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("ScreenWall"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongScreenWallToolProperties, Params));
 	Presets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
-	// Presets after the parameters they save.
+	// Panel order is registration order: presets after the params they save.
 	RegisterSettings(Settings);
 	RegisterSettings(Presets);
 }
@@ -30,7 +29,7 @@ void UHutongScreenWallTool::GetEffectiveRectBounds(
 	const FVector2D Local = WorldXYToLocalRect(CurrentWorld);
 	const double D = Settings ? Settings->Params.GetFootprintDepth() : 60.0;
 
-	// The longer extent is the run; the other collapses. Same rule as the wall and the paifang.
+	// Longer extent is the run; the other collapses (as wall and paifang).
 	if (FMath::Abs(Local.X) >= FMath::Abs(Local.Y))
 	{
 		OutMinX = FMath::Min(0.0, Local.X);
@@ -72,7 +71,7 @@ void UHutongScreenWallTool::AttachBuildingComponent(AStaticMeshActor* Actor, dou
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: the plan outline (and any lights) attach to the actor's root, which the component needs to be live to reach.
+	// After registration: plan outline and lights attach to the actor root, which needs the component live.
 	Building->ApplyPlacementAttachments();
 }
 
@@ -98,8 +97,8 @@ TArray<FText> UHutongScreenWallTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongScreenWallTool", "HelpSpan",
-		"Drag to set the screen's length. The depth is fixed by the moulded plinth (須彌座), so only the long axis follows the cursor.");
+		"Drag to set the length; the depth is fixed.");
 	Lines.Insert(NSLOCTEXT("HutongScreenWallTool", "HelpPlace",
-		"A screen wall (影壁) stands facing a gate — a few paces inside a main gate (大門), or across the lane from one."), 1);
+		"A screen wall (影壁) faces a gate, just inside it or across the lane."), 1);
 	return Lines;
 }

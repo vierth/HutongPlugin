@@ -57,7 +57,7 @@ TArray<UHutongBuildingComponent*> CollectLoaded(UWorld* World)
 
 int32 SetLevel(const TArray<UHutongBuildingComponent*>& Buildings, EHutongDetail Level)
 {
-	// Counted first, so the slow task's total is right and a run that would change nothing does not open a transaction at all.
+	// Count first: slow-task total is right, and a no-op run opens no transaction.
 	TArray<UHutongBuildingComponent*> Work;
 	Work.Reserve(Buildings.Num());
 	for (UHutongBuildingComponent* B : Buildings)
@@ -79,13 +79,13 @@ int32 SetLevel(const TArray<UHutongBuildingComponent*>& Buildings, EHutongDetail
 
 		B->Modify();
 		B->DetailLevel = Level;
-		// The same seam every parameter edit goes through.
+		// Same seam as every parameter edit.
 		B->Rebuild();
 
-		// And the attachments after it, for the reason the compound and the gallery both have to call this.
+		// Rebuild does not apply attachments (lights, plan outline); compound and gallery call this too.
 		B->ApplyPlacementAttachments();
 	}
-	// Footprints can have changed under the snap cache, and nothing here is a tool.
+	// Footprints may have changed; no tool is active to invalidate the snap cache.
 	HutongSnap::Invalidate();
 	return Work.Num();
 }
@@ -115,7 +115,7 @@ int32 Rebuild(const TArray<UHutongBuildingComponent*>& Buildings)
 		B->Rebuild();
 		B->ApplyPlacementAttachments();
 	}
-	// Footprints can have changed under the snap cache, and nothing here is a tool.
+	// Footprints may have changed; no tool is active to invalidate the snap cache.
 	HutongSnap::Invalidate();
 	return Work.Num();
 }
@@ -146,7 +146,7 @@ int32 GeneratePlanned(const TArray<UHutongBuildingComponent*>& Buildings)
 		B->Rebuild();
 		B->ApplyPlacementAttachments();
 	}
-	// Footprints can have changed under the snap cache, and nothing here is a tool.
+	// Footprints may have changed; no tool is active to invalidate the snap cache.
 	HutongSnap::Invalidate();
 	return Work.Num();
 }
@@ -183,7 +183,7 @@ int32 RevertToPlan(const TArray<UHutongBuildingComponent*>& Buildings)
 
 const TArray<FConvertTarget>& ConvertTargets()
 {
-	// Built once by walking the component classes: a fifteenth type joins the list by existing.
+	// Built once from the component classes: a new type joins automatically.
 	static TArray<FConvertTarget> Targets;
 	if (Targets.Num() > 0) return Targets;
 
@@ -193,8 +193,7 @@ const TArray<FConvertTarget>& ConvertTargets()
 	{
 		if (!Class || Class->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists)) continue;
 
-		// The label a variant carries is the variant's, and only the component can say it, so the
-		// list is read off a throwaway instance rather than assembled from names here.
+		// Only the component knows its variant labels: read them off a throwaway instance.
 		UHutongBuildingComponent* Probe = NewObject<UHutongBuildingComponent>(GetTransientPackage(), Class);
 		if (!Probe) continue;
 
@@ -224,8 +223,7 @@ FConvertTarget FindConvertTarget(const FString& Label)
 
 namespace
 {
-	// Hutong_Shopfront_a1b2c3 becomes Hutong_Siheyuan_a1b2c3: the guid tail is this placement's,
-	// and a label still naming the generator it used to be built by is a lie the outliner repeats.
+	// Hutong_Shopfront_a1b2c3 -> Hutong_Siheyuan_a1b2c3: keep the placement's guid tail, rename the type.
 	void RelabelForType(AActor* Actor, const UHutongBuildingComponent* Building)
 	{
 		if (!Actor || !Building) return;
@@ -245,8 +243,7 @@ UHutongBuildingComponent* ConvertBuilding(UHutongBuildingComponent* Old,
 	AActor* Actor = Old->GetOwner();
 	if (!Actor) return nullptr;
 
-	// Everything the *placement* decided, which is what survives a change of type. The parameters
-	// do not: a shop's boarded bays mean nothing to a house.
+	// Only placement state survives a type change; per-type parameters do not.
 	const FVector2D Footprint = Old->GetFootprintSize();
 	const FHutongFootprintSkew Skew = Old->FootprintSkew;
 	const bool bRunAlongY = Old->IsRunAlongY();
@@ -266,8 +263,7 @@ UHutongBuildingComponent* ConvertBuilding(UHutongBuildingComponent* Old,
 	UHutongBuildingComponent* New = NewObject<UHutongBuildingComponent>(
 		Actor, Target.Class, NAME_None, RF_Transactional);
 
-	// The same building, so the same id: a conversion is not a new placement, and a scene file
-	// exported before it still names this one.
+	// Same id: a conversion is not a new placement; earlier exports still name it.
 	New->BuildingId = Id;
 	New->Palette = Palette;
 	New->DetailLevel = Level;
@@ -275,16 +271,14 @@ UHutongBuildingComponent* ConvertBuilding(UHutongBuildingComponent* Old,
 	New->bBespokeMesh = bBespoke;
 	New->bBuildLODChain = bLODs;
 
-	// Kind first, then the preset, then the footprint: a wall's thickness is capped against what
-	// its role asks for, so a footprint applied before the role is measured against the wrong wall.
+	// Order: kind, preset, footprint. Wall thickness is capped per role, so the role must be set first.
 	if (!Target.Variant.IsNone()) New->SetTypeVariant(Target.Variant);
 	if (!Preset.IsEmpty() && New->ApplyPresetParams(Preset)) New->Preset = Preset;
 
 	New->SetRunAlongY(bRunAlongY);
 	New->SetFootprintSize(Footprint);
 	if (bHasFacade) New->SetFacade(Facade);
-	// The corners come across with the rest of the placement: a wall's end cut on the bias is as
-	// much the plan's as a house's angled gable.
+	// Corner skew is placement state and carries over.
 	New->FootprintSkew = Skew;
 
 	Actor->AddInstanceComponent(New);
@@ -307,7 +301,7 @@ int32 Convert(const TArray<UHutongBuildingComponent*>& Buildings, const FConvert
 	for (UHutongBuildingComponent* B : Buildings)
 	{
 		if (!B || !B->GetOwner()) continue;
-		// Already this type and this kind of it: nothing to convert, and rebuilding is a separate button.
+		// Already this type and variant: nothing to convert (rebuild is a separate button).
 		if (B->GetClass() == Target.Class && B->GetTypeVariant() == Target.Variant) continue;
 		Work.Add(B);
 	}
@@ -324,14 +318,14 @@ int32 Convert(const TArray<UHutongBuildingComponent*>& Buildings, const FConvert
 		Task.EnterProgressFrame(1.0f, FText::FromString(Old->GetOwner()->GetActorNameOrLabel()));
 		if (ConvertBuilding(Old, Target, Preset)) ++Converted;
 	}
-	// Footprints can have changed under the snap cache, and nothing here is a tool.
+	// Footprints may have changed; no tool is active to invalidate the snap cache.
 	HutongSnap::Invalidate();
 	return Converted;
 }
 
 namespace
 {
-	// Positions of the bay lines along the run, in the actor's local frame, sorted.
+	// Bay line positions along the run, actor-local, sorted.
 	TArray<double> BayLines(const UHutongBuildingComponent* B)
 	{
 		FHutongPlanBays Bays;
@@ -340,8 +334,8 @@ namespace
 		return Bays.Boundaries;
 	}
 
-	// The corner offsets an end keeps when the other end is cut away: the two corners at that end
-	// stay, the two at the cut are zero. bAlongX is the run axis; bStart the end at the origin.
+	// Skew kept by one end after a cut: its two corners stay, the cut corners zero.
+	// bAlongX = run axis; bStart = the end at the origin.
 	FHutongFootprintSkew EndSkew(const FHutongFootprintSkew& Skew, bool bAlongX, bool bStart)
 	{
 		FHutongFootprintSkew Out;
@@ -353,7 +347,7 @@ namespace
 		return Out;
 	}
 
-	// Whether either corner at this end has been pulled off the rectangle.
+	// Either corner at this end is skewed.
 	bool EndHasSkew(const FHutongFootprintSkew& Skew, bool bAlongX, bool bStart)
 	{
 		int32 A, B;
@@ -361,7 +355,7 @@ namespace
 		return !Skew.Get(A).IsNearlyZero() || !Skew.Get(B).IsNearlyZero();
 	}
 
-	// How far two ends may stand apart and still be one line: a hand-placed join is not exact.
+	// Hand-placed joins are inexact.
 	constexpr double JoinToleranceCm = 5.0;
 	constexpr double JoinToleranceDeg = 0.5;
 }
@@ -421,7 +415,7 @@ UHutongBuildingComponent* DivideBuilding(UHutongBuildingComponent* Building, int
 		return nullptr;
 	}
 
-	// The second piece stands at the cut, on the same line and facing, with the far end's corners.
+	// Second piece starts at the cut, same line and facing, keeps the far end's corners.
 	const FTransform Xf = Owner->GetActorTransform();
 	FTransform NewXf = Xf;
 	NewXf.SetLocation(Xf.TransformPosition(bAlongX ? FVector(Cut, 0.0, 0.0) : FVector(0.0, Cut, 0.0)));
@@ -441,8 +435,7 @@ UHutongBuildingComponent* DivideBuilding(UHutongBuildingComponent* Building, int
 	}
 	NewActor->SetFolderPath(Owner->GetFolderPath());
 
-	// The same type with the same parameters, which a duplicate gives without a word of per-type
-	// code; only what the placement decides is then written over.
+	// Duplicate keeps type and parameters with no per-type code; placement state is overwritten after.
 	UHutongBuildingComponent* New = DuplicateObject<UHutongBuildingComponent>(Building, NewActor);
 	New->SetFlags(RF_Transactional);
 	New->BuildingId = FGuid::NewGuid();
@@ -515,7 +508,7 @@ bool CanFuse(const UHutongBuildingComponent* Building, const UHutongBuildingComp
 	else if (FMath::Abs(Along + OtherRun) <= JoinToleranceCm) bOutAtEnd = false;
 	else return Refuse(LOCTEXT("FuseApart", "The two do not stand end to end."));
 
-	// The corners at the join must be square: a cut end on the bias would have nothing to meet.
+	// Join corners must be square: a skewed end has nothing to meet.
 	if (EndHasSkew(Building->FootprintSkew, bAlongX, !bOutAtEnd)
 		|| EndHasSkew(Other->FootprintSkew, bAlongX, bOutAtEnd))
 	{
@@ -539,7 +532,7 @@ bool FuseBuildings(UHutongBuildingComponent* Building, UHutongBuildingComponent*
 	const double Run = bAlongX ? Size.X : Size.Y;
 	const double OtherRun = bAlongX ? OtherSize.X : OtherSize.Y;
 
-	// Each side's bays, forced or derived, so the fused count is exactly their sum.
+	// Fused bay count = sum of both sides' bays.
 	const int32 BaysA = FMath::Max(BayLines(Building).Num() - 1, 1);
 	const int32 BaysB = FMath::Max(BayLines(Other).Num() - 1, 1);
 
@@ -547,12 +540,12 @@ bool FuseBuildings(UHutongBuildingComponent* Building, UHutongBuildingComponent*
 	FTransform Fused = Xf;
 	if (!bAtEnd)
 	{
-		// The neighbour stands before this one: the fused building starts where it started, on this one's line.
+		// Neighbour comes first: fused building starts at its origin, on this one's line.
 		Fused.SetLocation(Xf.TransformPosition(bAlongX ? FVector(-OtherRun, 0.0, 0.0) : FVector(0.0, -OtherRun, 0.0)));
 	}
 	const FVector2D FusedSize = bAlongX ? FVector2D(Run + OtherRun, Size.Y) : FVector2D(Size.X, Run + OtherRun);
 
-	// The outer ends keep their corners; the join is square by the check above.
+	// Outer ends keep their skew; the join is square (checked above).
 	const FHutongFootprintSkew& StartSkew = bAtEnd ? Building->FootprintSkew : Other->FootprintSkew;
 	const FHutongFootprintSkew& EndSkewSrc = bAtEnd ? Other->FootprintSkew : Building->FootprintSkew;
 	FHutongFootprintSkew Skew = EndSkew(StartSkew, bAlongX, /*bStart*/ true);

@@ -37,10 +37,7 @@ public:
 	UFUNCTION(CallInEditor, Category = "New Region", meta = (DisplayName = "Discard Outline"))
 	void DiscardOutline();
 
-	// Where the name came from and how far it is attested. Stamped onto each region as it is
-	// placed and, unlike the name, deliberately *not* cleared afterwards: a lane is traced off one
-	// sheet in one sitting, and the source is a fact about that sitting rather than about one
-	// polygon. HutongLayout's metadata property set is the same decision.
+	// Where the name came from. Stamped on each new region and kept for the next one.
 	UPROPERTY(EditAnywhere, Category = "New Region", meta = (MultiLine = true))
 	FText Source;
 
@@ -69,19 +66,18 @@ public:
 		meta = (EditCondition = "bUseHeightBounds", ClampMin = "0.0", Units = "cm"))
 	double DepthBelowGround = 100.0;
 
-	// Snap new points onto the corners of regions already placed, so shared boundaries meet exactly rather than nearly.
+	// Snap new points onto placed regions' corners so shared boundaries meet exactly.
 	UPROPERTY(EditAnywhere, Category = "Snapping")
 	bool bSnapToExistingVertices = true;
 
-	// Snap onto the edges too, for a compound whose front runs along a hutong without matching any of its corners.
+	// Also snap onto their edges.
 	UPROPERTY(EditAnywhere, Category = "Snapping")
 	bool bSnapToExistingEdges = true;
 
 	UPROPERTY(EditAnywhere, Category = "Snapping", meta = (ClampMin = "0.0", Units = "cm"))
 	double SnapRadius = 100.0;
 
-	// Click a placed HutongLayout building to take its footprint as the outline rather than tracing
-	// four corners by eye. Nothing is offered while HutongLayout's plan outlines are hidden.
+	// Click a HutongLayout building to take its footprint as the outline. Off while plan outlines are hidden.
 	UPROPERTY(EditAnywhere, Category = "Snapping", meta = (DisplayName = "Trace Building Footprints"))
 	bool bTraceFootprints = true;
 
@@ -125,7 +121,7 @@ public:
 	virtual void Render(IToolsContextRenderAPI* RenderAPI) override;
 	virtual void DrawHUD(FCanvas* Canvas, IToolsContextRenderAPI* RenderAPI) override;
 
-	// Regions can be deleted, imported or edited while this tool is up, and none of that notifies it.
+	// Region deletes, imports and edits do not notify the tool.
 	virtual void OnTick(float DeltaTime) override;
 
 	// IClickDragBehaviorTarget.
@@ -170,8 +166,7 @@ public:
 	FText GetStagePromptText() const;
 	FText GetDrawingSummaryText() const;
 
-	// What the region about to be placed will be called. The mode panel's form edits these
-	// directly while an outline is in hand, so there is one place to type a name rather than two.
+	// Pending region's name; the mode panel's form edits it while an outline is in hand.
 	UPlaceRegionPenToolProperties* GetPendingSettings() const { return Settings; }
 	void NotifyPendingSettingsChanged()
 	{
@@ -255,14 +250,14 @@ protected:
 	int32 DraggedPointIndex = INDEX_NONE;
 	FVector2D PressPixel = FVector2D::ZeroVector;
 
-	// Snapshot of the level's regions, refreshed periodically and after each spawn rather than walked on every hover tick.
+	// Level's regions, refreshed periodically and after each spawn, not per hover tick.
 	TArray<TWeakObjectPtr<UPlaceRegionComponent>> CachedRegions;
 	double TimeSinceCacheRefresh = 0.0;
 
 	// What the last placement produced.
 	TWeakObjectPtr<AActor> LastPlacedActor;
 
-	// Cached from the last Render so hover picking can size handles the way they are drawn.
+	// From the last Render, so hover picking sizes handles as drawn.
 	FVector CameraPosition = FVector::ZeroVector;
 	double WorldPerPixelOrtho = 1.0;
 	double WorldPerPixelPerUnitDistance = 0.001;

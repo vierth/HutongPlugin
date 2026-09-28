@@ -45,9 +45,8 @@ namespace
 	}
 }
 
-// A five-bay house drawn across two compounds is two houses. Divided at its second bay line it
-// becomes a two and a three standing end to end on the same line, each its own building with its
-// own gable and door; fused again it is the five it was.
+// Five-bay house divided at its second bay line: a two and a three end to end, each with its own
+// gable and door; fused, the original five.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongDivideFuseHouseTest, "HutongLayout.DivideFuse.HouseAtBayLine",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -85,7 +84,7 @@ bool FHutongDivideFuseHouseTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("and a fresh id"), Second->BuildingId.IsValid() && Second->BuildingId != Id);
 	TestEqual(TEXT("the house keeps its id"), House->BuildingId, Id);
 
-	// The second stands at the cut, on the house's own line, turned the same way.
+	// Second piece stands at the cut, same line and yaw.
 	const FVector Expected = Xform.TransformPosition(FVector(Cut, 0.0, 0.0));
 	const AActor* SecondActor = Second->GetOwner();
 	TestTrue(TEXT("the new building stands at the cut"), SecondActor && SecondActor->GetActorLocation().Equals(Expected, 0.1));
@@ -95,7 +94,7 @@ bool FHutongDivideFuseHouseTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("both face the same way"), House->GetFacade(SideA) && Second->GetFacade(SideB) && SideA == SideB);
 	TestTrue(TEXT("both are built"), HasMesh(House) && HasMesh(Second));
 
-	// The pair now offers to fuse, at the house's far end and the new one's origin end.
+	// Pair offers to fuse at the house's far end and the new piece's origin end.
 	bool bAtEnd = false;
 	TestTrue(TEXT("the new one fuses onto the house's end"), HutongDetailOps::CanFuse(House, Second, bAtEnd, &Why) && bAtEnd);
 	TestTrue(TEXT("and the house onto the new one's start"), HutongDetailOps::CanFuse(Second, House, bAtEnd, &Why) && !bAtEnd);
@@ -107,7 +106,7 @@ bool FHutongDivideFuseHouseTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the absorbed actor is gone"), !IsValid(SecondActor) || SecondActor->IsActorBeingDestroyed());
 	TestTrue(TEXT("and the house is built"), HasMesh(House));
 
-	// Fused the other way round the fused building starts where the earlier one did.
+	// Fused in reverse order, the result starts where the earlier piece did.
 	UHutongBuildingComponent* Third = HutongDetailOps::DivideBuilding(House, 3, Why);
 	if (!TestNotNull(TEXT("divides again"), Third)) return false;
 	TestTrue(TEXT("the later piece absorbs the earlier"), HutongDetailOps::FuseBuildings(Third, House, Why));
@@ -116,7 +115,7 @@ bool FHutongDivideFuseHouseTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// What refuses to fuse: another type, a gap, a different depth, an angle, a corner cut on the bias.
+// Fuse refusals: other type, gap, different depth, angle, bias-cut join corner.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFuseRefusalsTest, "HutongLayout.DivideFuse.FuseRefusals",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -148,13 +147,13 @@ bool FHutongFuseRefusalsTest::RunTest(const FString& Parameters)
 	UHutongBuildingComponent* Beside = Place(World, HouseClass, FVector2D(600.0, 500.0), FTransform(FVector(900.0, 40.0, 0.0)), 2, true);
 	TestFalse(TEXT("a house off the line does not"), HutongDetailOps::CanFuse(House, Beside, bAtEnd, &Why));
 
-	// Three centimetres short is a hand-placed join and fuses; a corner cut on the bias at the join does not.
+	// 3 cm short is a hand-placed join and fuses; a bias cut at the join does not.
 	UHutongBuildingComponent* Near = Place(World, HouseClass, FVector2D(600.0, 500.0), FTransform(FVector(903.0, 0.0, 0.0)), 2, true);
 	TestTrue(TEXT("a join three centimetres open fuses"), HutongDetailOps::CanFuse(House, Near, bAtEnd, &Why) && bAtEnd);
 	Near->FootprintSkew.Corner00 = FVector2D(30.0, 0.0);
 	TestFalse(TEXT("but not with its join corner angled"), HutongDetailOps::CanFuse(House, Near, bAtEnd, &Why));
 
-	// The far end's angle rides along: fused, the outer corner keeps its offset and the join is square.
+	// Far-end angle survives fusing: outer corner keeps its offset, join square.
 	Near->FootprintSkew.Corner00 = FVector2D::ZeroVector;
 	Near->FootprintSkew.Corner10 = FVector2D(-25.0, 0.0);
 	TestTrue(TEXT("fuses with the far end angled"), HutongDetailOps::FuseBuildings(House, Near, Why));
@@ -162,7 +161,7 @@ bool FHutongFuseRefusalsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("and the origin corners are square"), House->FootprintSkew.Corner00.IsNearlyZero() && House->FootprintSkew.Corner01.IsNearlyZero());
 	TestEqual(TEXT("frontage is the sum"), House->GetFootprintSize().X, 1500.0, 0.01);
 
-	// Divided again, the angle goes with the far piece and the cut end is square on both.
+	// Divided again, the angle goes with the far piece; both cut ends square.
 	UHutongBuildingComponent* Far = HutongDetailOps::DivideBuilding(House, 2, Why);
 	if (!TestNotNull(TEXT("the fused house divides"), Far)) return false;
 	TestEqual(TEXT("the far piece carries the angle"), Far->FootprintSkew.Corner10.X, -25.0, 0.01);

@@ -62,13 +62,14 @@ namespace HutongGen
 
 		float LODScreenSize(int32 LODIndex);
 
-		void BuildLODChain(
+		// Both return the index of the LOD collision cooks from: 遠, or the cheapest LOD above 塊.
+		int32 BuildLODChain(
 			EHutongDetail Placed,
 			bool bChain,
 			TFunctionRef<void(UE::Geometry::FDynamicMesh3&, EHutongDetail)> Build,
 			TArray<UE::Geometry::FDynamicMesh3>& OutLODs);
 
-		void BuildPlacementLODs(
+		int32 BuildPlacementLODs(
 			bool bPlanOnly,
 			double SizeX,
 			double SizeY,

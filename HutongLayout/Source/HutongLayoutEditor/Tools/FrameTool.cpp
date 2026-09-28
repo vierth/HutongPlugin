@@ -16,7 +16,7 @@ void UHutongFrameTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongFrameToolProperties>(this);
 
-	// The picker first: which house's frame is the first question.
+	// Picker first: which house's frame is the first question.
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("Frame"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongFrameToolProperties, Params));
@@ -38,7 +38,7 @@ FVector2D UHutongFrameTool::StampSize(EHutongBaySide Side) const
 void UHutongFrameTool::GetEffectiveRectBounds(
 	double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const
 {
-	// Not dragged: the preset's footprint, centred where the first click stood.
+	// Not dragged: the preset's footprint, centred on the first click.
 	const FVector2D Size = StampSize(BaySide);
 	OutMinX = -0.5 * Size.X; OutMaxX = 0.5 * Size.X;
 	OutMinY = -0.5 * Size.Y; OutMaxY = 0.5 * Size.Y;
@@ -57,7 +57,7 @@ bool UHutongFrameTool::OnRectCommitted(const FVector& HitWorld)
 void UHutongFrameTool::OnPlacementHover(const FVector& HitWorld)
 {
 	if (bRotateModeActive) return;
-	// The front is the side the cursor has moved off toward; near the centre it is not asked yet.
+	// Front is the side the cursor moved toward; undecided near the centre.
 	const FVector2D Local = WorldXYToLocalRect(HitWorld);
 	if (Local.Size() < 50.0) return;
 	BaySide = (FMath::Abs(Local.X) > FMath::Abs(Local.Y))
@@ -67,7 +67,7 @@ void UHutongFrameTool::OnPlacementHover(const FVector& HitWorld)
 
 void UHutongFrameTool::RenderIdlePreview(FPrimitiveDrawInterface* PDI, const FVector& CursorGround)
 {
-	// The footprint rides under the cursor before the first click, front toward the camera.
+	// Before the first click the footprint follows the cursor, front toward the camera.
 	const EHutongBaySide Side = ComputeDefaultBaySide();
 	const FVector2D Size = StampSize(Side);
 	auto At = [&](double X, double Y) { return LocalRectToWorldFrom(CursorGround, X, Y); };
@@ -127,7 +127,7 @@ void UHutongFrameTool::AttachBuildingComponent(AStaticMeshActor* Actor, double S
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: the plan outline attaches to the actor's root, which the component needs to be live to reach.
+	// After registration: the plan outline attaches to the actor's root, which needs the component live.
 	Building->ApplyPlacementAttachments();
 }
 
@@ -222,12 +222,8 @@ TArray<FText> UHutongFrameTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongFrameTool", "HelpStamp",
-		"Click where the frame stands, move toward the side that is its front, click to place. "
-		"Nothing is dragged: the footprint is the preset's canonical frontage and depth.");
+		"Click where the frame stands, move toward its front, click to place. The size comes from the preset.");
 	Lines.Insert(NSLOCTEXT("HutongFrameTool", "HelpWhat",
-		"The timber frame (構架) of a main hall (正房) with no walls, windows or roof on it, standing on its platform (臺明) — "
-		"四合院建築及其構造 圖5-3-1 drawn whole. The seven-purlin frame with front and rear verandas (七檁前後廊) is the "
-		"ordinary one; the small-court preset is the smaller front-veranda frame on a through-column (鑽金柱) of 圖5-3-2. "
-		"Full House stamps the finished house on the same footprint instead."), 1);
+		"The bare timber frame (構架) of a main hall (正房) on its platform (臺明), without walls or roof. Full House builds the finished house instead."), 1);
 	return Lines;
 }

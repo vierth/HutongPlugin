@@ -40,8 +40,7 @@ namespace HutongWallRun
 		HutongWallChain::FEndFace Face;
 		const AActor* Owner = Leg ? Leg->GetOwner() : nullptr;
 		if (!Owner) return Face;
-		// Corners from the origin anticlockwise: the run's start edge is 0-3 and its end edge 1-2
-		// along X; along Y the start edge is 0-1 and the end edge 3-2.
+		// Corners anticlockwise from origin. Along X: start edge 0-3, end edge 1-2; along Y: start 0-1, end 3-2.
 		const FHutongFootprintSkew& K = Leg->FootprintSkew;
 		const bool bY = Leg->bLengthAlongY;
 		const int32 A = bStart ? 0 : (bY ? 3 : 1);
@@ -114,7 +113,7 @@ namespace HutongWallRun
 		TArray<HutongWallChain::FSegment>& OutSegments)
 	{
 		if (Vertices.Num() != Run.NumLegs() + 1) return false;
-		// Every vertex is kept: a leg pulled short is a short leg, not a dropped one.
+		// Every vertex kept: a leg pulled short stays a short leg.
 		return HutongWallChain::Build(Vertices, Run.Thickness, 0.5 * Run.Thickness, StartFace, EndFace, OutSegments, 0.0)
 			&& OutSegments.Num() == Run.NumLegs();
 	}
@@ -132,7 +131,7 @@ namespace HutongWallRun
 			Leg->SetRunAlongY(false);
 			Leg->SetFootprintSize(FVector2D(FMath::Max(S.Length, 10.0), Run.Thickness));
 			Leg->FootprintSkew = S.Skew;
-			// The corner offsets are the joins; the square extension is the other way and they do not stack.
+			// Corner offsets are the joins; square extension does not stack with them.
 			Leg->StartExtend = 0.0;
 			Leg->EndExtend = 0.0;
 		}

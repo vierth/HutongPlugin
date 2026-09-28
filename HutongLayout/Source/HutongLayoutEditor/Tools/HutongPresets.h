@@ -37,42 +37,40 @@ class UHutongPresetProperties : public UInteractiveToolPropertySet
 	GENERATED_BODY()
 
 public:
-	// ToolKey namespaces the saved names so the wall and siheyuan lists stay separate.
+	// ToolKey namespaces saved names per tool.
 	void Initialize(FName InToolKey, UInteractiveToolPropertySet* InOwnerSet, FName ParamsPropertyName);
 
-	// Called after a preset is applied, so the tool can refresh the details panel.
+	// Runs after a preset is applied, to refresh the details panel.
 	TFunction<void()> OnPresetLoaded;
 
 	UPROPERTY(EditAnywhere, Category = "Preset", meta = (DisplayName = "Type / Preset", GetOptions = "GetPresetNames", ToolTip = "Existing preset to load or delete."))
 	FString Preset;
 
-	UPROPERTY(EditAnywhere, Category = "Preset", meta = (ToolTip = "Name to save the current settings under."))
+	UPROPERTY(EditAnywhere, Category = "Preset", meta = (HutongAdvanced, ToolTip = "Name to save the current settings under."))
 	FString SaveAs;
 
-	UFUNCTION(CallInEditor, Category = "Preset", meta = (DisplayName = "Save", ToolTip = "Saves the current settings under the Save As name."))
+	// Buttons drawn by FHutongPresetCustomization: Save and Delete only in the advanced view.
 	void SaveCurrentAsPreset();
-
-	UFUNCTION(CallInEditor, Category = "Preset", meta = (DisplayName = "Load", ToolTip = "Applies the selected preset to the current settings."))
 	void LoadSelectedPreset();
-
-	UFUNCTION(CallInEditor, Category = "Preset", meta = (DisplayName = "Delete", ToolTip = "Deletes the selected user preset."))
 	void DeleteSelectedPreset();
 
 	UFUNCTION()
 	TArray<FString> GetPresetNames() const;
 
-	// What this picker's names are namespaced under, for comparing against a component's own key.
+	// Picking a preset applies it; students picked one and placed the previous type.
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+
+	// Namespace key, compared against a component's own key.
 	FName GetToolKey() const { return ToolKey; }
 
 private:
-	// Resolves the params struct on the owning set. Returns false if the owner has gone away.
+	// Resolves the params struct on the owning set; false if the owner is gone.
 	bool GetParams(const UScriptStruct*& OutType, void*& OutData) const;
 
 	FName ToolKey;
 	FName ParamsName;
 
-	// TransientToolProperty, or RestoreProperties copies the previous tool's set back out of the
-	// CDO cache and the preset buttons read another tool's parameters.
+	// TransientToolProperty, else RestoreProperties copies the previous tool's set from the CDO cache.
 	UPROPERTY(meta=(TransientToolProperty))
 	TWeakObjectPtr<UInteractiveToolPropertySet> OwnerSet;
 };

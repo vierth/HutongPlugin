@@ -15,7 +15,7 @@ namespace PlaceLabelsValidation
 		NoType,
 		NoName,
 
-		// The outline crosses itself, so "inside" has no answer and the fill will not build.
+		// Self-crossing outline: no inside, no fill.
 		SelfIntersecting,
 
 		// Fewer than three corners, or an area small enough to be rounding error.
@@ -30,7 +30,7 @@ namespace PlaceLabelsValidation
 
 	FText DescribeIssue(EIssue Issue);
 
-	// True for the ones that make a region unusable at runtime, as opposed to merely unfinished.
+	// True if the region is unusable at runtime, not merely unfinished.
 	bool IsSevere(EIssue Issue);
 
 	struct FRegionIssue
@@ -38,7 +38,7 @@ namespace PlaceLabelsValidation
 		TWeakObjectPtr<UPlaceRegionComponent> Region;
 		EIssue Issue = EIssue::NoType;
 
-		// Filled in where the issue alone does not say enough — which name is duplicated, how many edges cross.
+		// Extra detail, e.g. the duplicated name or crossing count.
 		FText Detail;
 	};
 

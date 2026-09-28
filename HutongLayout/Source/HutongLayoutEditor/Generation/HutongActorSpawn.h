@@ -10,7 +10,7 @@ class UMaterialInterface;
 
 namespace HutongGen
 {
-	// Bakes a dynamic mesh into a UStaticMesh, spawns an AStaticMeshActor at Transform, and gives it one material instance per EMaterialSlot, tinted from Palette.
+	// Bakes Mesh into a UStaticMesh on a new AStaticMeshActor at Transform, one tinted material per slot.
 	AStaticMeshActor* SpawnStaticMeshActor(
 		UWorld* World,
 		UE::Geometry::FDynamicMesh3& Mesh,
@@ -29,7 +29,8 @@ namespace HutongGen
 		TArray<UE::Geometry::FDynamicMesh3>& LODs,
 		const FTransform& Transform,
 		const FString& NameBase,
-		const FHutongPalette& Palette = FHutongPalette());
+		const FHutongPalette& Palette = FHutongPalette(),
+		int32 CollisionLOD = 0);
 
 	// Bakes Mesh onto an actor that already exists.
 	void BuildAndAssignStaticMesh(
@@ -40,8 +41,13 @@ namespace HutongGen
 	void BuildAndAssignStaticMesh(
 		AStaticMeshActor* Actor,
 		TArray<UE::Geometry::FDynamicMesh3>& LODs,
-		const FHutongPalette& Palette = FHutongPalette());
+		const FHutongPalette& Palette = FHutongPalette(),
+		int32 CollisionLOD = 0);
 
-	// The slots this mesh actually wears, in slot order, with its material IDs rewritten onto 0..N-1 to match.
+	// Library meshes (/Game/HutongLayout/Generated) no saved package and no loaded component references:
+	// what a rebuild or a deleted building left behind.
+	TArray<class UStaticMesh*> FindUnusedLibraryMeshes();
+
+	// Slots the mesh wears, in order; material IDs remapped to 0..N-1.
 	TArray<int32> CompactMaterialSlots(UE::Geometry::FDynamicMesh3& Mesh);
 }

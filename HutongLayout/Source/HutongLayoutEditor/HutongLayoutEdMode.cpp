@@ -61,8 +61,8 @@ public:
 		const FKey Key = InKeyEvent.GetKey();
 		if (Key == EKeys::Escape)
 		{
-			// What is in hand goes first: a half-drawn rect or a plan edit. With nothing in hand the
-			// tool itself is put down, so the preview stops following the cursor.
+			// Cancel what is in hand first (half-drawn rect or plan edit); with nothing in hand, put the
+			// tool down so the preview stops following the cursor.
 			if (Tool->IsPlacingActive() || Tool->IsEditingPlan())
 			{
 				Tool->CancelPlacement();
@@ -75,7 +75,7 @@ public:
 		}
 		if (Key == EKeys::Hyphen || Key == EKeys::Equals)
 		{
-			// Height edits the tool's persisted params, so unlike the bay keys they work before a placement starts too.
+			// Height edits the tool's persisted params, so unlike the bay keys it works before a placement starts.
 			const FModifierKeysState& Mods = InKeyEvent.GetModifierKeys();
 			const double Step = Mods.IsShiftDown() ? 5.0 : (Mods.IsControlDown() ? 100.0 : 20.0);
 			Tool->AdjustHeight(Key == EKeys::Equals ? Step : -Step);
@@ -83,7 +83,7 @@ public:
 		}
 		if (Key == EKeys::LeftBracket || Key == EKeys::RightBracket)
 		{
-			// Repeats are wanted here — holding a bracket key walks the value.
+			// Repeats wanted: holding a bracket key walks the value.
 			if (!Tool->IsPlacingActive())
 			{
 				// Nothing being placed: the keys turn the selected building's facade instead.
@@ -107,15 +107,15 @@ public:
 		}
 		if (Key == EKeys::F)
 		{
-			// Taken only mid-placement, so the viewport keeps F for focusing the selection.
+			// Only mid-placement, so the viewport keeps F for focus.
 			if (!Tool->IsPlacingActive() || InKeyEvent.IsRepeat()) return false;
 			Tool->FlipFacing();
 			return true;
 		}
 		if (Key == EKeys::G)
 		{
-			// Hold G on the click that ends a wall segment: that segment gets the gate. Taken
-			// only mid-placement, so the viewport keeps G for its game view otherwise.
+			// Hold G on the click ending a wall segment to give it the gate. Only mid-placement, so the
+			// viewport keeps G for game view.
 			if (!Tool->IsPlacingActive()) return false;
 			Tool->SetOpeningKeyHeld(true);
 			return true;
@@ -159,7 +159,7 @@ UHutongLayoutEdMode::UHutongLayoutEdMode()
 		true,
 		1000);
 
-	// UEdMode makes the object, calls LoadConfig/SaveConfig round it and hands it to the toolkit, which already builds ModeDetailsView and slots it above the tool's panel.
+	// UEdMode creates the object, wraps it in LoadConfig/SaveConfig, and the toolkit slots its ModeDetailsView above the tool panel.
 	SettingsClass = UHutongLayoutModeSettings::StaticClass();
 }
 
@@ -167,8 +167,7 @@ void UHutongLayoutEdMode::Enter()
 {
 	Super::Enter();
 
-	// The settings object is made fresh on every Enter, so its plan-outline checkbox has to be
-	// told what the switch it mirrors is currently set to.
+	// Settings are recreated each Enter, so seed the plan-outline checkbox from the switch it mirrors.
 	if (UHutongLayoutModeSettings* Settings = Cast<UHutongLayoutModeSettings>(SettingsObject))
 	{
 		Settings->bShowPlanOutlines = HutongPlanOutline::ArePlansVisible();
@@ -223,18 +222,48 @@ void UHutongLayoutEdMode::Enter()
 		NewObject<UHutongStreetRowToolBuilder>(this));
 	RegisterTool(Commands.BeginGalleryTool, TEXT("HutongGalleryTool"),
 		NewObject<UHutongGalleryToolBuilder>(this));
+	// One gallery per category, the same tool with its builder's category.
+	{
+		UHutongGalleryToolBuilder* Builder = NewObject<UHutongGalleryToolBuilder>(this);
+		Builder->Category = EHutongGalleryCategory::Walls;
+		RegisterTool(Commands.BeginGalleryWallsTool, TEXT("HutongGalleryWallsTool"), Builder);
+	}
+	{
+		UHutongGalleryToolBuilder* Builder = NewObject<UHutongGalleryToolBuilder>(this);
+		Builder->Category = EHutongGalleryCategory::Houses;
+		RegisterTool(Commands.BeginGalleryHousesTool, TEXT("HutongGalleryHousesTool"), Builder);
+	}
+	{
+		UHutongGalleryToolBuilder* Builder = NewObject<UHutongGalleryToolBuilder>(this);
+		Builder->Category = EHutongGalleryCategory::Gates;
+		RegisterTool(Commands.BeginGalleryGatesTool, TEXT("HutongGalleryGatesTool"), Builder);
+	}
+	{
+		UHutongGalleryToolBuilder* Builder = NewObject<UHutongGalleryToolBuilder>(this);
+		Builder->Category = EHutongGalleryCategory::Courtyard;
+		RegisterTool(Commands.BeginGalleryCourtyardTool, TEXT("HutongGalleryCourtyardTool"), Builder);
+	}
+	{
+		UHutongGalleryToolBuilder* Builder = NewObject<UHutongGalleryToolBuilder>(this);
+		Builder->Category = EHutongGalleryCategory::Street;
+		RegisterTool(Commands.BeginGalleryStreetTool, TEXT("HutongGalleryStreetTool"), Builder);
+	}
+	{
+		UHutongGalleryToolBuilder* Builder = NewObject<UHutongGalleryToolBuilder>(this);
+		Builder->Category = EHutongGalleryCategory::Temples;
+		RegisterTool(Commands.BeginGalleryTemplesTool, TEXT("HutongGalleryTemplesTool"), Builder);
+	}
 	RegisterTool(Commands.BeginMeasureTool, TEXT("HutongMeasureTool"),
 		NewObject<UHutongMeasureToolBuilder>(this));
 	RegisterTool(Commands.BeginImportTool, TEXT("HutongImportTool"),
 		NewObject<UHutongImportToolBuilder>(this));
 
-	// The tool manager's default (UndoToExit) pushes an "Activate Tool" entry onto the undo stack
-	// on every activation, and Ctrl+Z pops it — cancelling the tool instead of undoing the last
-	// edit. With a click on a building starting its tool, that was one dead Ctrl+Z per click, and
-	// a Generate could not be undone at all. Nothing here needs undo to leave a tool: Esc does.
+	// The default (UndoToExit) pushes an "Activate Tool" undo entry per activation, so Ctrl+Z
+	// cancels the tool instead of undoing: with click-to-edit, a dead Ctrl+Z per click and a
+	// Generate that could not be undone. Esc leaves a tool.
 	GetToolManager()->ConfigureChangeTrackingMode(EToolChangeTrackingMode::NoChangeTracking);
 
-	// The house is the tool most sessions start with, so it is the one that is already up.
+	// The house is the usual first tool, so it starts active.
 	GetToolManager()->SelectActiveToolType(EToolSide::Left, TEXT("HutongSiheyuanTool"));
 	GetToolManager()->ActivateTool(EToolSide::Left);
 
@@ -282,7 +311,7 @@ TMap<FName, TArray<TSharedPtr<FUICommandInfo>>> UHutongLayoutEdMode::GetModeComm
 {
 	TMap<FName, TArray<TSharedPtr<FUICommandInfo>>> Result;
 	const FHutongLayoutCommands& Commands = FHutongLayoutCommands::Get();
-	// Second list, and not optional: a tool left out here loses its keyboard chord while its palette button keeps working.
+	// Second list, required: a tool missing here loses its keyboard chord while its palette button still works.
 	Result.Add(FName("Buildings"),
 		{ Commands.BeginSiheyuanTool, Commands.BeginEarPassageTool, Commands.BeginShopfrontTool,
 		  Commands.BeginStoreyTool, Commands.BeginHallTool, Commands.BeginPavilionTool,
@@ -296,7 +325,8 @@ TMap<FName, TArray<TSharedPtr<FUICommandInfo>>> UHutongLayoutEdMode::GetModeComm
 	Result.Add(FName("Courtyard"),
 		{ Commands.BeginFlowerBedTool, Commands.BeginWaterJarTool });
 	Result.Add(FName("Layout"),
-		{ Commands.BeginGalleryTool, Commands.BeginMeasureTool, Commands.BeginImportTool });
+		{ Commands.BeginGalleryTool, Commands.BeginGalleryWallsTool, Commands.BeginGalleryHousesTool, Commands.BeginGalleryGatesTool, Commands.BeginGalleryCourtyardTool, Commands.BeginGalleryStreetTool, Commands.BeginGalleryTemplesTool,
+		  Commands.BeginMeasureTool, Commands.BeginImportTool });
 	return Result;
 }
 
@@ -324,8 +354,8 @@ bool UHutongLayoutEdMode::StartTool(const TCHAR* ToolIdentifier)
 
 void UHutongLayoutEdMode::RememberToolBeforeSave()
 {
-	// Captured on the way in, because by the time the save is over the tool manager has forgotten
-	// which tool it had. Empty when nothing was up, so a save never opens a tool of its own.
+	// Captured before the save: afterwards the tool manager has forgotten the tool. Empty when
+	// none was up, so a save never opens one.
 	UInteractiveToolManager* ToolManager = GetToolManager();
 	ToolBeforeSave = ToolManager ? ToolManager->GetActiveToolName(EToolSide::Left) : FString();
 }
@@ -336,14 +366,13 @@ void UHutongLayoutEdMode::RestoreToolAfterSave()
 	ToolBeforeSave.Reset();
 	if (Wanted.IsEmpty() || !GEditor) return;
 
-	// Next tick: the save's own broadcast is no place to be starting a tool, and the context has
-	// only just finished shutting one down.
+	// Next tick: not inside the save's broadcast, and the context has just shut a tool down.
 	GEditor->GetTimerManager()->SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this,
 		[this, Wanted]()
 		{
 			UInteractiveToolManager* ToolManager = GetToolManager();
 			if (!ToolManager) return;
-			// Not if something else is up: the user may have picked a tool while the save ran.
+			// Not if the user picked another tool during the save.
 			if (!ToolManager->GetActiveToolName(EToolSide::Left).IsEmpty()) return;
 			ToolManager->SelectActiveToolType(EToolSide::Left, Wanted);
 			ToolManager->ActivateTool(EToolSide::Left);
@@ -376,8 +405,8 @@ void UHutongLayoutEdMode::PutToolDown()
 	UInteractiveToolManager* Manager = GetToolManager();
 	if (!Manager || !Manager->HasActiveTool(EToolSide::Left)) return;
 
-	// Next tick, never inside the key event: the tool being shut down is the one that would be
-	// handling it. The same reason FollowSelection defers.
+	// Next tick, never inside the key event: the tool being shut down would be handling it
+	// (as in FollowSelection).
 	if (!GEditor) return;
 	GEditor->GetTimerManager()->SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
 	{
@@ -423,8 +452,8 @@ FString UHutongLayoutEdMode::ToolIdentifierFor(const UHutongBuildingComponent* B
 void UHutongLayoutEdMode::OnEditorSelectionChanged(UObject* Selection)
 {
 	if (!GEditor || Selection != GEditor->GetSelectedActors() || bFollowSelectionQueued) return;
-	// Next tick: the broadcast may be our own tool's press selecting what it is about to drag,
-	// and a tool is not swapped out from under its own press.
+	// Next tick: the broadcast may be our own tool's press selecting what it will drag; never swap
+	// a tool out from under its own press.
 	bFollowSelectionQueued = true;
 	GEditor->GetTimerManager()->SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]() { FollowSelection(); }));
 }
@@ -440,11 +469,11 @@ void UHutongLayoutEdMode::FollowSelection()
 	const UHutongBuildingComponent* Building = Actor ? Actor->FindComponentByClass<UHutongBuildingComponent>() : nullptr;
 	const FString Wanted = ToolIdentifierFor(Building);
 	if (Wanted.IsEmpty()) return;
-	// A tool already up stays up: every tool edits any selected building, and a stray click on a
-	// house while drawing walls must not take the wall tool away. Only an empty hand gets a tool.
+	// An active tool stays: every tool edits any selected building, and a stray house click while
+	// drawing walls must not drop the wall tool. Only an empty hand gets a tool.
 	if (!ToolManager->GetActiveToolName(EToolSide::Left).IsEmpty()) return;
 
-	// A drag in hand keeps its tool; asked again when it lets go.
+	// A drag in hand keeps its tool; asked again on release.
 	if (const URectDragToolBase* Tool = Cast<URectDragToolBase>(ToolManager->GetActiveTool(EToolSide::Left)))
 	{
 		if (Tool->IsPlacingActive() || Tool->IsEditingPlan())
@@ -457,7 +486,7 @@ void UHutongLayoutEdMode::FollowSelection()
 
 	ToolManager->SelectActiveToolType(EToolSide::Left, Wanted);
 	if (!ToolManager->ActivateTool(EToolSide::Left)) return;
-	// Its tab too, after the tool is up: the toolkit closes a tool that is not on the tab it switches to.
+	// Tab after the tool is up: the toolkit closes a tool not on the tab it switches to.
 	const FName Palette = PaletteOfTool(Wanted);
 	if (!Palette.IsNone() && Toolkit.IsValid() && Toolkit->GetCurrentPalette() != Palette)
 	{

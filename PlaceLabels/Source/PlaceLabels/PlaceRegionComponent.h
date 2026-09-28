@@ -43,8 +43,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Place Label", meta = (MultiLine = true))
 	FText Note;
 
-	// Where this region's name and extent were read: a sheet of the 全圖, a gazetteer, a street
-	// sign, a conversation. Free text, and the half of the answer the outline cannot give.
+	// Where the name and extent were read: a 全圖 sheet, a gazetteer, a street sign. Free text.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Metadata", meta = (MultiLine = true))
 	FText Source;
 
@@ -70,7 +69,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hierarchy")
 	bool bAutoParent = true;
 
-	// Result of the last auto-resolution, baked at edit time so starting a level does not mean solving every region's adjacency query.
+	// Last auto-resolved parent, baked at edit time so level start solves no adjacency queries.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Hierarchy")
 	TObjectPtr<AActor> DerivedParent;
 
@@ -90,7 +89,7 @@ public:
 
 	bool ContainsWorldPoint2D(const FVector2D& WorldXY) const;
 
-	// Recompute the world-space point cache, bounds and area from LocalPoints and the current transform, and push the result to the renderer.
+	// Rebuilds world points, bounds and area from LocalPoints and transform; refreshes the proxy.
 	void RebuildCache();
 
 	// Re-runs the type-driven parenting rule and writes Derived Parent, returning true if the result differed.
@@ -104,10 +103,8 @@ public:
 		meta = (DisplayName = "Draw Outline In Viewport"))
 	bool bDrawOutline = true;
 
-	// **Whether regions are drawn at all.** On while the Place Labels mode is up and off the rest
-	// of the time: a region is furniture for the job of drawing regions, and a city's worth of
-	// outlines over a level somebody is doing anything else in is a mess in the way of the work.
-	// A region selected in the outliner still shows, drawn by its component visualizer.
+	// Whether regions draw at all: on only while the Place Labels mode is up. A selected region
+	// still shows through its component visualizer.
 	static void SetEditorDrawingVisible(bool bVisible);
 	static bool IsEditorDrawingVisible();
 

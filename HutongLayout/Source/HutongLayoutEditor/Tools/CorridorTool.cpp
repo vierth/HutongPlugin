@@ -14,12 +14,11 @@ void UHutongCorridorTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongCorridorToolProperties>(this);
 
-	// Registered before the params, and the order here is the panel order.
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("Corridor"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongCorridorToolProperties, Params));
 	Presets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
-	// Presets after the parameters they save.
+	// Panel order is registration order: presets after the params they save.
 	RegisterSettings(Settings);
 	RegisterSettings(Presets);
 }
@@ -35,7 +34,7 @@ void UHutongCorridorTool::GetEffectiveRectBounds(
 	const double Lo = FMath::Max(P.WalkWidthMin, 10.0) + Extras;
 	const double Hi = FMath::Max(P.WalkWidthMax, FMath::Max(P.WalkWidthMin, 10.0) + 1.0) + Extras;
 
-	// The anchor is one end of each extent, so the far end is the one that moves.
+	// The anchor is one end of each extent; the far end moves.
 	auto Band = [&](double& OutLo, double& OutHi, double Reach)
 	{
 		const double Want = FMath::Clamp(FMath::Abs(Reach), Lo, Hi);
@@ -60,7 +59,7 @@ void UHutongCorridorTool::GetEffectiveRectBounds(
 void UHutongCorridorTool::BuildMeshForRect(double SizeX, double SizeY, FDynamicMesh3& OutMesh,
 	EHutongDetail Level)
 {
-	// Both extents matter now: the long one is the run, the short one sets the walk width.
+	// Long extent is the run; short sets the walk width.
 	FHutongCorridorParams P = Settings ? Settings->Params : FHutongCorridorParams();
 	P.Width = P.WalkWidthFromFootprint(FMath::Min(SizeX, SizeY));
 
@@ -89,7 +88,7 @@ void UHutongCorridorTool::AttachBuildingComponent(AStaticMeshActor* Actor, doubl
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: the plan outline (and any lights) attach to the actor's root, which the component needs to be live to reach.
+	// After registration: the plan outline and lights attach to the actor's root, which needs the component live.
 	Building->ApplyPlacementAttachments();
 }
 
@@ -126,9 +125,9 @@ TArray<FText> UHutongCorridorTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongCorridorTool", "HelpSpan",
-		"Drag to set both the run and the walk width. The short axis is held between the Min and Max Walk Width below — wide enough to pass along, narrow enough to still read as a walk.");
+		"Drag to set the run and the walk width.");
 	Lines.Insert(NSLOCTEXT("HutongCorridorTool", "HelpFlip",
-		"[ and ] flip which side the colonnade opens onto. Closed On One Side below puts a wall along the other."), 1);
+		"[ and ] flip the open side; Closed On One Side walls in the other."), 1);
 	return Lines;
 }
 

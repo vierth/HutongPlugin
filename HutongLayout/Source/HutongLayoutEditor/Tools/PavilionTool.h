@@ -34,6 +34,9 @@ protected:
 	virtual void AttachBuildingComponent(AStaticMeshActor* Actor, double SizeX, double SizeY) override;
 	virtual FString GetActorNameBase() const override { return TEXT("Hutong_Pavilion"); }
 	virtual FString GetPlacementDetail() const override;
+	FHutongPavilionParams GetSizedParams() const;
+	virtual void Render(IToolsContextRenderAPI* RenderAPI) override;
+	virtual bool DrawsRectFootprint() const override { return !(Settings && Settings->Params.IsRound()); }
 
 	UPROPERTY()
 	TObjectPtr<UHutongPavilionToolProperties> Settings;

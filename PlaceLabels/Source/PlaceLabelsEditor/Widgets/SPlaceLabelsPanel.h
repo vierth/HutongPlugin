@@ -57,8 +57,7 @@ struct FPlaceLabelsProblemRow
 	bool bSevere = false;
 };
 
-// Which half of the panel is showing. Drawing regions and naming them is the session's work;
-// hierarchy, welding, import, export and the starter types are settled once and then in the way.
+// Which half of the panel shows: drawing and naming, or the set-once tools (hierarchy, welding, exchange, types).
 enum class EPlaceLabelsPanelTab : uint8
 {
 	Regions,
@@ -130,11 +129,8 @@ private:
 	// The inline editor: name, type, note and metadata for whichever region the form is on.
 	TSharedRef<SWidget> BuildRegionEditor();
 
-	// **The form follows the pen while the pen has an outline in hand.** Two forms carrying the
-	// same three name fields — this one on the selected region, the tool's own on the region about
-	// to be placed — is how a name gets typed into the last region instead of the next one, and
-	// the last region is selected precisely because it was just placed. So there is one form, and
-	// while something is being drawn it is the drawing's.
+	// While the pen holds an outline the form edits it, not the selection: one form, so a name
+	// cannot land on the just-placed (selected) region.
 	class UPlaceRegionPenTool* GetAuthoringPen() const;
 	class UPlaceRegionPenToolProperties* GetAuthoringSettings() const;
 	bool IsAuthoringNewRegion() const { return GetAuthoringPen() != nullptr; }
@@ -198,7 +194,7 @@ private:
 	TArray<TSharedPtr<FPlaceRegionRow>> VisibleRegionRows;
 	TArray<TSharedPtr<FPlaceLabelsProblemRow>> ProblemRows;
 
-	// One stable row object per region, kept across refreshes so the list view sees the same pointers and leaves its widgets.
+	// Stable row per region across refreshes, so the list view keeps its widgets.
 	TMap<TWeakObjectPtr<UPlaceRegionComponent>, TSharedPtr<FPlaceRegionRow>> RowByRegion;
 
 	// Recomputed on refresh rather than per frame.
@@ -225,7 +221,7 @@ private:
 	// So the dropdowns are reloaded when the form changes what it is pointing at.
 	bool bWasAuthoring = false;
 
-	// Not remembered between sessions: the panel opens on the work, not on the last button pressed.
+	// Not persisted: the panel opens on the work.
 	EPlaceLabelsPanelTab ActiveTab = EPlaceLabelsPanelTab::Regions;
 
 	FString SearchFilter;

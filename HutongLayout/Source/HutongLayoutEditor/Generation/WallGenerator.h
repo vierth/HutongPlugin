@@ -4,7 +4,6 @@
 #include "Generation/HutongCanon.h"
 #include "DynamicMesh/DynamicMesh3.h"
 #include "Generation/HutongDoor.h"
-#include "Generation/HutongApron.h"
 #include "Generation/HutongDoorStone.h"
 #include "WallGenerator.generated.h"
 
@@ -43,13 +42,13 @@ struct FHutongWallParams
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(DisplayName="Gate (牆垣門)", ToolTip="Cuts a gate through the wall under its own raised hood."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(HutongBasic, DisplayName="Gate (牆垣門)", ToolTip="Cuts a gate through the wall under its own raised hood."))
 	bool bHasGate = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(DisplayName="Garden Doorway", ToolTip="Shape of the garden doorway cut through the wall, if any."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(HutongBasic, DisplayName="Garden Doorway", ToolTip="Shape of the garden doorway cut through the wall, if any."))
 	EHutongWallDoorway Doorway = EHutongWallDoorway::None;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(DisplayName="Decorative Windows (什錦窗)", ToolTip="Adds a row of decorative windows (什錦窗) along the wall."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(HutongBasic, DisplayName="Decorative Windows (什錦窗)", ToolTip="Adds a row of decorative windows (什錦窗) along the wall."))
 	bool bHasWindows = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Role", ToolTip="Role of the wall."))
@@ -77,9 +76,8 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Base Course Projection", UIMin="0", UIMax="15", Units="cm", ToolTip="How far the base course stands proud of each wall face, in cm."))
 	double BaseCourseProjection = 3.0;
 
-	// How far a run continuing along a neighbour's face holds its own face inside that face:
-	// its 下鹼 then stands flush with the house and the body a shadow line behind it, so the
-	// two read as two pieces and the cap dies into a step rather than into mid-plane.
+	// Setback of a run continuing along a neighbour's face: its 下鹼 flush with the house, body a shadow
+	// line behind, so the two read apart and the cap dies into a step, not mid-plane.
 	double GetAbuttingSetback() const { return FMath::Max(BaseCourseProjection, 0.0); }
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(EditCondition="!bDeriveFromRole", UIMin="0", UIMax="40", Units="cm", ToolTip="How far the top cornice course projects past each wall face, in cm."))
@@ -94,10 +92,14 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(UIMin="0", UIMax="40", Units="cm", ToolTip="Rise of the tiled cap above the cornice, in cm; zero gives a flat top."))
 	double CapRidgeHeight = 12.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(DisplayName="Cap Ridge Roll", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="How rounded the cap's crown is, 0 for a peaked cap to 1 for a full roll."))
-	double CapRidgeRoll = 0.5;
+	// Peaked by default: a 眉子 ridge sits on a fold; a rolled crown drops it.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(DisplayName="Cap Ridge Roll", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="How rounded the cap's crown is, 0 for a peaked cap with a ridge course to 1 for a full roll with none."))
+	double CapRidgeRoll = 0.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Window Details", meta=(DisplayName="Shape", EditCondition="bHasWindows", ToolTip="Outline of each decorative window (什錦窗) opening."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the cap, rather than leaving the texture to draw it."))
+	bool bHasTileRuns = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Window Details", meta=(HutongBasic, DisplayName="Shape", EditCondition="bHasWindows", ToolTip="Outline of each decorative window (什錦窗) opening."))
 	EHutongWindowShape WindowShape = EHutongWindowShape::Round;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Window Details", meta=(DisplayName="Opening Size", EditCondition="bHasWindows", UIMin="40", UIMax="120", ClampMin="20", Units="cm", ToolTip="Width and height of each window opening, in cm."))
@@ -211,19 +213,19 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate Details", meta=(DisplayName="Hood Rafter Spacing", EditCondition="bHasGate", UIMin="8", UIMax="50", ClampMin="4", Units="cm", ToolTip="Distance between rafter ends under the gate hood, in cm."))
 	double GateRafterSpacing = 18.0;
 
-	// A floor under the head the user typed: the opening has to admit the player, same rule as every other doorway here.
+	// Floored so the opening admits the player, as every doorway here.
 	double GetGateHeadHeight() const
 	{
 		return FMath::Max(GateHeadHeight, HutongGen::Passage::MinHeadZ(0.0, GateThresholdHeight));
 	}
 
-	// BuildWall holds the head 10 cm below the wall top with the jambs a frame's thickness above it.
+	// BuildWall holds the head 10 cm below the wall top, jambs a frame thickness above it.
 	double GetMinHeight() const
 	{
 		const double GateNeed = bHasGate
 			? GetGateHeadHeight() + FMath::Max(GateFrameThickness, 2.0) + 10.0
 			: 0.0;
-		// A garden doorway asks the same of the wall it is cut into.
+		// A garden doorway needs the same of its wall.
 		const double DoorNeed = (Doorway != EHutongWallDoorway::None)
 			? GetDoorwayHeight() + FMath::Max(DoorwaySurroundWidth, 0.0)
 				+ (bDoorwayChuihua ? 26.0 : 10.0)
@@ -231,8 +233,7 @@ struct FHutongWallParams
 		return FMath::Max(GateNeed, DoorNeed);
 	}
 
-	// The fields as asked, before the walker is fitted: a 月亮門 is a circle, so its width is its
-	// height whatever the width field says, and the height keeps the crouch floor every doorway does.
+	// Height as asked, before fitting the walker: a 月亮門's width is its height; keeps the crouch floor.
 	double RawDoorwayHeight() const
 	{
 		const double Sill = FMath::Clamp(DoorwaySillHeight, 0.0, 40.0);
@@ -243,13 +244,10 @@ struct FHutongWallParams
 		return (Doorway == EHutongWallDoorway::Moon) ? RawDoorwayHeight() : FMath::Max(DoorwayWidth, 20.0);
 	}
 
-	// The opening is fitted round a standing walker: scaled up, keeping its shape, and its
-	// outline continued below the sill (buried) so the cut at the sill is wide enough at the
-	// foot. A shaped doorway narrows at its head and at its foot — a 六角門 at its sill was a
-	// hand's breadth wide, and no scale mends that since the sill stays at the foot of the
-	// shape; carrying the shape on down does. One scale for width and height, so a circle
-	// stays a circle and the arch's springing stays where the fields put it. Cached on the
-	// fields it reads: the accessors below are asked per course while the wall is built.
+	// Fits the opening round a standing walker: uniform scale (circle stays a circle, arch springing
+	// stays put) plus the outline continued below the sill (buried) so a shape narrowing at its foot
+	// is still wide enough at the sill (a 六角門 was a hand's breadth there; scale alone cannot fix it).
+	// Cached on its inputs: the accessors below are called per course.
 	void FitWalker(double& OutScale, double& OutBury) const
 	{
 		const double W0 = RawDoorwayWidth(), H0 = RawDoorwayHeight();
@@ -271,7 +269,7 @@ struct FHutongWallParams
 			{
 				const double Z = Sill + Y;
 				if (Z >= Head) return false;
-				// The capsule's own half-width at this height: rounded at both ends, full between.
+				// Capsule half-width at this height: rounded ends, full between.
 				double Need = Rad;
 				if (Y < Rad) Need = FMath::Sqrt(FMath::Max(Rad * Rad - (Rad - Y) * (Rad - Y), 0.0));
 				else if (Y > WalkH - Rad) Need = FMath::Sqrt(FMath::Max(Rad * Rad - (Y - (WalkH - Rad)) * (Y - (WalkH - Rad)), 0.0));
@@ -280,7 +278,7 @@ struct FHutongWallParams
 			}
 			return true;
 		};
-		// The least burying that fits at a scale, or the span's half when none does.
+		// Least bury that fits at a scale, or half the span when none does.
 		auto BuryFor = [&](double K)
 		{
 			if (Fits(K, 0.0)) return 0.0;
@@ -317,11 +315,11 @@ struct FHutongWallParams
 	mutable int32 WalkFitShape = -1;
 	mutable double WalkFitW = -1.0, WalkFitH = -1.0, WalkFitSill = -1.0, WalkFitScale = 1.0, WalkFitBury = 0.0;
 
-	// How far below the ground the outline carries on before the sill cuts it, in cm.
+	// Outline depth below ground before the sill cuts it, cm.
 	double GetDoorwayBury() const { double K, B; FitWalker(K, B); return B; }
-	// The head of the opening above the ground, in cm.
+	// Opening head above ground, cm.
 	double GetDoorwayHeight() const { double K, B; FitWalker(K, B); return K * RawDoorwayHeight(); }
-	// The whole outline's height, buried part included: a 月亮門's diameter.
+	// Whole outline height including the buried part: a 月亮門's diameter.
 	double GetDoorwaySpan() const { return GetDoorwayHeight() + GetDoorwayBury(); }
 	double GetDoorwayWidth() const
 	{
@@ -329,26 +327,25 @@ struct FHutongWallParams
 		return (Doorway == EHutongWallDoorway::Moon) ? GetDoorwaySpan() : K * RawDoorwayWidth();
 	}
 
-	// Half-width at height t, normalized to [-1, 1] over the opening.
+	// Half-width at height t, normalized to [-1, 1].
 	double GetDoorwayHalfWidthFraction(double t) const
 	{
 		return ShapeHalfWidthFraction(Doorway, t, GetDoorwayWidth() / FMath::Max(GetDoorwaySpan(), 1.0));
 	}
 
-	// The outline of each shape, as a half-width fraction of its full width at height t in
-	// [-1, 1]; the arch alone needs the opening's width-over-height, which a uniform scale keeps.
+	// Half-width fraction of each shape at t in [-1, 1]; only the arch needs width/height (kept by uniform scale).
 	static double ShapeHalfWidthFraction(EHutongWallDoorway Shape, double t, double WidthOverHeight)
 	{
 		const double a = FMath::Abs(FMath::Clamp(t, -1.0, 1.0));
 		switch (Shape)
 		{
 		case EHutongWallDoorway::Rect:
-			// Square-headed, so the outline is the same width all the way up and every course round it is one box.
+			// Square-headed: constant width, every course round it one box.
 			return 1.0;
 
 		case EHutongWallDoorway::Arch:
 		{
-			// Square jambs to the springing, then a semicircular head of the opening's own half-width.
+			// Square jambs to the springing, then a semicircular head of the opening's half-width.
 			const double Head = FMath::Clamp(WidthOverHeight, 0.05, 1.0);
 			const double Spring = 1.0 - Head;
 			if (t <= Spring) return 1.0;
@@ -370,36 +367,35 @@ struct FHutongWallParams
 		}
 	}
 
-	// Masonry the wall generator keeps beside the surround, both sides together, before it cuts a doorway.
+	// Masonry kept beside the surround, both sides total, before a doorway is cut.
 	static constexpr double DoorwayMasonryCm = 60.0;
 
-	// Where the doorway's centre lands along a run: DoorwayPosition held in from each end by the
-	// opening's own half-width and surround, the one clamp the generator and every preview share.
+	// Doorway centre along a run: DoorwayPosition held in from each end by half-width plus surround;
+	// the one clamp shared by generator and previews.
 	double GetDoorwayCentre(double RunLength) const
 	{
 		const double Margin = 0.5 * GetDoorwayWidth() + FMath::Max(DoorwaySurroundWidth, 0.0);
 		return FMath::Clamp(DoorwayPosition * RunLength, Margin, RunLength - Margin);
 	}
 
-	// The shortest run the doorway as fitted passes HasDecorativeDoorway on.
+	// Shortest run on which the fitted doorway passes HasDecorativeDoorway.
 	double GetDoorwayRunNeed() const
 	{
 		return GetDoorwayWidth() + 2.0 * FMath::Max(DoorwaySurroundWidth, 0.0) + DoorwayMasonryCm + 1.0;
 	}
 
-	// Whether this run carries one.
 	bool HasDecorativeDoorway(double RunLength) const
 	{
 		if (Doorway == EHutongWallDoorway::None) return false;
 		if (bDeriveFromRole && Role != EHutongWallRole::Courtyard) return false;
 
-		// It has to fit the run with masonry left either side, and stand clear of the wall's top.
+		// Must fit the run with masonry either side and clear the wall top.
 		const double Outer = GetDoorwayWidth() + 2.0 * FMath::Max(DoorwaySurroundWidth, 0.0);
 		return Outer + DoorwayMasonryCm < RunLength
 			&& GetDoorwayHeight() + FMath::Max(DoorwaySurroundWidth, 0.0) + 10.0 <= GetHeight();
 	}
 
-	// The band the 垂花 dressing has to live in: from the top of the surround to the underside of the cap.
+	// Band for the 垂花 dressing: surround top to cap underside.
 	double GetDoorwayDressBand() const
 	{
 		const double Top = GetDoorwayHeight() + FMath::Max(DoorwaySurroundWidth, 0.0);
@@ -412,7 +408,7 @@ struct FHutongWallParams
 		return bDoorwayChuihua && HasDecorativeDoorway(RunLength) && GetDoorwayDressBand() > 0.0;
 	}
 
-	// What the role asks for.
+	// Role defaults.
 	struct FRoleDefaults
 	{
 		double Height = HutongCanon::Wall::PerimeterHeightCm;
@@ -440,7 +436,7 @@ struct FHutongWallParams
 		return FMath::Max(Asked, GetMinHeight());
 	}
 
-	// Holds the body at a height another part sets, keeping everything else the role gave it.
+	// Pins the body height set elsewhere, keeping the rest of the role.
 	void PinHeight(double H)
 	{
 		if (bDeriveFromRole)
@@ -455,14 +451,14 @@ struct FHutongWallParams
 		Height = FMath::Max(H, 10.0);
 	}
 
-	// Capped by the footprint when a caller has one.
+	// Capped by the footprint when there is one.
 	double GetThickness() const
 	{
 		const double Asked = FMath::Max(bDeriveFromRole ? GetRoleDefaults().Thickness : Thickness, 1.0);
 		return (FootprintThickness > 0.0) ? FMath::Min(Asked, FootprintThickness) : Asked;
 	}
 
-	// Zero on anything facing the lane: a 院牆 exists so the household is not seen, and an opening in one defeats it.
+	// Zero facing the lane: a 院牆 hides the household; an opening defeats it.
 	int32 GetWindowCount(double RunLength) const
 	{
 		if (!bHasWindows) return 0;
@@ -487,7 +483,7 @@ struct FHutongWallParams
 		}
 		case EHutongWindowShape::Octagon:
 		{
-			// Corners cut at 45°, which puts the break at sqrt(2) - 1 of the half height.
+			// 45° corner cuts: break at sqrt(2) - 1 of the half height.
 			const double s = UE_SQRT_2 - 1.0;
 			return (a <= s) ? 1.0 : FMath::Max(1.0 - (a - s), 0.0);
 		}
@@ -506,13 +502,13 @@ struct FHutongWallParams
 		return bDeriveFromRole ? GetRoleDefaults().CapOverhang : CapOverhang;
 	}
 
-	// Set by the tool from the drag rect; not user-editable.
+	// Set by the tool from the drag rect.
 	double Length = 500.0;
 
-	// The footprint's own cross extent, likewise tool-driven. Zero means no footprint to answer to.
+	// Footprint cross extent, tool-driven; zero = no footprint.
 	double FootprintThickness = 0.0;
 
-	// 轉角: how far each end runs past the drawn rect, filling the corner between two runs.
+	// 轉角: extension past the drawn rect at each end, filling the corner between runs.
 	double StartExtend = 0.0;
 	double EndExtend = 0.0;
 

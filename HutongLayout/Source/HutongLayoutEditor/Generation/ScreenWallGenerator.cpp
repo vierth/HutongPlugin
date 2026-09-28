@@ -15,7 +15,7 @@ namespace HutongGen
 		const double T = FMath::Max(P.Thickness, 1.0);
 		const double Eave = P.GetEaveHeight();
 
-		// The screen is built centred on Y = 0 in its own frame and translated to the rect's min corner by the caller's footprint depth.
+		// Built centred on Y = 0; the caller offsets to the rect min corner by the footprint depth.
 		const double PlinthP = FMath::Max(P.PlinthProjection, 0.0);
 		const double CY = PlinthP + 0.5 * T;                 // wall centre line in the rect
 		const double WY0 = CY - 0.5 * T;
@@ -25,8 +25,8 @@ namespace HutongGen
 		const double BaseH = FMath::Clamp(P.GetBaseCourseHeight(), 0.0, (Eave - PlinthH) * 0.7);
 		const double BaseP = FMath::Max(P.BaseCourseProjection, 0.0);
 
-		// 須彌座, three courses with the middle one recessed.
-		const int32 StoneFirstTri = Mesh.MaxTriangleID();
+		// 須彌座: three courses, middle recessed.
+		FSlotScope StoneTag(Mesh, MatSlot_Stone);
 		if (PlinthH > 0.0)
 		{
 			const double Course = PlinthH / 3.0;
@@ -41,9 +41,9 @@ namespace HutongGen
 				FVector3d(-PlinthP,     CY - 0.5 * T - PlinthP, 2.0 * Course),
 				FVector3d(L + PlinthP,  CY + 0.5 * T + PlinthP, PlinthH));
 		}
-		SetMaterialIDForTrianglesFrom(Mesh, StoneFirstTri, MatSlot_Stone);
+		StoneTag.Close();
 
-		// 2) 下鹼 and the wall body above it.
+		// 2) 下鹼 and wall body.
 		const double BodyBottom = PlinthH + BaseH;
 		if (BaseH > 0.0 && BaseP > 0.0)
 		{
@@ -57,7 +57,7 @@ namespace HutongGen
 			AppendBox(Mesh, FVector3d(0.0, WY0, PlinthH), FVector3d(L, WY1, Eave));
 		}
 
-		// 影壁心: a frame of four bars standing proud of the wall rather than a slab with a hole cut in it.
+		// 影壁心: four bars proud of the wall, not a slab with a hole.
 		if (P.bHasPanel)
 		{
 			const double FieldZ0 = BodyBottom;
@@ -67,7 +67,7 @@ namespace HutongGen
 				* FMath::Min(L, FMath::Max(FieldH, 1.0));
 			const double Proj = FMath::Max(P.BorderProjection, 0.0);
 
-			// Leave the panel out entirely.
+			// Otherwise no panel.
 			if (Proj > 0.0 && L > 4.0 * Border && FieldH > 4.0 * Border)
 			{
 				const double X0 = 1.5 * Border, X1 = L - 1.5 * Border;
@@ -78,15 +78,14 @@ namespace HutongGen
 					const double A = FaceY;
 					const double B = FaceY + Dir * Proj;
 					const double Lo = FMath::Min(A, B), Hi = FMath::Max(A, B);
-					// Top and bottom bars run the full width; the side bars sit between them.
+					// Top and bottom bars full width; side bars between.
 					AppendBox(Mesh, FVector3d(X0, Lo, Z0), FVector3d(X1, Hi, Z0 + Border));
 					AppendBox(Mesh, FVector3d(X0, Lo, Z1 - Border), FVector3d(X1, Hi, Z1));
 					AppendBox(Mesh, FVector3d(X0, Lo, Z0 + Border),
 						FVector3d(X0 + Border, Hi, Z1 - Border));
 					AppendBox(Mesh, FVector3d(X1 - Border, Lo, Z0 + Border),
 						FVector3d(X1, Hi, Z1 - Border));
-					// The field inside the frame is 白灰, a skim standing a hair proud of the brick
-					// so the two faces are not one plane, tagged in its own range since more follows.
+					// Field is 白灰: a skim a hair proud of the brick so the faces are not coplanar; ranged tag since more follows.
 					const double SkimLo = Dir < 0.0 ? FaceY - 0.6 : FaceY - 0.2;
 					const double SkimHi = Dir < 0.0 ? FaceY + 0.2 : FaceY + 0.6;
 					const int32 First = Mesh.MaxTriangleID();
@@ -105,7 +104,7 @@ namespace HutongGen
 		Roof.RearOverhang = FMath::Max(P.RoofOverhang, 0.0);
 		Roof.GableOverhang = FMath::Max(P.GableOverhang, 0.0);
 		Roof.Rise = P.GetRoofRise();
-		// 三檁: a screen is one 步架 deep and its roof is a single slope each side.
+		// 三檁: one 步架 deep, a single slope each side.
 		Roof.Section = Jiajia::MakeSection(
 			EHutongPurlins::Three, 0.5 * T, Roof.FrontOverhang, P.RoofApexRoll);
 		Roof.bHasRidgeCourse = P.bHasRidgeCourse;
@@ -120,6 +119,7 @@ namespace HutongGen
 
 		// AppendGableRoof builds for walls spanning Y = 0..T.
 		const int32 RoofFirstVert = Mesh.MaxVertexID();
+		Roof.bTileRuns = P.bHasTileRuns;
 		Shell::AppendGableRoof(Mesh, L, T, Eave, Roof);
 		TransformVerticesFrom(Mesh, RoofFirstVert,
 			FTransform(FQuat::Identity, FVector(0.0, WY0, 0.0)));

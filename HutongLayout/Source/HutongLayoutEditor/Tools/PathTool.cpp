@@ -14,12 +14,11 @@ void UHutongPathTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongPathToolProperties>(this);
 
-	// Registered before the params, and the order here is the panel order.
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("Path"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongPathToolProperties, Params));
 	Presets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
-	// Presets after the parameters they save.
+	// Panel order is registration order: presets after the params they save.
 	RegisterSettings(Settings);
 	RegisterSettings(Presets);
 }
@@ -29,13 +28,13 @@ void UHutongPathTool::GetEffectiveRectBounds(
 {
 	const FVector2D Local = WorldXYToLocalRect(CurrentWorld);
 
-	// Unlike the wall and the paifang the short axis is dragged rather than collapsed, and only held to a band.
+	// Short axis dragged, not collapsed as on wall and paifang; only held to a band.
 	const FHutongPathParams& P = Settings ? Settings->Params : FHutongPathParams();
 	const double Extras = 2.0 * P.GetKerbWidth();
 	const double Lo = FMath::Max(P.WidthMin, 10.0) + Extras;
 	const double Hi = FMath::Max(P.WidthMax, FMath::Max(P.WidthMin, 10.0) + 1.0) + Extras;
 
-	// The anchor is one end of each extent, so the far end is the one that moves.
+	// The anchor is one end of each extent; the far end moves.
 	auto Band = [&](double& OutLo, double& OutHi, double Reach)
 	{
 		const double Want = FMath::Clamp(FMath::Abs(Reach), Lo, Hi);
@@ -84,7 +83,7 @@ void UHutongPathTool::AttachBuildingComponent(AStaticMeshActor* Actor, double Si
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: the plan outline (and any lights) attach to the actor's root, which the component needs to be live to reach.
+	// After registration: the plan outline and lights attach to the actor's root, which needs the component live.
 	Building->ApplyPlacementAttachments();
 }
 
@@ -114,8 +113,8 @@ TArray<FText> UHutongPathTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongPathTool", "HelpSpan",
-		"Drag to set the run and the width. The short axis is held between the Min and Max Width below.");
+		"Drag to set the run and the width.");
 	Lines.Insert(NSLOCTEXT("HutongPathTool", "HelpWhat",
-		"A paved path (甬路) runs from the gate to the steps of the main hall (正房). A courtyard without one reads as open ground."), 1);
+		"A paved path (甬路) runs from the gate to the steps of the main hall (正房)."), 1);
 	return Lines;
 }

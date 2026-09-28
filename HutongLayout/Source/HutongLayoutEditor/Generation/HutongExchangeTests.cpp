@@ -17,13 +17,13 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// What a scene file has to survive. The exchange has no per-type code.
+// What a scene file must survive. The exchange has no per-type code.
 
 using UE::Geometry::FDynamicMesh3;
 
 namespace
 {
-	// Something distinct in every field the exchange claims to carry, reached by reflection so a property added next year is perturbed the day it is added.
+	// A distinct value in every carried field, via reflection, so a new property is perturbed the day it is added.
 	void PerturbStruct(UStruct* Type, void* Container, int32& Counter)
 	{
 		for (TFieldIterator<FProperty> It(Type); It; ++It)
@@ -31,12 +31,12 @@ namespace
 			FProperty* Prop = *It;
 			if (!Prop->HasAnyPropertyFlags(CPF_Edit)) continue;
 			if (Prop->HasAnyPropertyFlags(CPF_Transient | CPF_Deprecated)) continue;
-			// This plugin's own properties only.
+			// This plugin's properties only.
 			if (const UClass* Owner = Prop->GetOwnerClass())
 			{
 				if (!Owner->IsChildOf(UHutongBuildingComponent::StaticClass())) continue;
 			}
-			// An object reference is an asset path, covered by its own test; perturbing it here would mean inventing an asset.
+			// Object references are asset paths with their own test; perturbing one here would need an invented asset.
 			if (Prop->IsA<FObjectPropertyBase>()) continue;
 
 			void* Value = Prop->ContainerPtrToValuePtr<void>(Container);
@@ -128,8 +128,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongExchangeExportableTest,
 
 bool FHutongExchangeExportableTest::RunTest(const FString& Parameters)
 {
-	// CPF_Edit is the whole serialisation contract, and its failure mode is silence. Nothing on a
-	// building component is exempt any more: the two that were are gone with the lights.
+	// CPF_Edit is the whole serialisation contract and fails silently. No building-component property is exempt.
 
 	TMap<FName, UClass*> Classes;
 	HutongExchange::GatherBuildingComponentClasses(Classes);
@@ -139,7 +138,7 @@ bool FHutongExchangeExportableTest::RunTest(const FString& Parameters)
 		for (TFieldIterator<FProperty> It(Pair.Value); It; ++It)
 		{
 			FProperty* Prop = *It;
-			// Only this module's own properties.
+			// This module's properties only.
 			if (Prop->GetOwnerClass() &&
 				!Prop->GetOwnerClass()->IsChildOf(UHutongBuildingComponent::StaticClass()))
 			{
@@ -161,14 +160,13 @@ bool FHutongExchangeLightPointersTest::RunTest(const FString& Parameters)
 {
 	UHutongSiheyuanBuildingComponent* C =
 		NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
-	// A record carries what was changed, so something has to have been.
+	// A record carries changes, so something must be changed.
 	C->Params.EaveHeight += 17.0;
 	C->Palette.Body = FLinearColor(0.1f, 0.2f, 0.3f, 1.0f);
 	TSharedPtr<FJsonObject> Blob = HutongExchange::WriteComponent(C);
 	if (!TestTrue(TEXT("a house writes a blob"), Blob.IsValid())) return false;
 
-	// Nothing UActorComponent owns travels. Case-insensitively, because the converter lowercases
-	// the first character on the way out.
+	// Nothing UActorComponent owns travels. Case-insensitive: the converter lowercases the first character.
 	for (const auto& Field : Blob->Values)
 	{
 		const FString Key = FString(Field.Key).ToLower();
@@ -177,10 +175,10 @@ bool FHutongExchangeLightPointersTest::RunTest(const FString& Parameters)
 			&& Key != TEXT("bautoactivate") && Key != TEXT("breplicates"));
 	}
 
-	// And the things that must travel do.
+	// What must travel does.
 	TestTrue(TEXT("a tuned parameter travels"), Blob->HasField(TEXT("params")));
 	TestTrue(TEXT("a tuned palette travels"), Blob->HasField(TEXT("palette")));
-	// Identity always, whether or not anything about the building was touched.
+	// Identity always, touched or not.
 	TestTrue(TEXT("the id travels"), Blob->HasField(TEXT("buildingId")));
 
 	UHutongSiheyuanBuildingComponent* Plain =
@@ -231,7 +229,7 @@ bool FHutongExchangePaletteMaterialTest::RunTest(const FString& Parameters)
 		HutongExchange::ReadComponent(Blob.ToSharedRef(), Target, Problem));
 	TestTrue(TEXT("and resolves to the same asset"), Target->Palette.BodyMaterial == Asset);
 
-	// The recipient without the asset: a null slot and the palette tint, not a failed record.
+	// Recipient lacking the asset: null slot and palette tint, not a failed record.
 	(*PaletteObj)->SetStringField(TEXT("bodyMaterial"),
 		TEXT("/Script/Engine.Material'/Game/NotHere/M_Missing.M_Missing'"));
 	UHutongWallBuildingComponent* Stranger =
@@ -248,7 +246,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongExchangePlacementTest,
 
 bool FHutongExchangePlacementTest::RunTest(const FString& Parameters)
 {
-	// A record standing at an angle to the set.
+	// A record at an angle to the set.
 	HutongExchange::FRecord R;
 	R.Offset = FVector2D(100.0, 200.0);
 	R.RelativeYawDeg = 90.0;
@@ -257,13 +255,13 @@ bool FHutongExchangePlacementTest::RunTest(const FString& Parameters)
 	FVector2D Corners[4];
 	HutongExchange::FootprintCornersInSetFrame(R, Corners);
 	TestTrue(TEXT("the near corner is the offset"), Corners[0].Equals(R.Offset, 0.01));
-	// Turned a quarter, (400, 0) becomes (0, 400).
+	// Quarter turn: (400, 0) becomes (0, 400).
 	TestTrue(TEXT("a quarter turn swings the long axis onto Y"),
 		Corners[1].Equals(FVector2D(100.0, 600.0), 0.01));
 	TestTrue(TEXT("and the far corner follows"),
 		Corners[2].Equals(FVector2D(0.0, 600.0), 0.01));
 
-	// Composition at three set bearings, against transforms worked out by hand.
+	// Composition at three set bearings vs hand-worked transforms.
 	const double SetYaws[] = { 0.0, 37.0, -90.0 };
 	for (double SetYaw : SetYaws)
 	{
@@ -280,7 +278,7 @@ bool FHutongExchangePlacementTest::RunTest(const FString& Parameters)
 				FRotator::NormalizeAxis(SetYaw + R.RelativeYawDeg), 0.001));
 	}
 
-	// And the export arithmetic is its inverse.
+	// Export arithmetic is its inverse.
 	{
 		const double SetYaw = 37.0;
 		const FVector Anchor(1000.0, -500.0, 0.0);
@@ -303,7 +301,7 @@ bool FHutongExchangePlacementTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// NormaliseToBounds slides the set onto its own min corner.
+	// NormaliseToBounds slides the set onto its min corner.
 	{
 		TArray<HutongExchange::FRecord> Records;
 		HutongExchange::FRecord A;
@@ -333,8 +331,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongExchangeLayoutOnlyTest,
 
 bool FHutongExchangeLayoutOnlyTest::RunTest(const FString& Parameters)
 {
-	// A layout-only file carries the arrangement and nothing about how a piece is built, so a
-	// re-import puts the same street down built from the types' current defaults.
+	// Layout-only file: arrangement, no build parameters; re-import builds the same street from current type defaults.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
@@ -360,7 +357,7 @@ bool FHutongExchangeLayoutOnlyTest::RunTest(const FString& Parameters)
 		B->bBuildLODChain = false;
 		B->SetFootprintSize(Footprint);
 		B->BaySide = EHutongBaySide::PlusX;
-		// Tuned away from the shipped default, which is exactly what must not travel.
+		// Tuned off the shipped default: must not travel.
 		B->Params.EaveHeight = TunedEave;
 		Actor->AddInstanceComponent(B);
 		B->RegisterComponent();
@@ -374,7 +371,7 @@ bool FHutongExchangeLayoutOnlyTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the layout export succeeds"), Out.bSucceeded);
 	TestEqual(TEXT("the building is exported"), Out.Exported, 1);
 
-	// The file itself: it says what it is, and it carries no parameters at all.
+	// The file declares what it is and carries no parameters.
 	FString Text;
 	if (TestTrue(TEXT("the file is on disk"), FFileHelper::LoadFileToString(Text, *Path)))
 	{
@@ -409,7 +406,7 @@ bool FHutongExchangeLayoutOnlyTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	// The arrangement is the file's.
+	// Arrangement comes from the file.
 	const FTransform Placed = House->GetOwner()->GetActorTransform();
 	TestTrue(TEXT("it stands where it stood"),
 		Placed.GetLocation().Equals(Xform.GetLocation(), 1.0));
@@ -420,7 +417,7 @@ bool FHutongExchangeLayoutOnlyTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("its facade is the recorded side"), House->BaySide, EHutongBaySide::PlusX);
 	TestEqual(TEXT("its detail level travels"), House->DetailLevel, EHutongDetail::Massing);
 
-	// And the parameters are the type's own, not the ones the export was tuned to.
+	// Parameters are the type's own, not the exported tuning.
 	const FHutongSiheyuanParams Defaults;
 	TestNotEqual(TEXT("the tuned parameter did not travel"), House->Params.EaveHeight, TunedEave);
 	TestEqual(TEXT("the parameters are the shipped defaults"),
@@ -452,7 +449,7 @@ bool FHutongExchangeFileRoundTripTest::RunTest(const FString& Parameters)
 	TArray<FGuid> Ids;
 	for (const FPlaced& P : Wanted)
 	{
-		// Massing with no chain: three bakes.
+		// Massing, no chain: three bakes.
 		UHutongBuildingComponent* Template = NewObject<UHutongBuildingComponent>(
 			GetTransientPackage(), P.Class);
 		Template->DetailLevel = EHutongDetail::Massing;
@@ -488,7 +485,7 @@ bool FHutongExchangeFileRoundTripTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the export succeeds"), Out.bSucceeded);
 	TestEqual(TEXT("all three are exported"), Out.Exported, 3);
 
-	// Read it back as a file rather than trusting the in-memory structure: the JSON is what a collaborator receives.
+	// Read back from file, not memory: the JSON is what a collaborator receives.
 	HutongExchange::FSceneFile File;
 	HutongExchange::FResult ReadResult;
 	if (!TestTrue(TEXT("the file reads"), HutongExchange::Read(Path, File, ReadResult)))
@@ -498,7 +495,7 @@ bool FHutongExchangeFileRoundTripTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("it describes three buildings"), File.Records.Num(), 3);
 
-	// Where each actor stood, so the placement can be checked against it once they are gone.
+	// Each actor's placement, to check against after they are gone.
 	TMap<FGuid, FTransform> Before;
 	for (UHutongBuildingComponent* B : HutongDetailOps::CollectLoaded(World))
 	{
@@ -537,7 +534,7 @@ bool FHutongExchangeFileRoundTripTest::RunTest(const FString& Parameters)
 			(int32)B->DetailLevel, (int32)EHutongDetail::Massing);
 	}
 
-	// Sync means what it says: the same file again reshapes what is there rather than doubling it.
+	// Sync: the same file again reshapes what exists rather than doubling it.
 	HutongExchange::FResult Again;
 	HutongExchange::ImportAtRecordedTransforms(World, Path, HutongExchange::EMode::Sync,
 		NAME_None, Again);
@@ -556,9 +553,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongExchangeRunAxisTest,
 
 bool FHutongExchangeRunAxisTest::RunTest(const FString& Parameters)
 {
-	// A footprint is two numbers and says nothing about which of them is the run, so a line-like
-	// piece drawn down Y came back from a layout-only file with its own thickness for a length —
-	// a stub where a wall had been. Every type that has the flag is checked, both ways round.
+	// A footprint is two numbers with no run axis, so a line-like piece drawn down Y once came back from
+	// a layout-only file as a stub (thickness for length). Every flagged type, both orientations.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
@@ -593,7 +589,7 @@ bool FHutongExchangeRunAxisTest::RunTest(const FString& Parameters)
 					GetTransientPackage(), C.Class);
 				Template->DetailLevel = EHutongDetail::Massing;
 				Template->bBuildLODChain = false;
-				// Down Y, which is the case the run axis is the whole of.
+				// Down Y: the case the run axis matters for.
 				Template->SetRunAlongY(true);
 				Template->SetFootprintSize(FVector2D(Template->GetFootprintSize().X, C.Length));
 
@@ -638,8 +634,7 @@ bool FHutongExchangeRunAxisTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// And the parameters a full file carries reach the mesh: a lane wall's gate is the case that
-	// showed, since a wall with its gate lost is a wall with no way through it.
+	// Full-file parameters reach the mesh: a lane wall's gate is the telling case (lost gate = no way through).
 	{
 		for (UHutongBuildingComponent* Old : HutongDetailOps::CollectLoaded(World))
 		{
@@ -702,9 +697,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongExchangeRemapTest,
 
 bool FHutongExchangeRemapTest::RunTest(const FString& Parameters)
 {
-	// A file naming a type this build has not got — written before a rename or a split. Unanswered
-	// it is skipped and said so; answered it lands as the type the user chose, at the footprint the
-	// file recorded, since the old type's parameters are not this one's.
+	// A type this build lacks (pre-rename or split): unanswered, skipped and reported; answered, lands as
+	// the chosen type at the recorded footprint, since old params do not apply.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
@@ -741,7 +735,7 @@ bool FHutongExchangeRemapTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("and is reported"), Out.Problems.Num(), 1);
 	}
 
-	// Deliberately dropped: skipped, and not reported as a problem.
+	// Deliberately dropped: skipped, not reported.
 	{
 		HutongExchange::FSceneFile Dropped = File;
 		HutongImportTypes::SkipUnknownTypes(Dropped);
@@ -786,9 +780,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongExchangeLayoutFactsTest,
 
 bool FHutongExchangeLayoutFactsTest::RunTest(const FString& Parameters)
 {
-	// A layout-only file drops the parameters on purpose. What it must not drop is anything the
-	// *placement* decided: the kind of wall a run is, which way a corridor opens, how many bays a
-	// house was given, where its facade is. Each of those used to come back as the class default.
+	// Layout-only drops parameters on purpose but not what the placement decided: wall kind, corridor
+	// opening side, house bay count, facade side.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
@@ -905,8 +898,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongExchangeDeltaTest,
 
 bool FHutongExchangeDeltaTest::RunTest(const FString& Parameters)
 {
-	// A record carries what was decided, not what a building is: everything at its type's default
-	// is left out, and what comes back is byte-for-byte what went in.
+	// A record carries decisions only: type defaults are left out, and the round trip is byte-for-byte.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
@@ -936,7 +928,7 @@ bool FHutongExchangeDeltaTest::RunTest(const FString& Parameters)
 		return B;
 	};
 
-	// A gated lane wall, a 隔牆 with a doorway, and a house nobody has touched.
+	// A gated lane wall, a 隔牆 with a doorway, and an untouched house.
 	Spawn(UHutongWallBuildingComponent::StaticClass(), FTransform::Identity,
 		[](UHutongBuildingComponent* B)
 		{
@@ -957,7 +949,7 @@ bool FHutongExchangeDeltaTest::RunTest(const FString& Parameters)
 		FTransform(FRotator::ZeroRotator, FVector(8000.0, 0.0, 0.0)),
 		[](UHutongBuildingComponent*) {});
 
-	// What each of them is, before the trip.
+	// Each one's state before the trip.
 	TMap<FGuid, FString> Before;
 	for (UHutongBuildingComponent* B : HutongDetailOps::CollectLoaded(World))
 	{
@@ -979,16 +971,16 @@ bool FHutongExchangeDeltaTest::RunTest(const FString& Parameters)
 	FString Text;
 	if (TestTrue(TEXT("the file is on disk"), FFileHelper::LoadFileToString(Text, *Path)))
 	{
-		// What was decided is in it.
+		// Decisions are in it.
 		TestTrue(TEXT("the gate travels"), Text.Contains(TEXT("\"bHasGate\": true")));
 		TestTrue(TEXT("where the gate sits travels"), Text.Contains(TEXT("\"gatePosition\"")));
 		TestTrue(TEXT("the wall's role travels"), Text.Contains(TEXT("Courtyard")));
 		TestTrue(TEXT("the doorway travels"), Text.Contains(TEXT("Moon")));
-		// And what was not is not: three fields nobody touched, one per piece.
+		// Undecided fields are not: three untouched, one per piece.
 		TestFalse(TEXT("an untouched cap does not"), Text.Contains(TEXT("capRidgeRoll")));
 		TestFalse(TEXT("an untouched window spacing does not"), Text.Contains(TEXT("windowSpacing")));
 		TestFalse(TEXT("an untouched eave does not"), Text.Contains(TEXT("eaveHeight")));
-		// A whole untouched house is its identity and nothing else.
+		// An untouched house is its identity alone.
 		TestFalse(TEXT("no palette travels untouched"), Text.Contains(TEXT("\"palette\"")));
 	}
 
@@ -1004,7 +996,7 @@ bool FHutongExchangeDeltaTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("all three come back"), In.Created, 3);
 	TestEqual(TEXT("with nothing to report"), In.Problems.Num(), 0);
 
-	// Exactly, field for field, from a file that carried a handful of them.
+	// Exact, field for field, from a file carrying a handful.
 	for (UHutongBuildingComponent* B : HutongDetailOps::CollectLoaded(World))
 	{
 		const FString* Was = Before.Find(B->BuildingId);
@@ -1022,17 +1014,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongExchangePresetReferenceTest,
 
 bool FHutongExchangePresetReferenceTest::RunTest(const FString& Parameters)
 {
-	// **The preset is the reference a record is measured against**, and until a placement recorded
-	// which one it used that branch never ran: every delta was taken against the shipped class
-	// defaults, so everything a preset sets was written into the file as though somebody had typed
-	// it. Lossless, and the wrong reference — a re-import could not pick up a canon that had moved
-	// for any field the preset touched.
+	// Deltas are taken against the placement's preset, not class defaults; otherwise preset fields are
+	// written as if typed, and a re-import cannot follow a moved canon.
 	const TArray<FString>& Names = HutongPresets::BuiltInSiheyuanNames();
 	if (!TestTrue(TEXT("there are built-in house presets"), Names.Num() > 0)) return false;
 	const FString PresetName = Names[0];
 
-	// The premise: this preset moves a field off the struct's own default. Without that the test
-	// below would pass on a preset that changes nothing.
+	// Premise: the preset moves a field off the struct default, or the test passes vacuously.
 	UHutongSiheyuanBuildingComponent* Plain = NewObject<UHutongSiheyuanBuildingComponent>(
 		GetTransientPackage());
 	UHutongSiheyuanBuildingComponent* Preset = NewObject<UHutongSiheyuanBuildingComponent>(
@@ -1044,7 +1032,7 @@ bool FHutongExchangePresetReferenceTest::RunTest(const FString& Parameters)
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
-	// A house placed from that preset, with one field tuned away from it afterwards.
+	// A house from that preset, one field tuned away afterwards.
 	UHutongSiheyuanBuildingComponent* Template = NewObject<UHutongSiheyuanBuildingComponent>(
 		GetTransientPackage());
 	Template->DetailLevel = EHutongDetail::Massing;
@@ -1085,10 +1073,9 @@ bool FHutongExchangePresetReferenceTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(TEXT("the preset travels, since it is what the rest is measured against"),
 			Text.Contains(PresetName));
-		// The point of the whole exercise: a field the preset sets is the preset's to answer for.
+		// Preset-set fields are left out; fields tuned off the preset are written.
 		TestFalse(TEXT("a field the preset sets is not written out"),
 			Text.Contains(TEXT("eaveHeight")));
-		// And a field tuned away from the preset still is.
 		TestTrue(TEXT("what was tuned off the preset is"),
 			Text.Contains(TEXT("baseCourseHeight")));
 	}

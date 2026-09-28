@@ -11,8 +11,7 @@
 #include "Generation/HutongCanon.h"
 #include "StreetRowTool.generated.h"
 
-// What the ordinary bays of a street row are built as. Houses are the 倒座房 kind: a facade of
-// windows and one door to the lane. Shops open the whole bay.
+// Ordinary bays of a street row: Houses (倒座房, windows and one lane door) or Shops (bay fully open).
 UENUM()
 enum class EHutongStreetRowKind : uint8
 {
@@ -46,9 +45,8 @@ public:
 	FHutongGateHouseParams Gate;
 };
 
-// A street row from one drag: houses or shops along it, with a gate house on the bays picked
-// for one. The gates face the buildings' way unless F turns them round, since a gate to a
-// courtyard behind a row of shops looks the way the shops look, and one beside houses often does not.
+// Street row from one drag: houses or shops, gate houses on picked bays. Gates face the buildings' way
+// unless F turns them (a gate behind shops looks like the shops; beside houses often not).
 UCLASS()
 class UHutongStreetRowTool : public URectDragToolBase
 {
@@ -79,16 +77,16 @@ protected:
 	virtual bool OnExtraStageClicked(const FVector& HitWorld) override;
 	virtual void OnPlacementHover(const FVector& HitWorld) override;
 
-	// The clicks after the rectangle, in order.
+	// Clicks after the rectangle, in order.
 	enum class EExtra : uint8 { BuildingsFace, GateBays };
 	EExtra Extra = EExtra::BuildingsFace;
 
-	// The run is the longer extent; the facades are the two sides across it.
+	// Run is the longer extent; facades are the two long sides.
 	bool IsRunAlongX() const;
 	double RunLength() const;
 	double RowDepth() const;
 	int32 GetBayCount() const;
-	// Along the run from the row's start, for a world point; the bay it lands in.
+	// Bay a world point lands in, measured along the run from its start.
 	int32 BayUnder(const FVector& World) const;
 	HutongGen::EBaySide SideUnder(const FVector& World) const;
 
@@ -102,7 +100,7 @@ protected:
 	TObjectPtr<UHutongPresetProperties> HousePresets;
 
 	HutongGen::EBaySide BuildingSide = HutongGen::EBaySide::MinusY;
-	// Relative to the buildings' side, so a hover that moves that side carries the gates with it.
+	// Relative to the buildings' side, so gates follow when that side flips.
 	bool bGatesFaceBack = false;
 	HutongGen::EBaySide GateSide() const
 	{

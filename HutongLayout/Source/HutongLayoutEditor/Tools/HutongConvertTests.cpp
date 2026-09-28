@@ -14,8 +14,8 @@ using UE::Geometry::FDynamicMesh3;
 
 namespace
 {
-	// A placement of this type, standing where a drag would have left it.
-	UHutongBuildingComponent* Place(UWorld* World, UClass* Class, const FVector2D& Footprint,
+	// A placement of this type, as a drag would leave it.
+	UHutongBuildingComponent* PlaceNamed(UWorld* World, UClass* Class, const FVector2D& Footprint,
 		const FTransform& Xform, const TCHAR* NameBase)
 	{
 		UHutongBuildingComponent* Template = NewObject<UHutongBuildingComponent>(GetTransientPackage(), Class);
@@ -39,16 +39,13 @@ namespace
 	}
 }
 
-// A building is not stuck as whatever tool drew it. What the placement decided survives the change
-// of type — where it stands, its footprint, its facing, its id — and everything else comes from the
-// type converted to, which is the whole difference between converting and placing again.
+// Conversion keeps placement decisions (position, footprint, facing, id); everything else comes from the new type.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongConvertAcrossTypesTest, "HutongLayout.Convert.AcrossTypes",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FHutongConvertAcrossTypesTest::RunTest(const FString& Parameters)
 {
-	// Every type is offered, and a class carrying two kinds offers both: the wall is where a
-	// conversion list built from classes alone would lose half the answer.
+	// Every type offered, and both kinds of a two-kind class (the wall): a class-only list would miss one.
 	const TArray<HutongDetailOps::FConvertTarget>& Targets = HutongDetailOps::ConvertTargets();
 	TestTrue(TEXT("every building type is offered"), Targets.Num() >= 15);
 
@@ -65,11 +62,11 @@ bool FHutongConvertAcrossTypesTest::RunTest(const FString& Parameters)
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
-	// 鋪面房 → 房: a different generator, a different params struct.
+	// 鋪面房 → 房: different generator and params struct.
 	{
 		const FVector2D Footprint(1120.0, 640.0);
 		const FTransform Xform(FRotator(0.0, 23.0, 0.0), FVector(800.0, -200.0, 0.0));
-		UHutongBuildingComponent* Shop = Place(World, UHutongShopfrontBuildingComponent::StaticClass(),
+		UHutongBuildingComponent* Shop = PlaceNamed(World, UHutongShopfrontBuildingComponent::StaticClass(),
 			Footprint, Xform, TEXT("Convert"));
 		if (!TestNotNull(TEXT("the shopfront places"), Shop)) { World->DestroyWorld(false); return false; }
 
@@ -98,15 +95,15 @@ bool FHutongConvertAcrossTypesTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the label names what it is now"),
 			Actor->GetActorLabel().Contains(TEXT("Siheyuan")));
 
-		// The mesh is the new type's, not the old one's left standing.
+		// Mesh is the new type's, not the old one left standing.
 		const AStaticMeshActor* SMA = Cast<AStaticMeshActor>(Actor);
 		TestTrue(TEXT("it is built again"),
 			SMA && SMA->GetStaticMeshComponent() && SMA->GetStaticMeshComponent()->GetStaticMesh() != nullptr);
 	}
 
-	// 院牆 → 隔牆: one class, two kinds, and the conversion has to say which.
+	// 院牆 → 隔牆: one class, two kinds; conversion must pick.
 	{
-		UHutongBuildingComponent* Wall = Place(World, LaneWall.Class, FVector2D(1400.0, 37.0),
+		UHutongBuildingComponent* Wall = PlaceNamed(World, LaneWall.Class, FVector2D(1400.0, 37.0),
 			FTransform::Identity, TEXT("ConvertWall"));
 		if (!TestNotNull(TEXT("the wall places"), Wall)) { World->DestroyWorld(false); return false; }
 		Wall->SetTypeVariant(LaneWall.Variant);
@@ -122,11 +119,8 @@ bool FHutongConvertAcrossTypesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// Undoing a conversion put geometry on a laid-out plan. The component the conversion added is
-// *un-created* by the undo, and that object is restored to its defaults before it goes — with
-// bPlanOnly false — so the rebuild it ran on the way out baked a default house onto an actor whose
-// whole point was that it has no geometry. One Ctrl+Z, and the building that comes back is the one
-// that was there.
+// Undoing a conversion baked a default house onto a plan-only actor: the undone component reverts to
+// defaults (bPlanOnly false) and rebuilt on its way out. One Ctrl+Z must restore the original building.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongConvertUndoTest, "HutongLayout.Convert.Undo",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -146,7 +140,7 @@ bool FHutongConvertUndoTest::RunTest(const FString& Parameters)
 		const bool bPlanOnly = (Pass == 1);
 		const TCHAR* What = bPlanOnly ? TEXT("a laid-out shopfront") : TEXT("a built shopfront");
 
-		UHutongBuildingComponent* Shop = Place(World, UHutongShopfrontBuildingComponent::StaticClass(),
+		UHutongBuildingComponent* Shop = PlaceNamed(World, UHutongShopfrontBuildingComponent::StaticClass(),
 			FVector2D(1120.0, 640.0), FTransform::Identity, TEXT("Undo"));
 		if (!TestNotNull(TEXT("the shopfront places"), Shop)) { World->DestroyWorld(false); return false; }
 		Shop->bPlanOnly = bPlanOnly;
@@ -187,11 +181,8 @@ bool FHutongConvertUndoTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// A laid-out building draws one outline, and resizing it moves that one. An actor that has somehow
-// acquired two — an undo restoring a destroyed outline onto an actor that has since made itself a
-// new one is the way it happens — used to have only its first one found and updated ever again,
-// while the second stood there drawing the footprint as it was, following the actor about. Which
-// is what a resize looks like when the original rectangle will not go away.
+// A plan-only building has one outline and resize moves it. An undo can leave a second; only the first
+// was updated, the stray kept drawing the old footprint. Every outline must follow the resize.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanOutlineUniqueTest, "HutongLayout.Detail.PlanOutlineUnique",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -201,7 +192,7 @@ bool FHutongPlanOutlineUniqueTest::RunTest(const FString& Parameters)
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
 	const FVector2D Footprint(900.0, 600.0);
-	UHutongBuildingComponent* B = Place(World, UHutongSiheyuanBuildingComponent::StaticClass(),
+	UHutongBuildingComponent* B = PlaceNamed(World, UHutongSiheyuanBuildingComponent::StaticClass(),
 		Footprint, FTransform::Identity, TEXT("PlanOutline"));
 	if (!TestNotNull(TEXT("the house places"), B)) { World->DestroyWorld(false); return false; }
 
@@ -224,7 +215,7 @@ bool FHutongPlanOutlineUniqueTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("it carries the footprint"), Outlines[0]->Footprint.X, Footprint.X);
 
-	// A second one, as an undo would leave it, still drawing the size it was made at.
+	// Stray second outline, as an undo leaves it, at its original size.
 	UHutongPlanOutlineComponent* Stray = NewObject<UHutongPlanOutlineComponent>(
 		Actor, NAME_None, RF_Transactional);
 	Stray->SetupAttachment(Actor->GetRootComponent());
@@ -235,7 +226,7 @@ bool FHutongPlanOutlineUniqueTest::RunTest(const FString& Parameters)
 		FLinearColor::White);
 	TestEqual(TEXT("two outlines to start from"), OutlinesOn(Actor).Num(), 2);
 
-	// The resize the drag does, through the same accessor.
+	// Resize through the drag's accessor.
 	const FVector2D Resized(400.0, 300.0);
 	B->SetFootprintSize(Resized);
 	B->ApplyPlanOutline();
@@ -250,7 +241,7 @@ bool FHutongPlanOutlineUniqueTest::RunTest(const FString& Parameters)
 		B->GetFootprintSize().X);
 	TestTrue(TEXT("and it is not the stray"), Outlines[0] != Stray);
 
-	// Built again, the outline goes: geometry says the footprint from then on.
+	// Built again, outline removed: geometry shows the footprint.
 	B->bPlanOnly = false;
 	B->ApplyPlanOutline();
 	TestEqual(TEXT("no outline on a built building"), OutlinesOn(Actor).Num(), 0);
@@ -259,9 +250,8 @@ bool FHutongPlanOutlineUniqueTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// A built building goes back to the layout it was drawn as: the mesh comes off, the outline goes on,
-// the parameters stay put, so generating it again gives the same building. An already laid-out one
-// is left alone and not counted.
+// Revert to plan: mesh off, outline on, params kept so regenerating gives the same building. Already
+// plan-only buildings are skipped and not counted.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRevertToPlanTest, "HutongLayout.Detail.RevertToPlan",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -271,9 +261,9 @@ bool FHutongRevertToPlanTest::RunTest(const FString& Parameters)
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
 	const FVector2D Footprint(1120.0, 640.0);
-	UHutongBuildingComponent* Built = Place(World, UHutongShopfrontBuildingComponent::StaticClass(),
+	UHutongBuildingComponent* Built = PlaceNamed(World, UHutongShopfrontBuildingComponent::StaticClass(),
 		Footprint, FTransform::Identity, TEXT("Revert"));
-	UHutongBuildingComponent* Plan = Place(World, UHutongShopfrontBuildingComponent::StaticClass(),
+	UHutongBuildingComponent* Plan = PlaceNamed(World, UHutongShopfrontBuildingComponent::StaticClass(),
 		Footprint, FTransform::Identity, TEXT("RevertPlan"));
 	if (!TestNotNull(TEXT("the built shopfront places"), Built)
 		|| !TestNotNull(TEXT("the laid-out shopfront places"), Plan))

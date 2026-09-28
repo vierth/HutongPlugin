@@ -4,7 +4,7 @@
 #include "DynamicMesh/DynamicMesh3.h"
 #include "PathGenerator.generated.h"
 
-// 甬路: the raised brick walk from the gate to the steps of the 正房.
+// 甬路: raised brick walk from the gate to the 正房 steps.
 USTRUCT(BlueprintType)
 struct FHutongPathParams
 {
@@ -19,7 +19,7 @@ struct FHutongPathParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Path", meta=(DisplayName="Rise", UIMin="2", UIMax="30", ClampMin="0", Units="cm", ToolTip="Height of the paving above the surrounding ground, in cm."))
 	double Rise = 9.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Path", meta=(DisplayName="Has Kerb (牙子石)", ToolTip="Builds kerb stones (牙子石) along each edge of the path."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Path", meta=(HutongBasic, DisplayName="Has Kerb (牙子石)", ToolTip="Builds kerb stones (牙子石) along each edge of the path."))
 	bool bHasKerb = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Path", meta=(DisplayName="Kerb Width", EditCondition="bHasKerb", UIMin="5", UIMax="30", ClampMin="2", Units="cm", ToolTip="Width of the kerb along each edge, in cm."))
@@ -34,7 +34,7 @@ struct FHutongPathParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Path", meta=(DisplayName="Joint Width", EditCondition="CourseSpacing > 0", UIMin="1", UIMax="10", ClampMin="0", Units="cm", ToolTip="Width of each cross joint cut into the paving, in cm."))
 	double JointWidth = 3.0;
 
-	// Set by the tool from the drag rect; not user-editable.
+	// Set by the tool from the drag rect.
 	double Length = 600.0;
 	double Width = 130.0;
 

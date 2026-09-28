@@ -4,7 +4,6 @@
 
 namespace HutongGen
 {
-	// How many bays a facade of this length wants.
 	inline int32 ComputeBayCount(double Width, double MinBay, double MaxBay)
 	{
 		const double W = FMath::Max(Width, 1.0);
@@ -19,15 +18,14 @@ namespace HutongGen
 		return FMath::Max(1, N);
 	}
 
-	// 明間面闊: the wide bay plus (N-1) 次間 fill the frontage, so the wide width falls out. What
-	// BayBoundary lays the posts on, so nothing else may spell it out again.
+	// 明間面闊: 明間 + (N-1) 次間 fill the span. BayBoundary's basis; do not recompute elsewhere.
 	inline double CentralBayWidth(double Span, int32 BayCount, double SideRatio)
 	{
 		const int32 N = FMath::Max(BayCount, 1);
 		return FMath::Max(Span, 1.0) / (1.0 + (N - 1) * FMath::Clamp(SideRatio, 0.3, 1.0));
 	}
 
-	// X of bay boundary Index, and the single source of truth for 明間/次間 spacing.
+	// X of bay boundary Index; single source for 明間/次間 spacing.
 	inline double BayBoundary(int32 Index, int32 BayCount, double Span,
 		double EndInset, double SideRatio, int32 WideBayIndex)
 	{

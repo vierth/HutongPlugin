@@ -17,7 +17,7 @@ void UHutongInnerGateToolProperties::PostEditChangeProperty(FPropertyChangedEven
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 
-	// The head first, then the eave above it.
+	// Head first, then the eave above it.
 	Params.DoorHeadHeight = FMath::Max(Params.DoorHeadHeight,
 		HutongGen::Passage::MinHeadZ(Params.FloorHeight, Params.ThresholdHeight));
 
@@ -28,7 +28,7 @@ void UHutongInnerGateToolProperties::PostEditChangeProperty(FPropertyChangedEven
 	}
 	Params.EaveHeight = FMath::Max(Params.EaveHeight, Params.GetMinEaveHeight());
 
-	// The head has to stay under the beam the hanging posts drop from, whatever the eave just did.
+	// Head stays under the beam the hanging posts drop from.
 	Params.DoorHeadHeight = FMath::Min(Params.DoorHeadHeight, Params.EaveHeight - 45.0);
 }
 #endif
@@ -42,7 +42,7 @@ void UHutongInnerGateTool::GetEffectiveRectBounds(
 	const FHutongInnerGateParams::FSizeRange R = Settings->Params.GetSizeRange();
 	if (R.FrontageMax <= 0.0) return;
 
-	// One end of each extent is the anchor the drag started from.
+	// One end of each extent is the drag anchor.
 	auto ClampAxis = [](double& Lo, double& Hi, double MinLen, double MaxLen)
 	{
 		const double Want = FMath::Clamp(Hi - Lo, MinLen, MaxLen);
@@ -66,12 +66,11 @@ void UHutongInnerGateTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongInnerGateToolProperties>(this);
 
-	// Registered before the params, and the order here is the panel order.
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("InnerGate"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongInnerGateToolProperties, Params));
 	Presets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
-	// Presets after the parameters they save.
+	// Panel order is registration order: presets after the params they save.
 	RegisterSettings(Settings);
 	RegisterSettings(Presets);
 }
@@ -81,7 +80,7 @@ HutongGen::EBaySide UHutongInnerGateTool::ComputeClosestSide(double Hx, double H
 	const FVector2D Local = WorldXYToLocalRect(FVector(Hx, Hy, 0.0));
 	double MinX, MinY, MaxX, MaxY;
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
-	// Front or back only, as on the gate house: the two ends are the 進深 and carry no doorway.
+	// Front or back only, as the gate house: the ends are the 進深, no doorway.
 	return HutongGen::BaySide::ClosestOnAxis(
 		HutongGen::BaySide::IsAlongX(BaySide), Local.X, Local.Y, MinX, MinY, MaxX, MaxY);
 }
@@ -93,14 +92,14 @@ void UHutongInnerGateTool::OnPlacementStarted(const FVector& HitWorld)
 
 bool UHutongInnerGateTool::OnRectCommitted(const FVector& HitWorld)
 {
-	// Defer to a third click so the facing side can be picked by hovering.
+	// Third click picks the facing side by hover.
 	return false;
 }
 
 void UHutongInnerGateTool::OnPlacementHover(const FVector& HitWorld)
 {
 	if (bRotateModeActive) return;
-	// Left alone until the rect is committed.
+	// Untouched until the rect is committed.
 	if (bRectCommitted)
 	{
 		BaySide = ComputeClosestSide(HitWorld.X, HitWorld.Y);
@@ -134,14 +133,14 @@ void UHutongInnerGateTool::AttachBuildingComponent(AStaticMeshActor* Actor, doub
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: the plan outline (and any lights) attach to the actor's root, which the component needs to be live to reach.
+	// After registration: plan outline and lights attach to the actor root, which needs the component live.
 	Building->ApplyPlacementAttachments();
 }
 
 void UHutongInnerGateTool::AdjustHeight(double DeltaCm)
 {
 	if (!Settings) return;
-	// The floor is the height a walkable doorway needs.
+	// Floor = walkable doorway height.
 	Settings->Params.EaveHeight = FMath::Clamp(Settings->Params.EaveHeight + DeltaCm,
 		FMath::Max(120.0, Settings->Params.GetMinEaveHeight()), 600.0);
 }
@@ -194,7 +193,7 @@ void UHutongInnerGateTool::Render(IToolsContextRenderAPI* RenderAPI)
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
 	if (MaxX - MinX < 1.0 || MaxY - MinY < 1.0) return;
 
-	// A bar along the facing edge.
+	// Bar along the facing edge.
 	const HutongGen::BaySide::FEdge Edge =
 		HutongGen::BaySide::GetEdge(BaySide, MinX, MinY, MaxX, MaxY);
 	const double SpanMin = Edge.bAlongX ? MinX : MinY;
@@ -218,8 +217,8 @@ TArray<FText> UHutongInnerGateTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongInnerGateTool", "HelpDrag",
-		"Click to anchor, move, click to fix the footprint, move to pick which way it faces, click to place.");
+		"Click to anchor, move, click to fix the footprint, move toward its outer face, click to place.");
 	Lines.Insert(NSLOCTEXT("HutongInnerGateTool", "HelpWhat",
-		"An inner gate (垂花門) divides the outer courtyard from the inner one. The hanging lotus posts (垂蓮柱) hang on its outer face."), 1);
+		"An inner gate (垂花門) divides the outer courtyard from the inner one."), 1);
 	return Lines;
 }

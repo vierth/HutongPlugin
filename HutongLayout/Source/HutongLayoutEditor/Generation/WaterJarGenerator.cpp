@@ -19,26 +19,26 @@ namespace HutongGen
 		const double MouthR = 0.5 * Belly * FMath::Clamp(P.MouthFraction, 0.1, 1.0);
 		const double BellyZ = H * FMath::Clamp(P.BellyFraction, 0.05, 0.95);
 
-		// The whole footprint is centred on the drag.
+		// Footprint centred on the drag.
 		const double Span = P.GetFootprint();
 		const double CX = 0.5 * Span;
 		const double CY = 0.5 * Span;
 
-		// 1) 缸座 first, so the jar's foot sits on it.
+		// 1) 缸座 first; the jar's foot sits on it.
 		double Z0 = 0.0;
 		if (P.bHasBase && P.BaseHeight > 0.0)
 		{
-			const int32 BaseFirstTri = Mesh.MaxTriangleID();
+			FSlotScope BaseTag(Mesh, MatSlot_Stone);
 			const double BH = FMath::Max(P.BaseHeight, 1.0);
 			const double Half = FMath::Max(FootR + FMath::Max(P.BaseMargin, 0.0), 1.0);
 			AppendBox(Mesh,
 				FVector3d(CX - Half, CY - Half, 0.0),
 				FVector3d(CX + Half, CY + Half, BH));
-			SetMaterialIDForTrianglesFrom(Mesh, BaseFirstTri, MatSlot_Stone);
+			BaseTag.Close();
 			Z0 = BH;
 		}
 
-		// The jar: one unit circle scaled per station up the axis, the same way AppendColumn does 收分 and the 垂蓮柱 gets its bud.
+		// Jar: a unit circle scaled per station up the axis, as AppendColumn does 收分.
 		const TArray<FVector2d> Circle = MakeCircleProfile(1.0, Sides);
 
 		struct FStation { double Z; double R; };
@@ -60,9 +60,9 @@ namespace HutongGen
 				FVector(FMath::Max(S.R, 0.5), FMath::Max(S.R, 0.5), 1.0)));
 		}
 
-		// Tagged as tile: a 魚缸 is fired clay and so is a 瓦, and reading as one family is what the object looks like against a roof.
-		const int32 JarFirstTri = Mesh.MaxTriangleID();
+		// Tagged tile: fired clay like a 瓦, reads as one family against a roof.
+		FSlotScope JarTag(Mesh, MatSlot_Roof);
 		AppendSweptProfile(Mesh, Circle, Xf);
-		SetMaterialIDForTrianglesFrom(Mesh, JarFirstTri, MatSlot_Roof);
+		JarTag.Close();
 	}
 }

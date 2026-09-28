@@ -24,6 +24,6 @@ public:
 private:
 	static TSharedRef<SDockTab> SpawnPanelTab(const FSpawnTabArgs& Args);
 
-	// Cached at startup so shutdown does not have to touch StaticClass() while the UObject system may already be unwinding.
+	// Cached: StaticClass() at shutdown may hit an unwinding UObject system.
 	FName RegionComponentClassName;
 };

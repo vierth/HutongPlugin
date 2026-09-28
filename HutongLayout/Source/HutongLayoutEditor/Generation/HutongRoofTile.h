@@ -22,6 +22,6 @@ namespace HutongGen
 		inline constexpr double DefaultRowSpacing = 20.0;
 
 		// Sides on one 勾頭.
-		inline constexpr int32 EaveCapSides = 6;
+		inline constexpr int32 EaveCapSides = 10;
 	}
 }

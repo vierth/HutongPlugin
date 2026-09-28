@@ -69,11 +69,11 @@ private:
 	void OnSelectAllVertices();
 	bool CanSelectAllVertices() const;
 
-	// Adds a corner at the point on EdgeIndex nearest the click ray, falling back to the edge's midpoint when the ray is parallel to the region's plane.
+	// Adds a corner on EdgeIndex nearest the click ray; midpoint if the ray is parallel to the plane.
 	void InsertCornerOnEdge(UPlaceRegionComponent* Region, int32 EdgeIndex,
 		const struct FViewportClick& Click);
 
-	// Removes one corner without disturbing the rest of the selection, which is what Alt+click on a handle means.
+	// Alt+click: removes one corner, keeping the rest of the selection.
 	void DeleteSingleVertex(UPlaceRegionComponent* Region, int32 VertexIndex);
 
 	// A property path rather than a raw or weak pointer.

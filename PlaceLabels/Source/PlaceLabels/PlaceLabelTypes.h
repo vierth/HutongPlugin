@@ -39,15 +39,9 @@ struct PLACELABELS_API FPlaceName
 	}
 };
 
-// How far a region's name and outline are evidence and how far they are a guess. A lane traced off
-// the 乾隆京城全圖 and one drawn from a photograph of a street sign are the same polygon, and
-// nothing in the geometry can say afterwards which is which — so the region carries it, beside the
-// note saying where it was read.
-//
-// The values *are* the scale, so `Confidence >= Probable` reads as it looks; hence a zero entry
-// that is none of the five. It is hidden from the picker and exists because a reflected enum must
-// have one — anything that zero-initialises the field lands on "unknown" rather than on "not
-// attested", which would be a confident wrong answer. The same scale as HutongLayout's, deliberately.
+// How far a region's name and outline are evidence rather than guess; the geometry cannot say.
+// Values are ordered, so `Confidence >= Probable` works. Zero is Unknown, not "not attested", so a
+// zero-initialised field is not a confident wrong answer. Same scale as HutongLayout's.
 UENUM(BlueprintType)
 enum class EPlaceConfidence : uint8
 {
@@ -121,7 +115,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Presentation")
 	FLinearColor EditorOutlineColor = FLinearColor(1.0f, 0.9f, 0.15f);
 
-	// Soft: an icon is a texture, and a level with twenty types should not hold twenty textures resident just to answer "what type is this".
+	// Soft: keeps every type's texture from staying resident.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Presentation")
 	TSoftObjectPtr<UTexture2D> Icon;
 };

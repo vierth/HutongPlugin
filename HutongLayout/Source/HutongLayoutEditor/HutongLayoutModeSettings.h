@@ -12,9 +12,8 @@ class UHutongLayoutModeSettings : public UObject
 	GENERATED_BODY()
 
 public:
-	// Declared first: category order is declaration order, and export is the first thing on the tab.
-	// Writes every loaded building's placement and whatever it has been tuned away from its type's
-	// defaults, which is the whole of what it takes to build the street again.
+	// Declared first: category order is declaration order. Writes each loaded building's placement
+	// and its changes from type defaults: enough to rebuild the street.
 	UFUNCTION(CallInEditor, Category = "Export", meta = (DisplayName = "Export Loaded Buildings", ToolTip = "Writes every loaded building to a scene file."))
 	void ExportLoaded();
 
@@ -26,13 +25,15 @@ private:
 	void DoExport(bool bSelection, const TCHAR* FallbackName, FString& Remembered);
 
 public:
+	// Tool panel's simple/advanced switch; toggled there, not on this panel.
+	UPROPERTY(config)
+	bool bShowAdvancedSettings = false;
+
 	UPROPERTY(EditAnywhere, config, Category = "Plan", meta = (DisplayName = "Layout Only (outlines, no geometry)", ToolTip = "Places new buildings as footprint outlines with no geometry."))
 	bool bPlanOnly = true;
 
-	// A view onto HutongPlanOutline's switch rather than a setting of its own: the plans draw
-	// whether or not this mode is up, and the panel that most wants them out of the way is another
-	// plugin's. Seeded from the switch when the mode is entered, so a fresh settings object cannot
-	// report the plans visible while they are hidden.
+	// Mirrors HutongPlanOutline's switch: plans draw regardless of mode, and another plugin's panel
+	// wants them hidden. Seeded on Enter so a fresh object cannot report hidden plans as visible.
 	UPROPERTY(EditAnywhere, Category = "Plan", meta = (DisplayName = "Show Plan Outlines", ToolTip = "Draws the footprint outline of every laid-out building."))
 	bool bShowPlanOutlines = true;
 
@@ -49,7 +50,7 @@ public:
 	UFUNCTION(CallInEditor, Category = "Plan", meta = (DisplayName = "Revert To Layout (selection)", ToolTip = "Removes the geometry of the selected built buildings, leaving their outlines."))
 	void RevertSelectedToLayout();
 
-	// Nothing about the placement changes: every building is built again from the parameters it is already carrying.
+	// Placement unchanged: rebuilt from the parameters each building carries.
 	UFUNCTION(CallInEditor, Category = "Selection", meta = (DisplayName = "Rebuild Selection", ToolTip = "Re-bakes each selected building from the parameters it carries."))
 	void RebuildSelection();
 
@@ -59,17 +60,21 @@ public:
 	UFUNCTION(CallInEditor, Category = "Selection", meta = (DisplayName = "Promote Selection", ToolTip = "Sets the selected buildings to the Promote To level and rebuilds them."))
 	void PromoteSelection();
 
-	// What a placed building is, changed after the fact: the footprint, the facing and the
-	// transform are the plan's and stay, the parameters come from the type converted to. A shop
-	// becomes a house, a 院牆 becomes a 隔牆, without the rectangle being drawn again.
+	// Identical buildings share one mesh asset under /Game/HutongLayout/Generated; a rebuild or a deleted
+	// building can leave one no building wears.
+	UFUNCTION(CallInEditor, Category = "Selection", meta = (DisplayName = "Delete Unused Generated Meshes", ToolTip = "Finds the shared building meshes no building uses any more and offers them for deletion, with the editor's own reference check."))
+	void DeleteUnusedGeneratedMeshes();
+
+	// Converts a placed building's type: footprint, facing and transform stay; parameters come from
+	// the new type (shop to house, 院牆 to 隔牆) with no redraw.
 	UPROPERTY(EditAnywhere, config, Category = "Selection", meta = (DisplayName = "Convert To", GetOptions = "GetConvertOptions", ToolTip = "Building type that Convert Selection turns the selected buildings into."))
 	FString ConvertTo;
 
 	UFUNCTION()
 	TArray<FString> GetConvertOptions() const;
 
-	// Empty builds from the target type's own defaults, which is what a type with one preset or
-	// none wants; a house wants to be told which house.
+	// Empty uses the target type's defaults, right for types with one preset or none; a house
+	// needs a preset named.
 	UPROPERTY(EditAnywhere, config, Category = "Selection", meta = (DisplayName = "Convert Preset", GetOptions = "GetConvertPresetOptions", ToolTip = "Preset the converted buildings use; empty uses the type's defaults."))
 	FString ConvertPreset;
 
@@ -92,15 +97,15 @@ public:
 	UFUNCTION(CallInEditor, Category = "Selection", meta = (DisplayName = "Fuse Selection", ToolTip = "Fuses two selected buildings standing end to end on one line into one."))
 	void FuseSelection();
 
-	// Everything streamed in — which under World Partition is the region you are standing in rather than the level.
+	// Everything streamed in: under World Partition, the region you stand in, not the level.
 	UFUNCTION(CallInEditor, Category = "Loaded Region", meta = (DisplayName = "Set Loaded Region To Promote Level", ToolTip = "Sets every loaded building to the Promote To level and rebuilds it."))
 	void SetLoadedRegionToTarget();
 
 	UFUNCTION(CallInEditor, Category = "Loaded Region", meta = (DisplayName = "Rebuild Loaded Buildings", ToolTip = "Re-bakes every loaded building from the parameters it carries."))
 	void RebuildLoaded();
 
-	// One editable material asset per slot, which every placement and rebuild then wears in place
-	// of the tinted default until a material is assigned on the palette. Existing assets are kept.
+	// One editable material asset per slot, worn by every placement and rebuild instead of the
+	// tinted default until a palette material is assigned. Existing assets are kept.
 	UFUNCTION(CallInEditor, Category = "Materials", meta = (DisplayName = "Create Starter Materials", ToolTip = "Writes one editable material per surface slot to /Game/HutongLayout/Materials; existing assets are kept."))
 	void CreateStarterMaterials();
 
@@ -110,9 +115,8 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Import", meta = (DisplayName = "Update Matching Placements", ToolTip = "Updates buildings whose id matches an imported record in place."))
 	bool bUpdateMatchingPlacements = true;
 
-	// A file written in one level lands in another at coordinates that mean nothing there, so the
-	// set has to be positionable by hand: this hands the file to the Import tool, which carries the
-	// whole set under the cursor, turns it with R and lays it down on a click.
+	// Coordinates from another level mean nothing here, so the Import tool carries the set under
+	// the cursor, turns it with R and drops it on a click.
 	UFUNCTION(CallInEditor, Category = "Import", meta = (DisplayName = "Place By Hand (Import Tool)", ToolTip = "Loads a scene file into the Import tool to place by hand."))
 	void PlaceSceneByHand();
 
@@ -120,11 +124,8 @@ public:
 	UPROPERTY(config)
 	FString LastSceneFile;
 
-	// What each export button last wrote, so the save dialog opens on that folder with that name
-	// rather than on the shipped default every time: a street is exported over and over as it is
-	// laid out, and retyping the name each time is how a session ends up with one file called
-	// HutongScene and no idea which lane it holds. Kept apart from the selection's, since one
-	// careless Save over a whole-scene file with a selection loses the rest of the street.
+	// Last file each export button wrote, so the dialog reopens there instead of on the default.
+	// Separate from the selection's: saving a selection over a whole-scene file loses the street.
 	UPROPERTY(config)
 	FString LastExportFile;
 

@@ -5,7 +5,7 @@ namespace HutongGen
 {
 	namespace
 	{
-		// Where a distance from the ridge falls in the section, walking in from the eave.
+		// Segment containing a distance from the ridge.
 		void LocateFromRidge(
 			const FHutongRoofSection& S, double DistanceFromRidge,
 			int32& OutSegment, double& OutRunIntoSegment)
@@ -28,7 +28,7 @@ namespace HutongGen
 			OutRunIntoSegment = 0.0;
 		}
 
-		// Height above the eave line, and the local slope, at a distance measured from the ridge.
+		// Height above eave and local slope at a distance from the ridge.
 		void PolylineAt(
 			const FHutongRoofSection& S, double DistanceFromRidge,
 			double& OutHeight, double& OutSlope)
@@ -42,7 +42,7 @@ namespace HutongGen
 			Z += Into * S.Ju[Seg];
 
 			OutHeight = Z;
-			// Measured against distance-from-the-ridge, which runs the other way.
+			// Negated: distance-from-ridge runs opposite to the run.
 			OutSlope = -S.Ju[Seg];
 		}
 	}
@@ -62,11 +62,8 @@ namespace HutongGen
 			return H;
 		}
 
-		// 捲棚: inside the roll band the profile rejoins the polyline at the band's edge with its
-		// value and slope, and reaches the crown horizontal. The crown sits where a parabola
-		// through that join lands, half the band's climb short of the fold: a fillet that rounds
-		// the corner off. Held at the fold's own height it was a bulge above both slopes — a
-		// pillow on the ridge, on every rolled roof.
+		// 捲棚: Hermite from the band edge (matching value and slope) to a level crown. Crown sits half
+		// the band's climb below the fold; at fold height it bulged above both slopes.
 		double JoinH = 0.0, JoinSlope = 0.0;
 		PolylineAt(*this, Roll, JoinH, JoinSlope);
 
@@ -76,7 +73,7 @@ namespace HutongGen
 		const double H00 = 2.0 * s3 - 3.0 * s2 + 1.0;
 		const double H01 = -2.0 * s3 + 3.0 * s2;
 		const double H11 = s3 - s2;
-		// The h10 term drops out: the crown tangent is zero, which is the point.
+		// h10 drops out: crown tangent is zero.
 		return H00 * Crown + H01 * JoinH + H11 * JoinSlope * Roll;
 	}
 
@@ -106,7 +103,7 @@ namespace HutongGen
 			return (PurlinCount(Purlins) - 1) / 2;
 		}
 
-		// The canon's arrays are constexpr; the section wants them as a TArray.
+		// constexpr canon array → TArray.
 		template <SIZE_T N>
 		TArray<double> Ratios(const double (&Canon)[N])
 		{
@@ -139,7 +136,7 @@ namespace HutongGen
 			const double Steps = FMath::Max(HalfDepth, 1.0) / N;
 			const double Over = FMath::Max(EaveOverhang, 0.0);
 
-			// The overhang carries the eave step's own 舉.
+			// Overhang takes the eave step's 舉.
 			if (Over > 0.0)
 			{
 				S.Run.Add(Over);

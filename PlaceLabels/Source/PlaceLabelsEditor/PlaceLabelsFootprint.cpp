@@ -17,10 +17,8 @@ namespace
 	const TCHAR* BuildingComponentPath = TEXT("/Script/HutongLayoutEditor.HutongBuildingComponent");
 	const TCHAR* FootprintFunctionName = TEXT("GetFootprintSize");
 
-	// The switch HutongLayout's own panel and this plugin's checkbox both drive. With the plans
-	// hidden the buildings are out of the way on purpose, so the offer to trace one is withdrawn
-	// with them: an offer to click a rectangle nobody can see is worse than no offer at all.
-	// Absent HutongLayout the variable is unregistered, and the class lookup below answers anyway.
+	// Shared with HutongLayout's panel: hidden plans withdraw the trace offer. Unregistered without
+	// HutongLayout; the class lookup then answers.
 	bool ArePlansShown()
 	{
 		static IConsoleVariable* Var =
@@ -30,7 +28,7 @@ namespace
 
 	UClass* ResolveBuildingComponentClass()
 	{
-		// Static, so a project without HutongLayout pays one failed lookup rather than one per hover tick.
+		// Static: without HutongLayout, one failed lookup, not one per hover tick.
 		static bool bResolved = false;
 		static TWeakObjectPtr<UClass> Cached;
 
@@ -48,9 +46,8 @@ namespace
 		FVector2D ReturnValue = FVector2D::ZeroVector;
 	};
 
-	// Mirrors `void GetFootprintCornersLocal(FVector2D& C0, FVector2D& C1, FVector2D& C2, FVector2D& C3) const`,
-	// the placement's own four corners, which a skewed footprint moves off the rectangle. Absent
-	// on a HutongLayout that predates it, and the rectangle is used instead.
+	// Mirrors `void GetFootprintCornersLocal(FVector2D& C0, FVector2D& C1, FVector2D& C2, FVector2D& C3) const`:
+	// skewed corners. Missing on older HutongLayout → rectangle.
 	struct FGetFootprintCornersParams
 	{
 		FVector2D C0 = FVector2D::ZeroVector;
@@ -124,8 +121,7 @@ bool FindFootprintNear(UWorld* World, const FVector& WorldPoint, double SearchRa
 			continue;
 		}
 
-		// The generated mesh has its origin at the footprint's min corner; the corners are the
-		// placement's own, off the rectangle where it has been angled.
+		// Mesh origin at the footprint's min corner; corners include any skew.
 		const FTransform& Xf = Actor->GetActorTransform();
 		FVector2D Local[4];
 		ReadFootprintCorners(Component, Size, Local);

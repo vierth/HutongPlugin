@@ -14,6 +14,6 @@ public:
 	virtual FText GetToolPaletteDisplayName(FName PaletteName) const override;
 	virtual void BuildToolPalette(FName PaletteName, FToolBarBuilder& ToolbarBuilder) override;
 
-	// Replaces the default (mode details + tool details) with the Place Labels panel on top.
+	// Place Labels panel on top of the default mode and tool details.
 	virtual TSharedPtr<SWidget> GetInlineContent() const override;
 };

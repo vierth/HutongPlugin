@@ -22,7 +22,7 @@ void FHutongLayoutStyle::Register()
 	StyleSet = MakeShared<FSlateStyleSet>(GetStyleSetName());
 	StyleSet->SetContentRoot(Plugin->GetBaseDir() / TEXT("Resources") / TEXT("Icons"));
 
-	// 20/16, not 40/20: the editor's own mode palettes run at this size, and at 40 these buttons were the loudest thing in the panel and pushed their labels into truncating.
+	// 20/16, not 40/20: matches the editor's mode palettes; at 40 the buttons dominated and truncated their labels.
 	const FVector2D Icon16(16.0f, 16.0f);
 	const FVector2D Icon20(20.0f, 20.0f);
 
@@ -33,7 +33,7 @@ void FHutongLayoutStyle::Register()
 		StyleSet->Set(FName(*(StyleName.ToString() + TEXT(".Small"))), new FSlateVectorImageBrush(Path, Icon16));
 	};
 
-	// One line per tool, and the style name has to be "HutongLayout.<command member>" exactly.
+	// One line per tool; the style name must be exactly "HutongLayout.<command member>".
 	AddToolIcon("HutongLayout.BeginWallTool", TEXT("WallTool"));
 	AddToolIcon("HutongLayout.BeginCourtWallTool", TEXT("CourtWallTool"));
 	AddToolIcon("HutongLayout.BeginSiheyuanTool", TEXT("SiheyuanTool"));
@@ -52,6 +52,12 @@ void FHutongLayoutStyle::Register()
 	AddToolIcon("HutongLayout.BeginCompoundTool", TEXT("CompoundTool"));
 	AddToolIcon("HutongLayout.BeginStreetRowTool", TEXT("StreetRowTool"));
 	AddToolIcon("HutongLayout.BeginGalleryTool", TEXT("GalleryTool"));
+	AddToolIcon("HutongLayout.BeginGalleryWallsTool", TEXT("GalleryWallsTool"));
+	AddToolIcon("HutongLayout.BeginGalleryHousesTool", TEXT("GalleryHousesTool"));
+	AddToolIcon("HutongLayout.BeginGalleryGatesTool", TEXT("GalleryGatesTool"));
+	AddToolIcon("HutongLayout.BeginGalleryCourtyardTool", TEXT("GalleryCourtyardTool"));
+	AddToolIcon("HutongLayout.BeginGalleryStreetTool", TEXT("GalleryStreetTool"));
+	AddToolIcon("HutongLayout.BeginGalleryTemplesTool", TEXT("GalleryTemplesTool"));
 	AddToolIcon("HutongLayout.BeginFlowerBedTool", TEXT("FlowerBedTool"));
 	AddToolIcon("HutongLayout.BeginWaterJarTool", TEXT("WaterJarTool"));
 	AddToolIcon("HutongLayout.BeginMeasureTool", TEXT("MeasureTool"));

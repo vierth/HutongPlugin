@@ -4,10 +4,9 @@
 
 void FHutongLayoutCommands::RegisterCommands()
 {
-	// Shift+digit rather than plain digits.
-	// Two walls, not one with a role picker: a boundary wall onto the lane and a dividing wall
-	// inside the compound differ in height, thickness, cap, what openings they may carry and
-	// whether they are measured against a street.
+	// Shift+digit: plain digits are the viewport bookmarks.
+	// Two walls, not one with a role picker: boundary and dividing walls differ in height,
+	// thickness, cap, openings, and whether they are measured against a street.
 	UI_COMMAND(BeginWallTool, "Lane Wall",
 		"Place a boundary wall (院牆) onto the lane: tall, thick and blank, with the gate (牆垣式門) as the way through.\n"
 		"Click to anchor, move, click again to place. [ and ] slide the gate. Hold R to rotate, Esc to cancel.",
@@ -82,7 +81,7 @@ void FHutongLayoutCommands::RegisterCommands()
 		"Drag along the run; the width is held to a band. Hold R to rotate, Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord(EModifierKey::Shift, EKeys::Zero));
 
-	// "Temple", not "Hall": a 殿 is a temple hall, and "Hall" read as the plain house next to it.
+	// "Temple", not "Hall": "Hall" read as the plain house beside it.
 	UI_COMMAND(BeginHallTool, "Temple",
 		"Place a temple hall (殿) for a small temple, under a hip-and-gable roof (歇山).\n"
 		"Click to anchor, move, click to fix the footprint, move to pick the side the facade faces, click to place.\n"
@@ -99,7 +98,7 @@ void FHutongLayoutCommands::RegisterCommands()
 		"Click to set the southeast corner, move to size the plot, click to lay it out. The orange edge is the street. Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord(EModifierKey::Shift | EModifierKey::Alt, EKeys::One));
 
-	// 構架: for showing how a house is framed, not for building a street.
+	// 構架: shows how a house is framed; not for building a street.
 	UI_COMMAND(BeginFrameTool, "Frame",
 		"Place the timber frame (構架) of a main hall (正房) — columns, beams, purlins and rafters on the platform (臺明), with no walls or roof.\n"
 		"Stamped at the preset's canonical size: click where it stands, move toward its front, click to place.\n"
@@ -111,7 +110,37 @@ void FHutongLayoutCommands::RegisterCommands()
 		"Click to anchor, move to position the set, click to place. Hold R to rotate, Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord(EModifierKey::Shift | EModifierKey::Alt, EKeys::Three));
 
-	// 天棚魚缸石榴樹: the courtyard's own furnishing, as against the buildings round it.
+	UI_COMMAND(BeginGalleryWallsTool, "Wall Gallery",
+		"Place every wall: plain walls, walls with garden doorways (moon gate 月亮門, plain doorway 隨牆門 and the other shapes) and walls with decorative windows (什錦窗), clustered by kind.\n"
+		"Click to anchor, move to position the set, click to place. Hold R to rotate, Esc to cancel.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	UI_COMMAND(BeginGalleryHousesTool, "House Gallery",
+		"Place every house: the main hall (正房), side house (廂房), front row (倒座房), rear row (後罩房) and ear room (耳房) presets, the ear room with its passage (耳房過道), the covered passage (過道), and the timber frames (構架), clustered by kind.\n"
+		"Click to anchor, move to position the set, click to place. Hold R to rotate, Esc to cancel.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	UI_COMMAND(BeginGalleryGatesTool, "Gate Gallery",
+		"Place every gate, clustered by kind: the four gate houses (屋宇式門) — wide-hall gate (廣亮大門), inner-column gate (金柱大門), flush gate (蠻子門) and ruyi gate (如意門) — with their variants; the gates set in walls (牆垣式門); and the inner gates (垂花門).\n"
+		"Click to anchor, move to position the set, click to place. Hold R to rotate, Esc to cancel.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	UI_COMMAND(BeginGalleryCourtyardTool, "Court Gallery",
+		"Place every courtyard piece: covered corridors (遊廊), the screen wall (影壁), the paved path (甬路), the flower bed (花池) and the water jar (魚缸), clustered by kind.\n"
+		"Click to anchor, move to position the set, click to place. Hold R to rotate, Esc to cancel.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	UI_COMMAND(BeginGalleryStreetTool, "Street Gallery",
+		"Place every street building: shopfronts (鋪面房), multi-story buildings (樓) and memorial arches (牌坊, roofed 牌樓), clustered by kind.\n"
+		"Click to anchor, move to position the set, click to place. Hold R to rotate, Esc to cancel.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	UI_COMMAND(BeginGalleryTemplesTool, "Temple Gallery",
+		"Place every temple hall (殿) and pavilion (亭), clustered by kind.\n"
+		"Click to anchor, move to position the set, click to place. Hold R to rotate, Esc to cancel.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	// 天棚魚缸石榴樹: courtyard furnishing, not a building.
 	UI_COMMAND(BeginFlowerBedTool, "Bed",
 		"Place a kerbed flower bed (花池).\n"
 		"Click to anchor, move, click again to place. Hold R to rotate, Esc to cancel.",

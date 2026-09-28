@@ -10,17 +10,15 @@
 
 void FHutongLayoutEditorModule::StartupModule()
 {
-	// Style set first: FHutongLayoutCommands resolves its icons out of it at registration time.
+	// Style first: commands resolve their icons from it at registration.
 	FHutongLayoutStyle::Register();
 	FHutongLayoutCommands::Register();
 
-	// After the commands, though nothing depends on the order.
 	HutongPresets::RegisterBuiltInPresets();
 
 	HutongPanelCustomizations::Register();
 
-	// Plans draw whether or not the mode is up, so whether they are wanted has to be settled
-	// before anybody enters it.
+	// Plans draw whether or not the mode is active, so load their visibility before anyone enters it.
 	HutongPlanOutline::LoadVisibilityFromConfig();
 }
 

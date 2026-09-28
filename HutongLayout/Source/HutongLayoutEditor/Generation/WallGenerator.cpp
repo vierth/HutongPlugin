@@ -13,21 +13,21 @@ namespace HutongGen
 	{
 		using namespace HutongMeshUtils;
 
-		// The 什錦窗's moulded surround and its 欞條, once the masonry they sit in is down.
+		// 什錦窗 moulded surround and 欞條, after the masonry.
 		void AppendWindowTrim(FDynamicMesh3& Mesh, const FHutongWallParams& P, double Cx,
 			double WinHalf, double WinOuter, double WinSurW, double WinSurP,
 			double WinCz, int32 WinSteps, double T)
 		{
-			// A ring following the outline, built by the same walk the masonry used so the two step round the shape together.
+			// Ring following the outline, same walk as the masonry so both step round the shape together.
 			if (WinSurW > 0.0)
 			{
-				const int32 SurFirstTri = Mesh.MaxTriangleID();
+				FSlotScope SurTag(Mesh, MatSlot_BaseCourse);
 				const double Lap = FMath::Min(2.0, 0.25 * WinSurW);
 				for (int32 r = 0; r < WinSteps * 2; ++r)
 				{
 					const double Za = WinCz - WinOuter + 2.0 * WinOuter * r / double(WinSteps * 2);
 					const double Zb = WinCz - WinOuter + 2.0 * WinOuter * (r + 1) / double(WinSteps * 2);
-					// Taken at the row's widest point rather than its midpoint.
+					// At the row's widest point, not its midpoint.
 					const double Zw = FMath::Clamp(WinCz, Za, Zb);
 
 					const double Outer = P.GetWindowHalfWidthFraction((Zw - WinCz) / WinOuter) * WinOuter;
@@ -51,15 +51,15 @@ namespace HutongGen
 							FVector3d(Cx + Outer, T + WinSurP, Zb));
 					}
 				}
-				// Dressed brick, like the 下鹼: a moulded surround is the same clay laid and cut better.
-				SetMaterialIDForTrianglesFrom(Mesh, SurFirstTri, MatSlot_BaseCourse);
+				// Dressed brick like the 下鹼.
+				SurTag.Close();
 			}
 
-			// 欞條 run the opening's full bounding square and are simply buried in the masonry where they pass outside the shape.
+			// 欞條 span the opening's bounding square, buried in masonry outside the shape.
 			const int32 Bars = FMath::Clamp(P.WindowLatticeBars, 0, 8);
 			if (Bars <= 0) return;
 
-			const int32 BarFirstTri = Mesh.MaxTriangleID();
+			FSlotScope BarTag(Mesh, MatSlot_Lattice);
 			const double BarT = FMath::Clamp(P.WindowLatticeThickness, 1.0, 0.5 * T);
 			const double BarY = 0.5 * (T - BarT);
 			for (int32 b = 1; b <= Bars; ++b)
@@ -68,15 +68,15 @@ namespace HutongGen
 				const double X = Cx - WinHalf + 2.0 * WinHalf * F;
 				AppendBox(Mesh, FVector3d(X - 0.5 * BarT, BarY, WinCz - WinHalf),
 					FVector3d(X + 0.5 * BarT, BarY + BarT, WinCz + WinHalf));
-				// Crossing bars sit a little deeper.
+				// Crossing bars a little deeper.
 				const double Z = WinCz - WinHalf + 2.0 * WinHalf * F;
 				AppendBox(Mesh, FVector3d(Cx - WinHalf, BarY - 0.45 * BarT, Z - 0.5 * BarT),
 					FVector3d(Cx + WinHalf, BarY + 0.55 * BarT, Z + 0.5 * BarT));
 			}
-			SetMaterialIDForTrianglesFrom(Mesh, BarFirstTri, MatSlot_Lattice);
+			BarTag.Close();
 		}
 
-		// 牆垣式垂花門: the ornament of a 垂花門 hung on a doorway that has no frame of its own, because the wall is the frame.
+		// 牆垣式垂花門: 垂花門 ornament on a frameless doorway; the wall is the frame.
 		void AppendDoorwayDressing(FDynamicMesh3& Mesh, const FHutongWallParams& P,
 			double Cx, double T, double BandZ0, double BandZ1)
 		{
@@ -85,7 +85,7 @@ namespace HutongGen
 			const double SurP = FMath::Max(P.DoorwaySurroundProjection, 0.0);
 			const double CapO = FMath::Max(P.GetCapOverhang(), 0.0);
 
-			// Proud of the surround or the two meet flush on one plane, and under the cap's own overhang so the ornament sits in the eave's shadow.
+			// Proud of the surround (else coplanar) and under the cap overhang, in the eave's shadow.
 			const double Proj = FMath::Max(
 				FMath::Min(FMath::Max(P.DoorwayDressProjection, 1.0), FMath::Max(CapO, 1.0)),
 				SurP + 1.0);
@@ -93,16 +93,16 @@ namespace HutongGen
 			const double Band = BandZ1 - BandZ0;
 			const double BeamH = FMath::Clamp(0.45 * Band, 8.0, 26.0);
 			const double BeamTop = BandZ0 + BeamH;
-			// The beam overhangs the opening far enough for a post to hang off each end clear of the reveal.
+			// Beam overhangs far enough for a post off each end to clear the reveal.
 			const double BeamHalf = HalfW + FMath::Max(P.DoorwaySurroundWidth, 0.0) + 2.0 * PostR;
 
-			const int32 FirstTri = Mesh.MaxTriangleID();
+			FSlotScope PaintTag(Mesh, MatSlot_Paint);
 
 			AppendBox(Mesh,
 				FVector3d(Cx - BeamHalf, -Proj,    BandZ0),
 				FVector3d(Cx + BeamHalf, T + Proj, BeamTop));
 
-			// 花板, held narrower in Y than the beam it sits on.
+			// 花板 narrower in Y than its beam.
 			if (BandZ1 - 1.0 > BeamTop)
 			{
 				AppendBox(Mesh,
@@ -110,10 +110,10 @@ namespace HutongGen
 					FVector3d(Cx + BeamHalf, T + 0.55 * Proj,  BandZ1 - 1.0));
 			}
 
-			// 雀替 in the two top corners of the opening, stepped rather than scrolled for the reason the shopfront's 花牙子 are.
+			// 雀替 in the opening's top corners, stepped, not scrolled (as the shopfront's 花牙子).
 			const double Reach = FMath::Min(0.22 * (2.0 * HalfW), 22.0);
 			const int32 Steps = 3;
-			// Each face's brackets run from the wall face out to short of the beam's own outer face.
+			// Brackets run from the wall face to short of the beam's outer face.
 			const TPair<double, double> Faces[] = { { -0.7 * Proj, 0.0 }, { T, T + 0.7 * Proj } };
 			for (const TPair<double, double>& Face : Faces)
 			{
@@ -128,20 +128,20 @@ namespace HutongGen
 				}
 			}
 
-			SetMaterialIDForTrianglesFrom(Mesh, FirstTri, MatSlot_Paint);
+			PaintTag.Close();
 
-			// 垂蓮柱 off each end of the beam, one per face.
-			const int32 PostFirstTri = Mesh.MaxTriangleID();
+			// 垂蓮柱 off each beam end, one per face.
+			FSlotScope PostTag(Mesh, MatSlot_Wood);
 			const double Drop = FMath::Max(P.DoorwayPostDrop, 4.0 * PostR);
 			for (double PostX : { Cx - BeamHalf + PostR + 1.0, Cx + BeamHalf - PostR - 1.0 })
 			{
 				Frame::AppendHangingPost(Mesh, PostX, -Proj + PostR, BandZ0, Drop, PostR, 0.45);
 				Frame::AppendHangingPost(Mesh, PostX, T + Proj - PostR, BandZ0, Drop, PostR, 0.45);
 			}
-			SetMaterialIDForTrianglesFrom(Mesh, PostFirstTri, MatSlot_Wood);
+			PostTag.Close();
 		}
 
-		// 月亮門 and its relatives: a shaped opening walked through rather than looked through.
+		// 月亮門 and kin: shaped opening walked through, not looked through.
 		void AppendGardenDoorway(FDynamicMesh3& Mesh, const FHutongWallParams& P,
 			double Cx, double T, double H, double BaseH, double BaseP)
 		{
@@ -154,25 +154,25 @@ namespace HutongGen
 			const double X0 = Cx - HalfW;
 			const double X1 = Cx + HalfW;
 
-			// The outline at a height, and the same outline grown by the surround.
+			// Outline at a height, and the same grown by the surround.
 			auto ShapeHalf = [&](double Z, double Half, double Height, double Bottom)
 			{
 				const double t = 2.0 * (Z - Bottom) / FMath::Max(Height, 1.0) - 1.0;
 				return P.GetDoorwayHalfWidthFraction(t) * Half;
 			};
-			// The outline carries on below the ground by the bury, so the cut at the sill is wide enough to walk.
+			// Outline continues below ground by the bury so the sill cut is walkable.
 			const double Bury = P.GetDoorwayBury();
 			auto OpeningHalf = [&](double Z) { return ShapeHalf(Z, HalfW, Top + Bury, -Bury); };
 			auto OuterHalf = [&](double Z) { return ShapeHalf(Z, HalfW + SurW, Top + Bury + 2.0 * SurW, -Bury - SurW); };
 
-			// The outline's widest point anywhere across a row, which is what both the masonry and the surround have to clear.
+			// Outline's widest point across a row, which masonry and surround must clear.
 			auto WidestIn = [&](double Za, double Zb)
 			{
 				const double Bulge = FMath::Clamp(0.5 * Top, Za, Zb);
 				return FMath::Max3(OpeningHalf(Za), OpeningHalf(Zb), OpeningHalf(Bulge));
 			};
 
-			// One band of courses, each stepping to the outline's widest point across its own row so no course ever intrudes on the shape it is stepping round.
+			// A band of courses, each stepped to its row's widest point so none intrudes on the shape.
 			auto Rows = [&](double Za, double Zb, double Proj)
 			{
 				if (Zb - Za <= 0.0) return;
@@ -187,10 +187,10 @@ namespace HutongGen
 				}
 			};
 
-			// The 下鹼 carries on to the edge of the opening, so its band steps round the shape too.
+			// 下鹼 runs to the opening edge, stepping round the shape too.
 			const double BaseTop = FMath::Clamp(BaseH, Sill, Top);
-			// Flush is not absent: with no projection there is no separate course, and the body has
-			// to take the band back or the masonry beside the opening is a hole through the wall.
+			// Flush is not absent: with no projection there is no separate course, and the body must take the
+			// band back or the masonry beside the opening is a hole.
 			const bool bProudCourse = BaseP > 0.0 && BaseTop > Sill;
 			if (bProudCourse)
 			{
@@ -200,13 +200,13 @@ namespace HutongGen
 			}
 			Rows(bProudCourse ? BaseTop : Sill, Top, 0.0);
 
-			// Solid over the head, up to the wall's top.
+			// Solid over the head to the wall top.
 			if (H > Top)
 			{
 				AppendBox(Mesh, FVector3d(X0, 0.0, Top), FVector3d(X1, T, H));
 			}
 
-			// The stone sill the shape is cut at, stepped over like every other 門檻 here.
+			// Stone sill the shape is cut at, stepped over like every 門檻.
 			if (Sill > 0.0)
 			{
 				const int32 First = Mesh.MaxTriangleID();
@@ -214,7 +214,7 @@ namespace HutongGen
 				SetMaterialIDForTriangleRange(Mesh, First, Mesh.MaxTriangleID(), MatSlot_Stone);
 			}
 
-			// The moulded surround, lapping over the reveal.
+			// Moulded surround, lapping the reveal.
 			if (SurW <= 0.0) return;
 
 			const int32 SurFirstTri = Mesh.MaxTriangleID();
@@ -226,7 +226,7 @@ namespace HutongGen
 				const double Za = Sill + (SurZ1 - Sill) * r / double(N);
 				const double Zb = Sill + (SurZ1 - Sill) * (r + 1) / double(N);
 
-				// Both edges taken at the row's widest point, the same rule the masonry follows.
+				// Both edges at the row's widest point, as the masonry.
 				const double Outer = FMath::Max(OuterHalf(Za), OuterHalf(Zb));
 				if (Outer <= 0.0) continue;
 
@@ -241,7 +241,7 @@ namespace HutongGen
 					AppendBox(Mesh, FVector3d(Cx + Inner, -SurP, Za), FVector3d(Cx + Outer, T + SurP, Zb));
 				}
 			}
-			// Dressed brick, like the 下鹼 and the window's own surround.
+			// Dressed brick, like the 下鹼 and window surround.
 			SetMaterialIDForTriangleRange(Mesh, SurFirstTri, Mesh.MaxTriangleID(), MatSlot_BaseCourse);
 		}
 	}
@@ -252,10 +252,9 @@ namespace HutongGen
 
 		const double L = FMath::Max(P.Length, 1.0);
 		const double T = P.GetThickness();
-		// GetHeight, not the raw field.
 		const double H = FMath::Max(P.GetHeight(), 1.0);
 
-		// The run's real extent: the drawn rect plus whatever miter each end needs to reach into its neighbour.
+		// Real run extent: drawn rect plus each end's miter into its neighbour.
 		const double RunX0 = -FMath::Clamp(P.StartExtend, 0.0, 3.0 * T);
 		const double RunX1 = L + FMath::Clamp(P.EndExtend, 0.0, 3.0 * T);
 
@@ -263,7 +262,7 @@ namespace HutongGen
 		const double BaseP = FMath::Max(P.BaseCourseProjection, 0.0);
 		const bool bBaseCourse = (BaseH > 0.0 && BaseP > 0.0);
 
-		// The gate comes first because every run of masonry below has to stop at it.
+		// Gate first: all masonry below stops at it.
 		const double GateFrameT = FMath::Clamp(P.GateFrameThickness, 2.0, T);
 		const double GateW = FMath::Clamp(P.GateWidth, 40.0, FMath::Max(L - 4.0 * GateFrameT, 40.0));
 		const double GateHead = FMath::Clamp(P.GetGateHeadHeight(), 80.0, H - 10.0);
@@ -278,28 +277,28 @@ namespace HutongGen
 		const double MasonryX0 = ClearX0 - GateFrameT;
 		const double MasonryX1 = ClearX1 + GateFrameT;
 
-		// The head sits on the jambs, and the masonry above it carries on to the wall top.
+		// Head on the jambs; masonry above continues to the wall top.
 		const double JambTop = FMath::Min(GateHead + GateFrameT, H);
 
 		const bool bGate = P.bHasGate && (MasonryX1 - MasonryX0) > 1.0 && MasonryX0 > 0.0 && MasonryX1 < L;
 
-		// The garden doorway, worked out the same way and for the same reason.
+		// Garden doorway, same approach.
 		const double DoorHalfW = 0.5 * P.GetDoorwayWidth();
 		const double DoorMargin = DoorHalfW + FMath::Max(P.DoorwaySurroundWidth, 0.0);
 		const double DoorCentre = P.GetDoorwayCentre(L);
 		const double DoorX0 = DoorCentre - DoorHalfW;
 		const double DoorX1 = DoorCentre + DoorHalfW;
 
-		// Dropped rather than overlapped where a run carries a 牆垣式門 as well and the two would collide.
+		// Dropped, not overlapped, where a 牆垣式門 would collide with the gate.
 		const bool bDoorwayClearOfGate = !bGate
 			|| DoorX1 + DoorMargin - DoorHalfW < MasonryX0
 			|| DoorX0 - DoorMargin + DoorHalfW > MasonryX1;
 		const bool bDoorway = P.HasDecorativeDoorway(L) && bDoorwayClearOfGate
 			&& DoorX0 > RunX0 && DoorX1 < RunX1;
 
-		// No 散水 on a wall: the apron catches what a roof sheds, and a brick cap sheds a trickle where an eave sheds a metre of roof.
+		// No 散水 on a wall: a brick cap sheds a trickle, not a roof's worth.
 
-		// 什錦窗, worked out alongside the gate and for the same reason.
+		// 什錦窗, alongside the gate.
 		const double WinHalf = 0.5 * FMath::Max(P.WindowSize, 10.0);
 		const double WinSurW = FMath::Max(P.WindowSurroundWidth, 0.0);
 		const double WinSurP = FMath::Max(P.WindowSurroundProjection, 0.0);
@@ -310,18 +309,18 @@ namespace HutongGen
 		TArray<double> WindowX;
 		{
 			const int32 Count = P.GetWindowCount(L);
-			// Held clear of the wall top and of the 下鹼.
+			// Clear of the wall top and the 下鹼.
 			const bool bFits = (WinCz - WinOuter > BaseH + 4.0) && (WinCz + WinOuter < H - 8.0);
 			for (int32 i = 0; i < (bFits ? Count : 0); ++i)
 			{
 				const double Cx = (i + 0.5) * L / double(Count);
-				// Never through the gate or the piers standing either side of it.
+				// Never through the gate or its piers.
 				if (bGate)
 				{
 					const double Keep = FMath::Max(P.GatePierWidth, P.GateWingWidth) + WinOuter;
 					if (Cx > MasonryX0 - Keep && Cx < MasonryX1 + Keep) continue;
 				}
-				// Nor through the garden doorway, for the same reason.
+				// Nor the garden doorway.
 				if (bDoorway)
 				{
 					const double Keep = WinOuter + FMath::Max(P.DoorwaySurroundWidth, 0.0);
@@ -332,7 +331,7 @@ namespace HutongGen
 			}
 		}
 
-		// The wall body between Z0 and Z1, cut for whatever windows fall inside the span.
+		// Wall body Z0..Z1, cut for windows in the span.
 		auto AppendBodySpan = [&](double X0, double X1, double Z0, double Z1)
 		{
 			if (X1 - X0 <= 0.0 || Z1 - Z0 <= 0.0) return;
@@ -368,7 +367,7 @@ namespace HutongGen
 				{
 					const double Za = WinZ0 + (WinZ1 - WinZ0) * r / double(WinSteps);
 					const double Zb = WinZ0 + (WinZ1 - WinZ0) * (r + 1) / double(WinSteps);
-					// The row's own widest point.
+					// Row's widest point.
 					const double Zw = FMath::Clamp(WinCz, Za, Zb);
 					const double Hw = P.GetWindowHalfWidthFraction((Zw - WinCz) / WinHalf) * WinHalf;
 					AppendBox(Mesh, FVector3d(SX0, 0.0, Za), FVector3d(Cx - Hw, T, Zb));
@@ -379,16 +378,16 @@ namespace HutongGen
 			AppendBox(Mesh, FVector3d(Cursor, 0.0, Z0), FVector3d(X1, T, Z1));
 		};
 
-		// Length along X, thickness along Y, with the 下鹼 as a separate box standing proud on both faces.
+		// Length along X, thickness along Y; 下鹼 a separate box proud on both faces.
 		auto AppendWallRun = [&](double X0, double X1)
 		{
 			if (X1 - X0 <= 0.0) return;
 
 			if (bBaseCourse)
 			{
-				const int32 BaseFirstTri = Mesh.MaxTriangleID();
+				FSlotScope BaseTag(Mesh, MatSlot_BaseCourse);
 				AppendBox(Mesh, FVector3d(X0, -BaseP, 0.0), FVector3d(X1, T + BaseP, BaseH));
-				SetMaterialIDForTrianglesFrom(Mesh, BaseFirstTri, MatSlot_BaseCourse);
+				BaseTag.Close();
 				AppendBodySpan(X0, X1, BaseH, H);
 			}
 			else
@@ -397,7 +396,7 @@ namespace HutongGen
 			}
 		};
 
-		// Every stretch the wall's own masonry has to stop at, in order along the run.
+		// Stretches the masonry stops at, in run order.
 		TArray<TPair<double, double>> Gaps;
 		if (bGate)
 		{
@@ -418,7 +417,7 @@ namespace HutongGen
 		}
 		AppendWallRun(Cursor, RunX1);
 
-		// Masonry over the gate's head, from the top of the jambs to the wall's own top.
+		// Masonry over the gate head, jamb top to wall top.
 		if (bGate && H > JambTop)
 		{
 			AppendBox(Mesh, FVector3d(MasonryX0, 0.0, JambTop), FVector3d(MasonryX1, T, H));
@@ -428,7 +427,7 @@ namespace HutongGen
 		{
 			AppendGardenDoorway(Mesh, P, DoorCentre, T, H, BaseH, bBaseCourse ? BaseP : 0.0);
 
-			// The band runs from the top of the surround to the underside of the cap.
+			// Band from surround top to cap underside.
 			if (P.HasDoorwayChuihua(L))
 			{
 				const double BandZ0 =
@@ -442,7 +441,7 @@ namespace HutongGen
 			AppendWindowTrim(Mesh, P, Cx, WinHalf, WinOuter, WinSurW, WinSurP, WinCz, WinSteps, T);
 		}
 
-		// 門垛: brick pilasters flanking the opening, standing proud of both faces.
+		// 門垛: brick pilasters flanking the opening, proud of both faces.
 		const bool bDoorPiers = bGate && P.bHasDoorPiers;
 		const double PierFaceP = bDoorPiers
 			? FMath::Max(P.GatePierProjection, bBaseCourse ? BaseP + 1.0 : 0.0)
@@ -459,7 +458,7 @@ namespace HutongGen
 				FVector3d(MasonryX1 + PierW,   T + PierFaceP, H));
 		}
 
-		// The raised pier the hood sits on.
+		// Raised pier under the hood.
 		const double PierX0 = bGate ? FMath::Max(MasonryX0 - FMath::Max(P.GateWingWidth, 0.0), RunX0) : 0.0;
 		const double PierX1 = bGate ? FMath::Min(MasonryX1 + FMath::Max(P.GateWingWidth, 0.0), RunX1) : 0.0;
 		const double GateRise = bGate ? FMath::Max(P.GateRise, 0.0) : 0.0;
@@ -470,16 +469,13 @@ namespace HutongGen
 			AppendBox(Mesh, FVector3d(PierX0, 0.0, H), FVector3d(PierX1, T, H + GateRise));
 		}
 
-		// Everything from here up is cap, and takes the roof slot.
-		const int32 CapFirstTri = Mesh.MaxTriangleID();
-
+		// Cap from here up: brick corbelling, then the tiled 牆帽 (tags itself).
 		const double CapO = FMath::Max(P.GetCapOverhang(), 0.0);
 		const double CorniceH = FMath::Max(P.CapSlabHeight, 0.0);
 		const int32 Courses = FMath::Clamp(P.GetCapCorbelCourses(), 1, 8);
 		const double RidgeH = FMath::Max(P.CapRidgeHeight, 0.0);
 
-		// 磚檐: corbelled courses stepping out to the full overhang, then the tiled cap on top.
-		// The courses are brick and keep the body's slot; only the tiled cap is roof.
+		// 磚檐: corbelled courses to the full overhang (brick, body slot), then the tiled cap (roof).
 		TArray<TPair<int32, int32>> BrickRanges;
 		auto AppendCap = [&](double X0, double X1, double BaseZ)
 		{
@@ -503,24 +499,34 @@ namespace HutongGen
 
 			if (RidgeH > 0.0)
 			{
-				// A miniature roof one 步架 wide.
-				const FHutongRoofSection CapSection = Jiajia::MakeSection(
-					EHutongPurlins::Three, 0.5 * (T + 2.0 * CapO), 0.0, P.CapRidgeRoll);
+				// 瓦頂 牆帽: miniature house roof, one 步架 a side over the corbelling, with drip course, tile
+				// courses and, if peaked, a 眉子 ridge.
+				Shell::FRoofParams Cap;
+				const double CapEave = CapO + HutongCanon::Wall::CapDripProjectionCm;
+				Cap.FrontOverhang = CapEave;
+				Cap.RearOverhang = CapEave;
+				Cap.Section = Jiajia::MakeSection(EHutongPurlins::Three, 0.5 * T, CapEave, P.CapRidgeRoll);
+				Cap.Rise = RidgeH;
+				Cap.SlopeSegments = 6;
+				Cap.FasciaDepth = HutongCanon::Wall::CapDripDepthCm;
+				Cap.FasciaWidth = HutongCanon::Wall::CapDripProjectionCm;
+				Cap.RafterSection = 0.0;
+				Cap.RakeDepth = 0.0;
+				Cap.Tile = EHutongRoofTile::He;
+				Cap.bTileRuns = P.bHasTileRuns;
+				Cap.bHasRidgeCourse = P.CapRidgeRoll <= 0.01;
+				Cap.RidgeCourseHeight = HutongCanon::Wall::CapRidgeCourseHeightCm;
+				Cap.RidgeCourseWidth = HutongCanon::Wall::CapRidgeCourseWidthCm;
 
-				AppendCurvedGableRoof(Mesh,
-					FVector3d(X0, -CapO, Z),
-					X1 - X0,
-					T + 2.0 * CapO,
-					RidgeH,
-					CapSection,
-					6,
-					EAxis2D::X);
+				const int32 Mark = Mesh.MaxVertexID();
+				Shell::AppendGableRoof(Mesh, X1 - X0, T, Z, Cap);
+				TransformVerticesFrom(Mesh, Mark, FTransform(FVector(X0, 0.0, 0.0)));
 			}
 		};
 
 		if (bGateRoof)
 		{
-			// The wall cap stops either side of the pier.
+			// Wall cap stops either side of the pier.
 			AppendCap(RunX0, PierX0, H);
 			AppendCap(PierX1, RunX1, H);
 			AppendCap(PierX0, PierX1, H + GateRise);
@@ -530,35 +536,33 @@ namespace HutongGen
 			AppendCap(RunX0, RunX1, H);
 		}
 
-		SetMaterialIDForTrianglesFrom(Mesh, CapFirstTri, MatSlot_Roof);
 		for (const TPair<int32, int32>& Range : BrickRanges)
 		{
 			SetMaterialIDForTriangleRange(Mesh, Range.Key, Range.Value, MatSlot_Body);
 		}
 
-		// 椽頭 under the hood only: the wall cap is brick corbelling and never had rafters.
+		// 椽頭 under the hood only; the wall cap is corbelling, never rafters.
 		const double HoodRSec = FMath::Max(P.GateRafterSection, 0.0);
 		if (bGateRoof && HoodRSec > 0.0)
 		{
-			const int32 RafterFirstTri = Mesh.MaxTriangleID();
+			FSlotScope RafterTag(Mesh, MatSlot_Wood);
 			const double Reach = 3.0 * HoodRSec;
 			const double TopZ = H + GateRise;
 			Shell::AppendRafterEnds(Mesh, PierX0, PierX1, -CapO, -CapO + Reach,
 				TopZ, HoodRSec, P.GateRafterSpacing);
 			Shell::AppendRafterEnds(Mesh, PierX0, PierX1, T + CapO - Reach, T + CapO,
 				TopZ, HoodRSec, P.GateRafterSpacing);
-			SetMaterialIDForTrianglesFrom(Mesh, RafterFirstTri, MatSlot_Wood);
+			RafterTag.Close();
 		}
 
 		if (!bGate) return;
 
-		const int32 WoodFirstTri = Mesh.MaxTriangleID();
-		int32 LeafFirstTri = MAX_int32;
+		FSlotScope WoodTag(Mesh, MatSlot_Wood);
 
 		FHutongDoorAssembly Door;
 		Door.OpeningX0 = ClearX0;
 		Door.OpeningX1 = ClearX1;
-		// The frame fills the wall's full depth including the base course projection.
+		// Frame fills the full wall depth including base course projection.
 		Door.FrontY = bBaseCourse ? -BaseP : 0.0;
 		Door.BackY = bBaseCourse ? T + BaseP : T;
 		Door.BottomZ = 0.0;
@@ -566,7 +570,7 @@ namespace HutongGen
 		Door.JambTopZ = JambTop;
 		Door.FrameThickness = GateFrameT;
 		Door.ThresholdHeight = P.GateThresholdHeight;
-		// Inward, into the courtyard, never flat onto the lane.
+		// Inward to the courtyard, never flat onto the lane.
 		Door.StoneReveal = P.DoorStones.bEnabled
 			? DoorStoneReveal(GateFrameT, GateW) : 0.0;
 		Door.bUseLeafAngles = P.bGateLeavesOpen;
@@ -576,13 +580,12 @@ namespace HutongGen
 		Door.PegCount = P.GatePegCount;
 		Door.SwingClearance = FMath::Max(FMath::Min(MasonryX0, L - MasonryX1), 0.0);
 
-		AppendDoorAssembly(Mesh, Door, &LeafFirstTri);
+		AppendDoorAssembly(Mesh, Door);
 
-		SetMaterialIDForTrianglesFrom(Mesh, WoodFirstTri, MatSlot_Wood);
-		SetMaterialIDForTrianglesFrom(Mesh, LeafFirstTri, MatSlot_DoorPaint);
+		WoodTag.Close();
 
-		// 門墩 and the threshold slab, which are most of what stops the doorway looking like a cut-out.
-		const int32 StoneFirstTri = Mesh.MaxTriangleID();
+		// 門墩 and threshold slab keep the doorway from looking like a cut-out.
+		FSlotScope StoneTag(Mesh, MatSlot_Stone);
 
 		AppendDoorStonePair(Mesh, P.DoorStones, ClearX0, ClearX1,
 			Door.FrontY, Door.BackY, 0.0, GateFrameT,
@@ -598,6 +601,6 @@ namespace HutongGen
 				FVector3d(MasonryX1, Door.FrontY,         StepH));
 		}
 
-		SetMaterialIDForTrianglesFrom(Mesh, StoneFirstTri, MatSlot_Stone);
+		StoneTag.Close();
 	}
 }

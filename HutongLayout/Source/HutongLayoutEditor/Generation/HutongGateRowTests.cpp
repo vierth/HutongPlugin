@@ -15,7 +15,7 @@ bool FHutongGateMatchRowTest::RunTest(const FString& Parameters)
 {
 	using namespace HutongGen::GateRow;
 
-	// A 12 x 6 m row: its depth is behind its own facade, whichever side that is, and never its run.
+	// 12 x 6 m row: depth is behind its facade, whichever side, never the run.
 	const FVector2D Row(1200.0, 600.0);
 	TestEqual(TEXT("facade along X: depth is Y"), RowDepth(Row, true, true), 600.0);
 	TestEqual(TEXT("facade along Y: depth is X"), RowDepth(FVector2D(600.0, 1200.0), true, false), 600.0);
@@ -23,13 +23,12 @@ bool FHutongGateMatchRowTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("the run bearing is the actor's when the facade runs along X"), RunYawDeg(30.0, true), 30.0);
 	TestEqual(TEXT("and a quarter turn on when it runs along Y"), RunYawDeg(30.0, false), 120.0);
 
-	// A wall met end-on is not a row, whatever it reports for an eave.
+	// A wall met end-on is not a row, whatever eave it reports.
 	TestTrue(TEXT("a house is a row"), IsRow(279.0, 600.0));
 	TestFalse(TEXT("a wall run is not"), IsRow(0.0, 37.0));
 	TestFalse(TEXT("nor a piece with no eave"), IsRow(0.0, 600.0));
 
-	// The gate's ridge is lifted clear of the row's, past the style's own eave ceiling, and a
-	// gate already clear is left where it stands.
+	// Gate ridge lifts clear of the row's, past the style's eave ceiling; a gate already clear stays.
 	{
 		FHutongGateHouseParams Ruyi;
 		const double Before = Ruyi.GetEaveHeight();
@@ -45,7 +44,7 @@ bool FHutongGateMatchRowTest::RunTest(const FString& Parameters)
 		TestNearlyEqual(TEXT("no row leaves the gate alone"), Alone.GetEaveHeight(), Before, 0.01);
 	}
 
-	// The components answer for the row: a house reports the eave its footprint derives, a wall reports none.
+	// A house reports its derived eave; a wall reports none.
 	UHutongSiheyuanBuildingComponent* House =
 		NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
 	House->FootprintX = 1200.0;

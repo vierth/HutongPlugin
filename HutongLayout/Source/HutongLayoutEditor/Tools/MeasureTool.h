@@ -30,11 +30,11 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="Calibration", meta=(DisplayName="Scale Correction", ToolTip="Known distance divided by measured distance; one is true scale."))
 	double ScaleCorrection = 0.0;
 
-	// Multiplies the selected actor's scale by the correction, keeping the first clicked point fixed so the calibration does not slide the map out from under the measurement that produced it.
+	// Scales about the first clicked point, so the map stays under the measurement that calibrated it.
 	UFUNCTION(CallInEditor, Category="Calibration", meta=(DisplayName="Apply Scale To Selected", ToolTip="Multiplies the selected actor's scale by the correction."))
 	void ApplyScaleToSelected();
 
-	// Set by the tool so the button knows what it is scaling about.
+	// Pivot for ApplyScaleToSelected; set by the tool.
 	FVector AnchorWorld = FVector::ZeroVector;
 };
 

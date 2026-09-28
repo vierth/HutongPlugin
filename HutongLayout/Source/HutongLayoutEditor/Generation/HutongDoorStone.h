@@ -13,16 +13,16 @@ enum class EHutongDoorStone : uint8
 	Drum UMETA(DisplayName = "Drum Door Stone (抱鼓石)", ToolTip = "A round drum standing on a plinth."),
 };
 
-// Everything a pair of 門墩 needs, in one struct because three gates want the same object.
+// A pair of 門墩, shared by three gate types.
 USTRUCT(BlueprintType)
 struct FHutongDoorStoneParams
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Door Stones", meta=(DisplayName="Has Door Stones (門墩)", ToolTip="Adds a door stone (門墩) at the foot of each jamb."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Door Stones", meta=(HutongBasic, DisplayName="Has Door Stones (門墩)", ToolTip="Adds a door stone (門墩) at the foot of each jamb."))
 	bool bEnabled = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Door Stones", meta=(DisplayName="Style", EditCondition="bEnabled", ToolTip="Form of the door stones."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Door Stones", meta=(HutongBasic, DisplayName="Style", EditCondition="bEnabled", ToolTip="Form of the door stones."))
 	EHutongDoorStone Style = EHutongDoorStone::Block;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Door Stones", meta=(DisplayName="Block Height (方門墩)", EditCondition="bEnabled && Style == EHutongDoorStone::Block", UIMin="25", UIMax="90", ClampMin="10", Units="cm", ToolTip="Height of a block door stone, in cm."))

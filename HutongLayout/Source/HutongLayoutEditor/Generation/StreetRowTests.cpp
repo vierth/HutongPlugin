@@ -55,7 +55,7 @@ bool FHutongStreetRowLayoutTest::RunTest(const FString& Parameters)
 		if (P.Num() == 1) TestEqual(TEXT("with every bay"), P[0].BayCount, 6);
 		Tiles(P, 1800.0, 6, TEXT("no gate"));
 	}
-	// Gates at both ends and two adjacent: each gate is its own piece, and the two house runs between them.
+	// Gates at both ends plus two adjacent: each gate its own piece, house runs between.
 	{
 		const TArray<FPiece> P = LayOut(2100.0, 7, { 0, 3, 4, 6 });
 		TestEqual(TEXT("six pieces"), P.Num(), 6);
@@ -76,8 +76,7 @@ bool FHutongStreetRowLayoutTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("nothing before the row"), BayAt(-1.0, 900.0, 3), INDEX_NONE);
 	TestEqual(TEXT("nothing after it"), BayAt(901.0, 900.0, 3), INDEX_NONE);
 
-	// Every house in a row shares one eave: a one-bay piece and a three-bay piece built from
-	// RowHouse derive the same figure, where each on its own derives a different one.
+	// A row shares one eave: one- and three-bay RowHouse pieces derive the same figure, unlike standalone.
 	{
 		FHutongSiheyuanParams House;
 		House.bDeriveProportions = true;
@@ -112,10 +111,8 @@ bool FHutongStreetRowLayoutTest::RunTest(const FString& Parameters)
 		UHutongGateHouseBuildingComponent::BuildGateHouseMesh(Gate, EHutongBaySide::MinusY, 380.0, 600.0, Mesh);
 		TestTrue(TEXT("a gate builds at a 380 cm bay"), Mesh.TriangleCount() > 0);
 
-		// Measured off the meshes: the estimate the lift is computed from and the roof the
-		// generator builds have to agree, or the gate stands with its ridge below the row's. A
-		// gable roof has vertices only at its two ends, so the ridge is read by casting down onto
-		// the roof surface across the depth at mid-run, where the 蠍子尾 at the gable ends cannot be hit.
+		// Measured off meshes: the lift's estimate must match the built roof or the gate ridge sits below the
+		// row's. Gable vertices exist only at the ends, so cast down at mid-run, clear of the 蠍子尾.
 		auto RidgeZ = [](const UE::Geometry::FDynamicMesh3& M, double Width, double Depth)
 		{
 			UE::Geometry::FDynamicMeshAABBTree3 Tree(&M, true);
@@ -133,7 +130,7 @@ bool FHutongStreetRowLayoutTest::RunTest(const FString& Parameters)
 		UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(House, EHutongBaySide::MinusY, 0, 1200.0, 600.0, HouseMesh);
 		const double HouseTop = RidgeZ(HouseMesh, 1200.0, 600.0);
 		const double GateTop = RidgeZ(Mesh, 380.0, 600.0);
-		// Estimate against built fold is HutongLayout.Roofs.RidgeEstimates' job, for every type.
+		// Estimate vs built fold, every type: HutongLayout.Roofs.RidgeEstimates.
 		TestTrue(TEXT("the built gate ridge stands clear of the built row ridge"), GateTop >= HouseTop + 30.0);
 	}
 

@@ -4,32 +4,45 @@
 #include "Generation/HutongBays.h"
 #include "Generation/HutongCanon.h"
 
-// The 小式 proportion rules as arithmetic over plain scalars, in one place. Every params struct's
-// Get* accessor forwards here rather than spelling a rule out again, so there is one answer to
-// what 柱高 is and one place a rule can be checked or changed. The figures the rules are applied
-// to live in HutongCanon.h.
+// 小式 proportion rules over plain scalars. Every Get* accessor forwards here; figures live in HutongCanon.h.
 //
-// R is 柱高 in 柱徑, K is 臺明高 in 柱徑, A is 額枋高 in 柱徑, T is the 橫披窗 band as a share of
-// the opening. Each function clamps its own arguments, so a caller may pass a user-edited field
-// straight in.
+// R = 柱高, K = 臺明高, A = 額枋高, all in 柱徑; T = 橫披窗 share of the opening.
+// Each function clamps its own args, so user-edited fields pass straight in.
 namespace HutongGen
 {
 	namespace Proportions
 	{
+		// How far a roof stands above its 檐柱 tops (圖5-3-1): 墊板 and 檐檁 on the column, the rafters and
+		// the roof's cover on them, less what the slope rises over the overhang. The roof's base (its eave
+		// line at the eave edge) is the column top plus this; its surface then clears the frame's 檁 by the
+		// rafters and cover all the way up, since both follow the same 舉架.
+		inline double RoofLift(double ColumnDiameter, double Overhang, double EaveJu)
+		{
+			namespace F = HutongCanon::Frame;
+			const double OverFrame = (F::BoardHeight + F::PurlinDiameter + F::RafterDiameter + F::RoofCover) * FMath::Max(ColumnDiameter, 0.0);
+			return FMath::Max(OverFrame - FMath::Max(EaveJu, 0.0) * FMath::Max(Overhang, 0.0), 0.0);
+		}
+
+		// The roof's underside at the column line, above its base: the slope's rise over the overhang less
+		// the cover, i.e. the rafters' tops on the 檐檁. Zero where the roof has no lift.
+		inline double UndersideRise(double ColumnDiameter, double Overhang, double EaveJu)
+		{
+			if (RoofLift(ColumnDiameter, Overhang, EaveJu) <= 0.0) return 0.0;
+			return FMath::Max(EaveJu, 0.0) * FMath::Max(Overhang, 0.0) - HutongCanon::Frame::RoofCover * FMath::Max(ColumnDiameter, 0.0);
+		}
+
 		inline double SafeR(double R) { return FMath::Max(R, 1.0); }
 		inline double SafeK(double K) { return FMath::Max(K, 0.0); }
 		inline double SafeA(double A, double R) { return FMath::Clamp(A, 0.1, 0.9 * SafeR(R)); }
-		inline double SafeTransom(double T) { return FMath::Clamp(T, 0.0, 0.5); }
 
-		// 臺明高 = K 柱徑 and 柱高 = R 柱徑 are measured off the same eave, so the two solve together:
-		// Floor = K·Eave/(R+K). Set separately, one eats the other.
+		// 臺明 and 柱高 share one eave, so solve together: Floor = K·Eave/(R+K).
 		inline double FloorFromEave(double Eave, double R, double K)
 		{
 			const double Rr = SafeR(R), Kk = SafeK(K);
 			return FMath::Max(Eave, 1.0) * Kk / (Rr + Kk);
 		}
 
-		// The same solve read the other way: the eave a given 柱高 stands its platform under.
+		// Inverse: eave for a given 柱高.
 		inline double EaveFromColumn(double ColumnHeight, double R, double K)
 		{
 			const double Rr = SafeR(R), Kk = SafeK(K);
@@ -44,7 +57,7 @@ namespace HutongGen
 		}
 
 
-		// 檐柱高 = 8/10 明間面闊, floored: the rule cannot hold all the way down to a 耳房.
+		// 檐柱高 = 8/10 明間面闊, floored for 耳房 scale.
 		inline double ColumnFromCentralBay(double CentralBayWidth, double PerBay, double MinColumn)
 		{
 			return FMath::Max(
@@ -58,44 +71,51 @@ namespace HutongGen
 			return FMath::Max(ColumnHeight * Ratio, 0.0);
 		}
 
-		// 墀頭 projection, floored so the pier covers the corner column whose centre sits on the
-		// wall plane: the column's foot otherwise shows through the pier's face as a wedge that
-		// the 收分 taper closes higher up.
+		// 墀頭 projection, floored to cover the corner column centred on the wall plane; else its
+		// foot shows through as a wedge.
 		inline double ChitouProjection(double Requested, double ColumnRadius)
 		{
 			return FMath::Max(Requested,
 				FMath::Max(ColumnRadius, 0.0) + HutongCanon::Wall::ChitouColumnClearanceCm);
 		}
 
-		// 額枋's underside: 柱高 less the beam's own depth, which is what 則例 states.
+		// 額枋 underside: 柱高 less its depth (則例).
 		inline double ArchitraveBottom(double FloorHeight, double ColumnHeight, double R, double A)
 		{
 			const double Rr = SafeR(R);
 			return FloorHeight + ColumnHeight * (1.0 - SafeA(A, Rr) / Rr);
 		}
 
-		// 中檻: one member across the bay, so the window head and the leaf head are the same height.
-		inline double MiddleRail(double ArchitraveBottomZ, double FloorHeight, double TransomFraction)
+		// The rail at the 檐枋's line (上檻, or 中檻 under a 前廊's 橫陂), RailInD 柱徑 deep (清式營造則例 表十三):
+		// one member across the bay, so window and leaf heads match.
+		inline double MiddleRail(double ArchitraveBottomZ, double ColumnDiameter, double RailInD)
 		{
-			const double Opening = FMath::Max(ArchitraveBottomZ - FloorHeight, 1.0);
-			return ArchitraveBottomZ - SafeTransom(TransomFraction) * Opening;
+			return ArchitraveBottomZ - FMath::Max(RailInD, 0.0) * FMath::Max(ColumnDiameter, 0.0);
 		}
 
-		// The lowest eave that still leaves Need of clear height under the 中檻. Nothing below the
-		// eave can buy headroom — the whole stack is a fraction of 柱高 and 柱高 a fraction of the
-		// eave — so this solves for the eave with every other term cancelling.
-		inline double MinEaveForHeadroom(double Need, double R, double K, double A, double TransomFraction)
+		// Share of 柱高 clear between the 下檻's top and the rail's underside: 柱徑 = 柱高 / R, so the 額枋 (A), the
+		// rail and the 下檻 (all in 柱徑) come off the column in proportion.
+		inline double ClearShare(double R, double A, double RailInD, double SillInD)
 		{
 			const double Rr = SafeR(R);
-			const double ToRail = (1.0 - SafeA(A, Rr) / Rr) * (1.0 - SafeTransom(TransomFraction));
-			return EaveFromColumn(Need / FMath::Max(ToRail, 0.15), Rr, K);
+			return FMath::Max(1.0 - (SafeA(A, Rr) + FMath::Max(RailInD, 0.0) + FMath::Max(SillInD, 0.0)) / Rr, 0.15);
 		}
 
-		// 進深 = (檁數 - 1) × 步架, and the 舉 sequence over it. Both live in HutongJiajia.h; they
-		// are named here so a reader looking for the roof rule finds where it went.
-		//   Jiajia::DepthFor, Jiajia::MakeSection, Jiajia::DefaultRatios
-		//
-		// Bay spacing is HutongBays.h, included above:
-		//   ComputeBayCount, BayBoundary
+		// Lowest eave leaving Need clear between the 下檻 and the rail. The whole stack scales with the eave, so only
+		// the eave buys headroom.
+		inline double MinEaveForHeadroom(double Need, double R, double K, double A, double RailInD, double SillInD)
+		{
+			return EaveFromColumn(Need / ClearShare(R, A, RailInD, SillInD), SafeR(R), K);
+		}
+
+		// The same on a floor held at FloorHeight (a house raised to a court walk's floor): the column stands on it,
+		// so the headroom is bought above it.
+		inline double MinEaveForHeadroomOnFloor(double Need, double FloorHeight, double R, double A, double RailInD, double SillInD)
+		{
+			return FloorHeight + Need / ClearShare(R, A, RailInD, SillInD);
+		}
+
+		// Elsewhere: 進深 and 舉 sequence in HutongJiajia.h (DepthFor, MakeSection, DefaultRatios);
+		// bays in HutongBays.h (ComputeBayCount, BayBoundary).
 	}
 }

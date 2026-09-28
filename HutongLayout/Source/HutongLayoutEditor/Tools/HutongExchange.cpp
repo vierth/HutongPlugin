@@ -8,6 +8,8 @@
 
 #include "Editor.h"
 #include "Engine/StaticMeshActor.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
 #include "Engine/World.h"
 #include "JsonObjectConverter.h"
 #include "Misc/DateTime.h"
@@ -28,7 +30,7 @@ namespace HutongExchange
 
 namespace
 {
-	// Every parameter, footprint field and palette colour is an Edit property; the siheyuan's two component pointers are the only UPROPERTYs that are not, and they are exactly what must not travel.
+	// Every parameter, footprint field and palette colour is an Edit property; the siheyuan's two component pointers are the only UPROPERTYs that are not, and must not travel.
 	constexpr int64 CheckFlags = CPF_Edit;
 	constexpr int64 SkipFlags = CPF_Transient | CPF_Deprecated;
 
@@ -82,8 +84,8 @@ namespace
 		}
 	}
 
-	// This plugin's own editable properties in one category, which is how a layout-only record
-	// carries what a placement decided without carrying how the piece is built.
+	// This plugin's editable properties in one category: what a layout-only record carries
+	// (placement decisions, not how the piece is built).
 	bool IsInCategory(const FProperty* Prop, const TCHAR* Category)
 	{
 		if (!Prop->HasAnyPropertyFlags(CheckFlags)) return false;
@@ -129,10 +131,9 @@ namespace
 	}
 
 	// --- the delta ---
-	// A record carries what a building was *changed to*, not what it is: the reference is a fresh
-	// component of the same class carrying the same preset, and everything equal to it is dropped.
-	// A file of a hundred buildings was otherwise a hundred copies of the shipped defaults, and
-	// re-importing one pinned every field to whatever the canon said on the day it was written.
+	// A record carries what a building was *changed to*: fields equal to a fresh component of the
+	// same class and preset are dropped. Otherwise every file repeats the shipped defaults and a
+	// re-import pins each field to the canon of the day it was written.
 	bool JsonEquals(const TSharedPtr<FJsonValue>& A, const TSharedPtr<FJsonValue>& B)
 	{
 		if (!A.IsValid() || !B.IsValid()) return A.IsValid() == B.IsValid();
@@ -170,8 +171,7 @@ namespace
 		}
 	}
 
-	// Recurses into nested objects, so a params struct comes out as the two fields that were
-	// touched rather than as all of it or none of it.
+	// Recurses into nested objects, so a params struct yields only its touched fields.
 	void PruneEqual(const TSharedRef<FJsonObject>& Object, const TSharedRef<FJsonObject>& Reference)
 	{
 		TArray<FString> Keys;
@@ -182,7 +182,7 @@ namespace
 		{
 			const TSharedPtr<FJsonValue> Mine = Object->TryGetField(Key);
 			const TSharedPtr<FJsonValue> Theirs = Reference->TryGetField(Key);
-			// A field the reference has no answer for is a field that has to travel.
+			// A field the reference lacks must travel.
 			if (!Mine.IsValid() || !Theirs.IsValid()) continue;
 
 			if (Mine->Type == EJson::Object && Theirs->Type == EJson::Object)
@@ -200,13 +200,13 @@ namespace
 		}
 	}
 
-	// Case-insensitively, because a TMap<FString, ...> hashes that way and the file's own casing is cosmetic.
+	// Case-insensitive: TMap<FString, ...> hashes that way; file casing is cosmetic.
 	void KeepOwnFieldsOnly(const TSharedRef<FJsonObject>& Object, const UClass* Class)
 	{
 		TSet<FString> Keep;
 		GatherOwnKeys(Class, Keep);
 
-		// The map's key type is the engine's, and 5.8 changed it out from under this; take the keys as FString.
+		// The map's key type changed in 5.8; take keys as FString.
 		TArray<FString> Present;
 		Present.Reserve(Object->Values.Num());
 		for (const auto& Field : Object->Values)
@@ -289,9 +289,8 @@ TSharedPtr<FJsonObject> WriteComponent(const UHutongBuildingComponent* Component
 	}
 	KeepOwnFieldsOnly(Out, Component->GetClass());
 
-	// Measured against a fresh one of the same type carrying the same preset, so what is written
-	// is what somebody decided. Everything else follows the shipped defaults on the way back in,
-	// which is what makes a re-import pick up a canon that has moved.
+	// Diffed against a fresh component of the same type and preset, so only decisions are written;
+	// the rest follows shipped defaults on re-import, picking up canon changes.
 	if (UHutongBuildingComponent* Reference = NewObject<UHutongBuildingComponent>(
 		GetTransientPackage(), Component->GetClass(), NAME_None, RF_Transient))
 	{
@@ -302,8 +301,8 @@ TSharedPtr<FJsonObject> WriteComponent(const UHutongBuildingComponent* Component
 			CheckFlags, SkipFlags))
 		{
 			KeepOwnFieldsOnly(RefBlob, Reference->GetClass());
-			// Identity is not a parameter: the id is what a Sync import matches on, and a building
-			// whose every field happens to sit at its type's default still has to be findable.
+			// Identity is not a parameter: Sync matches on the id, so it is written even when every field
+			// is default.
 			RefBlob->RemoveField(FJsonObjectConverter::StandardizeCase(
 				GET_MEMBER_NAME_STRING_CHECKED(UHutongBuildingComponent, BuildingId)));
 			PruneEqual(Out, RefBlob);
@@ -325,9 +324,8 @@ bool ReadComponent(const TSharedRef<FJsonObject>& Blob, UHutongBuildingComponent
 	TSharedRef<FJsonObject> Filtered = MakeShared<FJsonObject>(*Blob);
 	KeepOwnFieldsOnly(Filtered, Component->GetClass());
 
-	// The preset first: the record holds the differences from it, not the whole of the building.
-	// A preset that is not in this project is not fatal — the differences land on the shipped
-	// defaults instead — but it is not silent either.
+	// Preset first: the record holds differences from it. A preset missing from this project is
+	// not fatal (differences land on shipped defaults) but is reported.
 	FString PresetName;
 	if (Filtered->TryGetStringField(TEXT("preset"), PresetName) && !PresetName.IsEmpty())
 	{
@@ -424,7 +422,7 @@ bool Gather(const TArray<UHutongBuildingComponent*>& Buildings, UWorld* World,
 	{
 		AActor* Actor = B->GetOwner();
 
-		// A placement made before the id field existed has none.
+		// Placements predating the id field have none.
 		if (B->EnsureBuildingId())
 		{
 			B->Modify();
@@ -490,8 +488,7 @@ bool Write(const FSceneFile& File, const FString& FilePath, FResult& OutResult)
 	Root->SetStringField(TEXT("coordinateSystem"), TEXT("unreal-world-centimetres"));
 	Root->SetStringField(TEXT("level"), File.LevelName);
 	Root->SetStringField(TEXT("exportedAt"), FDateTime::UtcNow().ToIso8601());
-	// Stated in the file, because a reader has to know whether the absent parameters are missing
-	// or deliberately absent.
+	// Stated in the file so a reader knows whether absent parameters are missing or omitted.
 	Root->SetBoolField(TEXT("layoutOnly"), File.bLayoutOnly);
 
 	TSharedRef<FJsonObject> Set = MakeShared<FJsonObject>();
@@ -527,10 +524,8 @@ bool Write(const FSceneFile& File, const FString& FilePath, FResult& OutResult)
 				StaticEnum<EHutongSkewMode>()->GetNameStringByValue((int64)R.Skew.Mode));
 		}
 
-		// Only where there is no blob to carry them. All four are CPF_Edit UPROPERTYs, so a full
-		// record already has them in `component`, and writing them twice would be two authorities
-		// for one field with a precedence question between them. Written as names rather than
-		// numbers: a layout file is meant to be read.
+		// Only without a blob: all four are CPF_Edit, so a full record already has them in `component`,
+		// and writing them twice makes two authorities. Names, not numbers: a layout file is meant to be read.
 		if (R.Blob.IsValid())
 		{
 			O->SetObjectField(TEXT("component"), R.Blob);
@@ -545,7 +540,7 @@ bool Write(const FSceneFile& File, const FString& FilePath, FResult& OutResult)
 			O->SetStringField(TEXT("detail"),
 				StaticEnum<EHutongDetail>()->GetNameStringByValue((int64)R.Detail));
 			O->SetBoolField(TEXT("planOnly"), R.bPlanOnly);
-			// The footprint is two numbers and says nothing about which of them is the run.
+			// The footprint's two numbers do not say which is the run.
 			O->SetBoolField(TEXT("runAlongY"), R.bRunAlongY);
 			// The kind within the class, where the class carries more than one kind.
 			if (!R.Variant.IsNone()) O->SetStringField(TEXT("variant"), R.Variant.ToString());
@@ -608,7 +603,7 @@ bool Read(const FString& FilePath, FSceneFile& OutFile, FResult& OutResult)
 	OutFile.Version = (int32)Version;
 	if (OutFile.Version > FormatVersion)
 	{
-		// Read it anyway — the format only grows — but say so.
+		// Read anyway (the format only grows), but warn.
 		OutResult.Problems.Add(FString::Printf(
 			TEXT("%s was written by a newer version (%d against %d); unknown fields will be lost."),
 			*FilePath, OutFile.Version, FormatVersion));
@@ -767,21 +762,20 @@ namespace
 		}
 	}
 
-	// What a record says about the placement rather than about the building: where it stands, how
-	// big it is, which way it faces and what it is built at. On a layout-only record this is the
-	// whole of it, and the parameters stay whatever the component already has — the type's current
-	// defaults on a fresh one, and what the user has tuned on a Sync match.
+	// What a record says about the placement, not the building: position, size, facing, detail
+	// level. On a layout-only record that is all; parameters stay as the component has them (type
+	// defaults when fresh, the user's tuning on a Sync match).
 	void ApplyLayout(const FRecord& Record, UHutongBuildingComponent* Component)
 	{
 		if (!Component) return;
-		// The kind first: a 隔牆 read back as a 院牆 is a different height, thickness and cap, and
-		// its footprint means something else.
+		// Kind first: a 隔牆 read as a 院牆 has a different height, thickness and cap, and its footprint
+		// means something else.
 		if (!Record.Variant.IsNone()) Component->SetTypeVariant(Record.Variant);
-		// Then the axis: a line-like piece reads its length off whichever of the two extents is
-		// the run, so a footprint applied before this is a wall as long as it is thick.
+		// Then the axis: line-like pieces read length off the run extent, so a footprint applied first
+		// gives a wall as long as it is thick.
 		Component->SetRunAlongY(Record.bRunAlongY);
-		// The placement's own fields verbatim where the file has them, which is everything the
-		// footprint is made of rather than the two numbers it comes out as.
+		// The placement's own fields verbatim where present: everything the footprint is made of, not
+		// just its two numbers.
 		if (Record.FootprintFields.IsValid())
 		{
 			ReadCategory(Record.FootprintFields.ToSharedRef(), Component, TEXT("Footprint"));
@@ -795,8 +789,8 @@ namespace
 		Component->bPlanOnly = Record.bPlanOnly;
 	}
 
-	// Everything a record says about a component: its parameters when it has them, its layout when
-	// it does not. One path, so the fresh placement and the Sync update cannot disagree.
+	// Everything a record says about a component: parameters if present, else layout. One path, so
+	// fresh placement and Sync update agree.
 	bool Hydrate(const FRecord& Record, UHutongBuildingComponent* Component, FString& OutProblem,
 		bool bForceLayout = false)
 	{
@@ -808,8 +802,8 @@ namespace
 		if (Record.Blob.IsValid())
 		{
 			const bool bOk = ReadComponent(Record.Blob.ToSharedRef(), Component, OutProblem);
-			// A record built for another type: only the fields both classes happen to share came
-			// out of the blob, so the placement's own facts are applied on top of it.
+			// A record for another type: only shared fields came out of the blob, so apply the placement's
+			// facts on top.
 			if (bOk && bForceLayout) ApplyLayout(Record, Component);
 			return bOk;
 		}
@@ -871,9 +865,8 @@ void Place(UWorld* World, const FSceneFile& File, const FTransform& SetToWorld,
 
 		UClass* const* Found = Classes.Find(Record.ClassName);
 
-		// A type this build does not have. The file may predate a rename or a split — 院牆 and 隔牆
-		// were one class once — so what to build instead is a question the caller has already put
-		// to the user, once per unknown type rather than once per record.
+		// A type this build lacks (the file may predate a rename or split, e.g. 院牆/隔牆): the caller
+		// already asked the user what to build instead, once per unknown type.
 		bool bRemapped = false;
 		if (!Found || !*Found)
 		{
@@ -923,7 +916,7 @@ void Place(UWorld* World, const FSceneFile& File, const FTransform& SetToWorld,
 						++OutResult.Skipped;
 						continue;
 					}
-					// Read, but with something worth saying about it.
+					// Read, with a warning.
 					if (!Problem.IsEmpty())
 					{
 						OutResult.Problems.Add(FString::Printf(TEXT("%s: %s."), *Name, *Problem));
@@ -934,10 +927,9 @@ void Place(UWorld* World, const FSceneFile& File, const FTransform& SetToWorld,
 					++OutResult.Updated;
 					continue;
 				}
-				// Same id, different type: the new building takes a fresh one. Left with the
-				// record's, the level holds two components under one guid, and the next Sync keeps
-				// whichever MapExistingById added last — actor-iteration order — so it can reshape
-				// and teleport the unrelated older building.
+				// Same id, different type: the new building gets a fresh id. Otherwise two components share a
+				// guid, and the next Sync may reshape and teleport whichever MapExistingById added last
+				// (actor-iteration order).
 				Id = FGuid::NewGuid();
 				OutResult.Problems.Add(FString::Printf(
 					TEXT("%s: a different type already carries this id; placed as a new building "
@@ -960,7 +952,7 @@ void Place(UWorld* World, const FSceneFile& File, const FTransform& SetToWorld,
 		}
 
 		TArray<FDynamicMesh3> LODs;
-		Template->BuildLODs(LODs);
+		const int32 CollisionLOD = Template->BuildLODs(LODs);
 		if (!Template->bPlanOnly && (LODs.Num() == 0 || LODs[0].TriangleCount() == 0))
 		{
 			OutResult.Problems.Add(FString::Printf(
@@ -972,7 +964,7 @@ void Place(UWorld* World, const FSceneFile& File, const FTransform& SetToWorld,
 		const FString SpawnName = bRemapped ? Class->GetName() : Record.ClassName.ToString();
 		AStaticMeshActor* Actor = Template->bPlanOnly
 			? HutongGen::SpawnEmptyActor(World, Xform, SpawnName)
-			: HutongGen::SpawnStaticMeshActor(World, LODs, Xform, SpawnName, Template->Palette);
+			: HutongGen::SpawnStaticMeshActor(World, LODs, Xform, SpawnName, Template->Palette, CollisionLOD);
 		if (!Actor)
 		{
 			OutResult.Problems.Add(FString::Printf(TEXT("%s: could not spawn an actor; skipped."), *Name));
@@ -999,17 +991,17 @@ void Place(UWorld* World, const FSceneFile& File, const FTransform& SetToWorld,
 			OutResult.Problems.Add(FString::Printf(TEXT("%s: %s."), *Name, *Problem));
 		}
 
-		// AddInstanceComponent as well as RegisterComponent, or the component is invisible in the Details panel and is not saved with the actor.
+		// AddInstanceComponent as well as RegisterComponent, or the component is hidden in Details and not saved with the actor.
 		Actor->AddInstanceComponent(Building);
 		Building->RegisterComponent();
-		// What a placement hangs on the actor besides the mesh — the plan outline.
+		// What a placement hangs on the actor besides the mesh: the plan outline.
 		Building->ApplyPlacementAttachments();
 
 		OutResult.Placed.Add(Actor);
 		++OutResult.Created;
 	}
 
-	// A whole street just arrived or moved; the snap cache has to see it.
+	// A whole street arrived or moved; refresh the snap cache.
 	HutongSnap::Invalidate();
 	OutResult.bFromLayoutOnly = File.bLayoutOnly;
 	OutResult.bSucceeded = true;
@@ -1022,7 +1014,7 @@ namespace
 	{
 		OutResult = FResult();
 
-		// Gather may mint ids on placements that predate the field, which is a change to the level.
+		// Gather may mint ids on old placements, which changes the level.
 		const FScopedTransaction Transaction(LOCTEXT("ExportScene", "Export Hutong Scene"));
 
 		FSceneFile File;
@@ -1058,13 +1050,30 @@ void ImportAtRecordedTransforms(UWorld* World, const FString& FilePath, EMode Mo
 		return;
 	}
 
-	// Straight back where it came from: the set frame's own recorded place in the world.
+	// Straight back to the set frame's recorded place in the world.
 	const FTransform SetToWorld(FRotator(0.0, File.SetYawDeg, 0.0), File.SetOriginWorld);
 
 	const FScopedTransaction Transaction(LOCTEXT("ImportScene", "Import Hutong Scene"));
 	Place(World, File, SetToWorld, Mode, FolderOverride, OutResult);
 }
 
+
+	void Report(const FResult& Result, const TCHAR* What)
+	{
+		for (const FString& Problem : Result.Problems)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Hutong %s: %s"), What, *Problem);
+		}
+
+		FNotificationInfo Info(Result.Summarise());
+		Info.ExpireDuration = Result.bSucceeded ? 5.0f : 8.0f;
+		TSharedPtr<SNotificationItem> Item = FSlateNotificationManager::Get().AddNotification(Info);
+		if (Item.IsValid())
+		{
+			Item->SetCompletionState(Result.bSucceeded
+				? SNotificationItem::CS_Success : SNotificationItem::CS_Fail);
+		}
+	}
 } // namespace HutongExchange
 
 #undef LOCTEXT_NAMESPACE

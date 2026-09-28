@@ -21,13 +21,13 @@ struct FHutongPaifangParams
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(ToolTip="Number of bays and columns the paifang has."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(HutongBasic, ToolTip="Number of bays and columns the paifang has."))
 	EHutongPaifangBays BayCount = EHutongPaifangBays::Three;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(DisplayName="Has Roofs (牌樓)", ToolTip="Adds a tiled roof over each bay (樓)."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(HutongBasic, DisplayName="Has Roofs (牌樓)", ToolTip="Adds a tiled roof over each bay (樓)."))
 	bool bHasRoofs = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(DisplayName="Columns Through Roof (衝天式)", ToolTip="Runs the columns up past the roofs rather than stopping them beneath."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(HutongBasic, DisplayName="Columns Through Roof (衝天式)", ToolTip="Runs the columns up past the roofs rather than stopping them beneath."))
 	bool bColumnsThroughRoof = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(UIMin="300", UIMax="1200", ClampMin="100", Units="cm", ToolTip="Height of the central bay's lintel assembly above the ground, in cm."))
@@ -56,7 +56,7 @@ struct FHutongPaifangParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(DisplayName="Panel Gap", EditCondition="bHasLowerArchitrave", UIMin="20", UIMax="150", ClampMin="5", Units="cm", ToolTip="Clear gap between the upper and lower architraves, in cm."))
 	double PanelGap = 55.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(DisplayName="Has Plaque (匾額)", EditCondition="bHasLowerArchitrave", ToolTip="Adds a name plaque (匾額) in the central bay."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(HutongBasic, DisplayName="Has Plaque (匾額)", EditCondition="bHasLowerArchitrave", ToolTip="Adds a name plaque (匾額) in the central bay."))
 	bool bHasPlaque = true;
 
 	// --- Base ---
@@ -75,8 +75,8 @@ struct FHutongPaifangParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(EditCondition="bHasRoofs", UIMin="20", UIMax="200", ClampMin="10", Units="cm", ToolTip="Rise of each roof from eave to ridge, in cm."))
 	double RoofRise = 62.0;
 
-	// The frame's height, the central 樓's eave on the architrave above it, and the 樓's rise:
-	// read by generator, massing block, preview and ridge estimate alike.
+	// Frame height, central 樓 eave on the architrave, 樓 rise: shared by generator, massing block,
+	// preview and ridge estimate.
 	double GetHeight() const { return FMath::Max(Height, 50.0); }
 	double GetRoofEaveZ() const { return GetHeight() + FMath::Max(ArchitraveDepth, 8.0); }
 	double GetRoofRise() const { return FMath::Max(RoofRise, 5.0); }
@@ -84,6 +84,15 @@ struct FHutongPaifangParams
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Eave Fascia Depth", EditCondition="bHasRoofs", UIMin="0", UIMax="30", Units="cm", ToolTip="Vertical depth of the fascia board along each eave, in cm."))
 	double EaveFasciaDepth = 9.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Tile Courses (壟)", EditCondition="bHasRoofs", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	bool bHasTileRuns = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Rafter End Section (椽頭)", EditCondition="bHasRoofs", UIMin="0", UIMax="15", ClampMin="0", Units="cm", ToolTip="Size of the rafter ends under the eave, in cm; zero omits them."))
+	double RafterEndSection = 4.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="10", UIMax="50", ClampMin="4", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))
+	double RafterEndSpacing = 12.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Corner Flare Rise (翼角)", EditCondition="bHasRoofs", UIMin="0", UIMax="90", ClampMin="0", Units="cm", ToolTip="Lift of each roof corner into its upturned corner (翼角), in cm."))
 	double RoofFlareRise = 32.0;
@@ -104,9 +113,9 @@ struct FHutongPaifangParams
 	double ColumnTaperRatio = HutongCanon::Module::ColumnTaperRatio;
 
 
-	// Set by the detail level, not by anybody's hand — 筒瓦 here is a *rank* statement and must not become a checkbox.
+	// Set by detail level: 筒瓦 here states rank; never a checkbox.
 	bool bPlainTileForDetail = false;
-	// Set by the tool from the drag rect; not user-editable.
+	// Set by the tool from the drag rect.
 	double Length = 900.0;
 	double Depth = 200.0;
 
@@ -114,14 +123,13 @@ struct FHutongPaifangParams
 
 	double GetColumnRadius() const { return FMath::Max(0.5 * ColumnDiameter, 4.0); }
 
-	// The radius the columns are laid on, held down on a shallow plinth depth.
+	// Column radius as laid, capped on a shallow plinth depth.
 	double GetColumnRadiusFor(double PlanDepth) const
 	{
 		return FMath::Min(GetColumnRadius(), 0.4 * FMath::Max(PlanDepth, 1.0));
 	}
 
-	// Bay spacing through the shared helper: 明間 is wider here for the same reason it is on a
-	// facade, and the plan reads its divisions out of this rather than spelling them out again.
+	// Bay spacing via the shared helper (wider 明間); the plan reads its divisions from here.
 	double GetBayBoundary(int32 Index, int32 Bays, double Span, double ColumnRadius) const
 	{
 		return HutongGen::BayBoundary(Index, Bays, Span, ColumnRadius, SideBayWidthRatio, Bays / 2);

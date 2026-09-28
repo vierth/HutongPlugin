@@ -130,7 +130,7 @@ void ValidateRegions(const TArray<TWeakObjectPtr<UPlaceRegionComponent>>& Region
 		// Deliberately no "this region found no parent" check.
 	}
 
-	// Explicit parents are checked in a second pass so a parent that is merely later in the array does not read as missing.
+	// Second pass, so a parent later in the array does not read as missing.
 	for (const TWeakObjectPtr<UPlaceRegionComponent>& Weak : Regions)
 	{
 		UPlaceRegionComponent* Region = Weak.Get();

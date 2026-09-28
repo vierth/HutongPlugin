@@ -22,13 +22,13 @@ namespace PlaceLabelsGeo
 	PLACELABELS_API double DistancePolygonToPolygon2D(
 		const TArray<FVector2D>& A, const TArray<FVector2D>& B, double MaxDistance);
 
-	// A point guaranteed to lie inside the polygon: the centroid when that works, otherwise the nearest vertex to it.
+	// A point inside the polygon: the centroid, else the vertex nearest it.
 	PLACELABELS_API FVector2D RepresentativePoint2D(const TArray<FVector2D>& Poly);
 
 	// Index pairs of edges that cross.
 	PLACELABELS_API void FindSelfIntersections(
 		const TArray<FVector2D>& Poly, TArray<TPair<int32, int32>>& OutCrossingEdges);
 
-	// Ear clipping into a triangle index list, three indices per triangle, wound counter-clockwise, for concave polygons in either input winding.
+	// Ear clipping: CCW index triples; concave input, either winding.
 	PLACELABELS_API bool TriangulatePolygon2D(const TArray<FVector2D>& Poly, TArray<int32>& OutIndices);
 }

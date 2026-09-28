@@ -18,7 +18,7 @@ void UHutongWaterJarTool::RegisterToolSettings()
 	Presets->Initialize(TEXT("WaterJar"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongWaterJarToolProperties, Params));
 	Presets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
-	// Presets after the parameters they save.
+	// Panel order is registration order: presets after the params they save.
 	RegisterSettings(Settings);
 	RegisterSettings(Presets);
 }
@@ -28,7 +28,7 @@ double UHutongWaterJarTool::DraggedBellyDiameter() const
 	const FHutongWaterJarParams P = Settings ? Settings->Params : FHutongWaterJarParams();
 	if (!bIsDragging && !bRectCommitted) return FMath::Max(P.BellyDiameter, 20.0);
 
-	// The larger extent, so the jar follows the hand rather than the shorter of two axes the user is not thinking about.
+	// The larger extent, so the jar follows the hand.
 	const FVector2D Local = WorldXYToLocalRect(CurrentWorld);
 	const double Reach = FMath::Max(FMath::Abs(Local.X), FMath::Abs(Local.Y));
 	return FMath::Clamp(Reach, 20.0, 140.0);
@@ -37,7 +37,7 @@ double UHutongWaterJarTool::DraggedBellyDiameter() const
 void UHutongWaterJarTool::GetEffectiveRectBounds(
 	double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const
 {
-	// Square, and at the object's true extent. A jar has one dimension.
+	// Square at the true extent: a jar has one dimension.
 	FHutongWaterJarParams P = Settings ? Settings->Params : FHutongWaterJarParams();
 	P.BellyDiameter = DraggedBellyDiameter();
 	const double Span = FMath::Max(P.GetFootprint(), 1.0);
@@ -75,7 +75,7 @@ void UHutongWaterJarTool::AttachBuildingComponent(AStaticMeshActor* Actor, doubl
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: the plan outline (and any lights) attach to the actor's root, which the component needs to be live to reach.
+	// After registration: the plan outline and lights attach to the actor's root, which needs the component live.
 	Building->ApplyPlacementAttachments();
 }
 
@@ -104,10 +104,8 @@ TArray<FText> UHutongWaterJarTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongWaterJarTool", "HelpSpan",
-		"Drag to set the belly diameter — the rect is held square, since a jar has only the one dimension. "
-		"- and = change its height.");
+		"Drag to set the jar's width; - and = set its height.");
 	Lines.Insert(NSLOCTEXT("HutongWaterJarTool", "HelpWhat",
-		"Courtyard furnishing (天棚魚缸石榴樹) — matting overhead, the fish jar, the pomegranate. It stands on the axis "
-		"in front of the main hall (正房), and the courtyard is arranged around it."), 1);
+		"The fish jar stands on the axis in front of the main hall (正房)."), 1);
 	return Lines;
 }

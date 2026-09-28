@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Generation/HutongProportions.h"
 #include "Generation/HutongCanon.h"
 #include "DynamicMesh/DynamicMesh3.h"
 #include "Generation/HutongJiajia.h"
@@ -10,9 +11,7 @@
 #include "Generation/HutongRearEave.h"
 #include "StoreyGenerator.generated.h"
 
-// 樓: the two-storey street building the 乾隆京城全圖 draws with a second tier of bays over the
-// shopfront — 酒樓, 茶樓, a 樓 over a shop. The same 硬山 shell and the same street facade as a
-// 鋪面房 below, with a tiled skirt (腰檐) marking the story line and a railed gallery over it.
+// 樓: two-storey street building (乾隆京城全圖): a 鋪面房 below, 腰檐 at the storey line, railed gallery and upper bays above.
 USTRUCT(BlueprintType)
 struct FHutongStoreyParams
 {
@@ -57,7 +56,7 @@ struct FHutongStoreyParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Opening Head / Story", UIMin="0.6", UIMax="0.92", ClampMin="0.3", ClampMax="0.95", ToolTip="Height of the shopfront opening's head as a fraction of the lower story."))
 	double OpeningTopRatio = 0.82;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Open Bays", UIMin="0", UIMax="5", ClampMin="0", ClampMax="12", ToolTip="Number of bays left open, counted outward from the middle."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(HutongBasic, DisplayName="Open Bays", UIMin="0", UIMax="5", ClampMin="0", ClampMax="12", ToolTip="Number of bays left open, counted outward from the middle."))
 	int32 OpenBayCount = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Board Width", UIMin="15", UIMax="45", ClampMin="8", Units="cm", ToolTip="Width of each board of the board doors (排板門), in cm."))
@@ -77,7 +76,7 @@ struct FHutongStoreyParams
 
 	// --- 腰檐 and the gallery ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(DisplayName="Has Skirt Roof (腰檐)", ToolTip="Adds the tiled skirt roof (腰檐) at the story line."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(HutongBasic, DisplayName="Has Skirt Roof (腰檐)", ToolTip="Adds the tiled skirt roof (腰檐) at the story line."))
 	bool bHasSkirtRoof = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(DisplayName="Skirt Projection", EditCondition="bHasSkirtRoof", UIMin="30", UIMax="140", ClampMin="10", Units="cm", ToolTip="How far the skirt roof (腰檐) projects in front of the facade, in cm."))
@@ -89,7 +88,7 @@ struct FHutongStoreyParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(DisplayName="Skirt Rafter Ends (椽頭)", EditCondition="bHasSkirtRoof", ToolTip="Adds a row of exposed rafter ends (椽頭) under the skirt roof."))
 	bool bHasSkirtRafters = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(DisplayName="Has Gallery (欄杆)", ToolTip="Adds the balcony deck and its railing (欄杆) across the upper front."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(HutongBasic, DisplayName="Has Gallery (欄杆)", ToolTip="Adds the balcony deck and its railing (欄杆) across the upper front."))
 	bool bHasGallery = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Story Line", meta=(DisplayName="Gallery Depth", EditCondition="bHasGallery", UIMin="40", UIMax="140", ClampMin="20", Units="cm", ToolTip="How far the gallery deck projects in front of the upper facade, in cm."))
@@ -127,7 +126,7 @@ struct FHutongStoreyParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Upper Front", meta=(DisplayName="Has Window Paper (窗紙)", ToolTip="Adds the paper pane (窗紙) behind each upper window's lattice."))
 	bool bHasWindowPaper = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Upper Front", meta=(DisplayName="Has Signboard (匾額)", ToolTip="Adds a name plaque (匾額) hung on the gallery rail."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Upper Front", meta=(HutongBasic, DisplayName="Has Signboard (匾額)", ToolTip="Adds a name plaque (匾額) hung on the gallery rail."))
 	bool bHasSignboard = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Upper Front", meta=(DisplayName="Signboard Height", EditCondition="bHasSignboard", UIMin="30", UIMax="90", ClampMin="10", Units="cm", ToolTip="Height of the signboard, in cm."))
@@ -180,8 +179,8 @@ struct FHutongStoreyParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge Course Width", EditCondition="bHasRidgeCourse", UIMin="10", UIMax="90", Units="cm", ToolTip="Width of the ridge course, in cm."))
 	double RidgeCourseWidth = 20.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="60", Units="cm", ToolTip="Rise of each ridge-end tail (蠍子尾), in cm."))
-	double RidgeEndKick = 30.0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="120", Units="cm", ToolTip="Rise of each ridge-end tail (蠍子尾), in cm."))
+	double RidgeEndKick = 50.0;   // HutongCanon::Roof::TailRiseInCourses × the ridge course
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Depth", UIMin="0", UIMax="25", ClampMin="0", Units="cm", ToolTip="Vertical depth of the fascia board along the eave, in cm."))
 	double EaveFasciaDepth = 8.0;
@@ -192,18 +191,21 @@ struct FHutongStoreyParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="18", ClampMin="0", Units="cm", ToolTip="Section size of each exposed rafter end (椽頭), in cm; zero omits them."))
 	double RafterEndSection = 7.0;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	bool bHasTileRuns = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="10", UIMax="50", ClampMin="4", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))
 	double RafterEndSpacing = 24.0;
 
-	// Set by the tool from the drag rect; not user-editable.
+	// Set by the tool from the drag rect.
 	double Width = 900.0;
 	double Depth = 620.0;
 	int32 BayCountOverride = 0;
 
 	double GetColumnRadius() const { return FMath::Max(0.5 * ColumnDiameter, 4.0); }
 
-	// The radius the columns are actually laid on, held against the wall they stand in, exactly as
-	// the shopfront's is — the bay boundaries are inset by it, so the plan asks for the same number.
+	// Column radius as laid, capped by the wall, as on the shopfront; bay boundaries inset by it, so
+	// the plan asks for the same value.
 	double GetColumnRadiusFor(double Frontage, double PlanDepth) const
 	{
 		const double W = FMath::Max(Frontage, 1.0), D = FMath::Max(PlanDepth, 1.0);
@@ -216,20 +218,27 @@ struct FHutongStoreyParams
 		return HutongGen::BayBoundary(i, BayCount, Frontage, ColR, SideBayWidthRatio, BayCount / 2);
 	}
 
-	// The story line: the top of the ground story and the level the gallery deck lies on.
+	// Storey line: top of the ground storey, level of the gallery deck.
 	double GetStoreyLineHeight() const
 	{
 		return FMath::Clamp(FloorHeight, 0.0, 120.0) + FMath::Max(LowerStoreyHeight, 150.0);
 	}
 
-	// The eave above the ground, which is both storys and the platform.
+	// Eave above ground: both storeys plus the platform.
 	double GetEaveHeight() const
 	{
 		return GetStoreyLineHeight() + FMath::Max(UpperStoreyHeight, 140.0);
 	}
 
-	// The head of the shopfront's own opening, floored so the ground story is a way in and not a
-	// picture of one: the mesh is its own collision.
+	// Roof above the column tops, the ceiling at the column line, and the roof's base
+	// (HutongGen::Proportions::RoofLift).
+	// The eave step's 舉 of the roof as built: the section scaled to the fixed rise.
+	double GetEaveJu() const { return HutongGen::Jiajia::BuiltEaveJu(HutongGen::Jiajia::MakeSection(EHutongPurlins::Five, 0.5 * Depth, FMath::Max(RoofOverhang, 0.0), RoofApexRoll), GetRoofRise()); }
+	double GetRoofLift() const { return HutongGen::Proportions::RoofLift(FMath::Max(ColumnDiameter, 2.0), FMath::Max(RoofOverhang, 0.0), GetEaveJu()); }
+	double GetUndersideRise() const { return HutongGen::Proportions::UndersideRise(FMath::Max(ColumnDiameter, 2.0), FMath::Max(RoofOverhang, 0.0), GetEaveJu()); }
+	double GetRoofBaseHeight() const { return GetEaveHeight() + GetRoofLift(); }
+
+	// Shopfront opening head, floored so the ground storey is walkable (the mesh is its own collision).
 	double GetOpeningTopHeight() const
 	{
 		const double Floor = FMath::Clamp(FloorHeight, 0.0, 120.0);

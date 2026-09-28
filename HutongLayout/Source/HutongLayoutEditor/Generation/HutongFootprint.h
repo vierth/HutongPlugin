@@ -3,13 +3,9 @@
 #include "CoreMinimal.h"
 #include "HutongFootprint.generated.h"
 
-// How the corner offsets reach the mesh.
-// Ends: only a zone at each end of the run moves — the end is cut on the bias, or pushed across,
-// and the body stays exactly as built, which is what a wall meeting an off-square neighbour
-// wants, and a house whose one gable follows the street. The corner may be pulled along the run
-// or across it; the drag lets it go one way at a time, the offset itself carries both.
-// Whole: every vertex moves by the bilinear blend of the four offsets, in any direction — a true
-// trapezoid plan, bays fanning with it.
+// How corner offsets move the mesh.
+// Ends: only a zone at each end moves (cut on the bias or pushed across); the body stays as built.
+// Whole: every vertex moves by a bilinear blend of the four offsets — a true trapezoid plan.
 UENUM(BlueprintType)
 enum class EHutongSkewMode : uint8
 {
@@ -17,10 +13,8 @@ enum class EHutongSkewMode : uint8
 	Whole UMETA(DisplayName="Whole footprint (整體)"),
 };
 
-// A footprint that is not a rectangle. Every generator builds a rectangle at the actor's origin;
-// this is how much each of its four corners is then moved, in the actor's local XY, so a house
-// on a lot that meets the street off square can follow it. Zero on all four is the rectangle.
-// Corners are numbered from the origin anticlockwise: (0,0), (W,0), (W,D), (0,D).
+// Off-square footprint: offsets of the built rectangle's four corners in actor-local XY; all zero = rectangle.
+// Corners anticlockwise from the origin: (0,0), (W,0), (W,D), (0,D).
 USTRUCT(BlueprintType)
 struct FHutongFootprintSkew
 {
@@ -79,17 +73,16 @@ struct FHutongFootprintSkew
 
 namespace HutongFootprint
 {
-	// The run is the long axis: the ends a bias cut belongs to are its ends.
+	// The run is the long axis; bias cuts apply at its ends.
 	inline bool RunAlongX(const FVector2D& Size) { return Size.X >= Size.Y; }
 
-	// The offset of a corner as the mode lets it stand: both modes now keep both components, and
-	// the name stays as the one seam a future mode would narrow it at.
+	// Corner offset as the mode reads it. Both modes keep both components; the seam a future mode would narrow.
 	inline FVector2D EffectiveOffset(const FVector2D& Size, const FHutongFootprintSkew& Skew, int32 Corner)
 	{
 		return Skew.Get(Corner);
 	}
 
-	// The four local corners, rectangle plus offsets, in the order the skew numbers them.
+	// Local corners (rectangle + offsets), in skew order.
 	inline void Corners(const FVector2D& Size, const FHutongFootprintSkew& Skew, FVector2D OutCorners[4])
 	{
 		OutCorners[0] = FVector2D(0.0, 0.0) + EffectiveOffset(Size, Skew, 0);
@@ -98,9 +91,8 @@ namespace HutongFootprint
 		OutCorners[3] = FVector2D(0.0, Size.Y) + EffectiveOffset(Size, Skew, 3);
 	}
 
-	// Where a point of the rectangle lands on the quadrilateral under Whole: the bilinear blend of
-	// the four corners weighted by where the point sits in the rectangle. The identity on a
-	// rectangle, and defined outside it too, which is how eaves and platforms follow the wall.
+	// Whole: bilinear map of a rectangle point onto the quad. Defined outside the rectangle too, so
+	// eaves and platforms follow the wall.
 	inline FVector2D MapWhole(const FVector2D& Size, const FVector2D C[4], double X, double Y)
 	{
 		const double U = X / FMath::Max(Size.X, 1.0e-6);
@@ -109,8 +101,7 @@ namespace HutongFootprint
 			 + C[2] * (U * V) + C[3] * ((1.0 - U) * V);
 	}
 
-	// Under Ends, the two corners at one end of the run: the one on the across == 0 side first,
-	// then the across == T side. bStart is the origin end.
+	// Ends: the two corners at one end, across == 0 first, then across == T. bStart = origin end.
 	inline void EndCorners(const FVector2D& Size, bool bStart, int32& OutA, int32& OutB)
 	{
 		const bool bX = RunAlongX(Size);
@@ -118,7 +109,7 @@ namespace HutongFootprint
 		OutB = bStart ? (bX ? 3 : 1) : 2;
 	}
 
-	// Under Ends, the along-run offsets at one end of the run, in EndCorners order.
+	// Ends: along-run offsets at one end, in EndCorners order.
 	inline void EndOffsets(const FVector2D& Size, const FHutongFootprintSkew& Skew, bool bStart, double& OutA, double& OutB)
 	{
 		int32 CornerA, CornerB;
@@ -128,7 +119,7 @@ namespace HutongFootprint
 		OutB = bX ? Skew.Get(CornerB).X : Skew.Get(CornerB).Y;
 	}
 
-	// The same across the run: positive is towards the across == T side.
+	// Across-run offsets; positive toward across == T.
 	inline void EndAcrossOffsets(const FVector2D& Size, const FHutongFootprintSkew& Skew, bool bStart, double& OutA, double& OutB)
 	{
 		int32 CornerA, CornerB;
@@ -138,8 +129,7 @@ namespace HutongFootprint
 		OutB = bX ? Skew.Get(CornerB).Y : Skew.Get(CornerB).X;
 	}
 
-	// How far in from that end the body starts to move: the across size plus half again the
-	// largest offset there, either way, never past the middle of the run. Nothing nearer the middle moves.
+	// End zone length: across size plus half the largest offset there, capped at mid-run.
 	inline double EndZone(const FVector2D& Size, const FHutongFootprintSkew& Skew, bool bStart)
 	{
 		const double L = RunAlongX(Size) ? Size.X : Size.Y;
@@ -152,7 +142,7 @@ namespace HutongFootprint
 		return FMath::Clamp(T + 1.5 * MaxAbs, 20.0, 0.5 * L);
 	}
 
-	// Where a point of the rectangle lands, whichever the mode.
+	// Map a rectangle point under either mode.
 	inline FVector2D Map(const FVector2D& Size, const FHutongFootprintSkew& Skew, double X, double Y)
 	{
 		if (Skew.Mode == EHutongSkewMode::Whole)
@@ -167,16 +157,12 @@ namespace HutongFootprint
 		const double R = bX ? X : Y;
 		const double Across = bX ? Y : X;
 		const double S = Across / FMath::Max(T, 1.0e-6);
-		// A course standing proud of a long face (S outside 0..1: a 墀頭, a cap, the 下鹼) follows
-		// the cut plane, but no steeper than 45° to the run past its corner: on the plane's own
-		// continuation a course proud by c reaches c / tan(angle) past the corner, and a cap on a
-		// 37 cm wall cut at 3° ran out two metres as a blade. A house's gable at a few degrees is
-		// well under the limit and its 墀頭 stays on the plane.
+		// Courses proud of a long face (S outside 0..1: 墀頭, cap, 下鹼) follow the cut plane, capped at
+		// 45°: uncapped, proud c reaches c/tan(angle) past the corner (a 3° cut ran a cap out 2 m).
 		const double Sc = FMath::Clamp(S, 0.0, 1.0);
 		auto Along = [&](double A, double B) { return FMath::Lerp(A, B, Sc) + (S - Sc) * FMath::Clamp(B - A, -T, T); };
-		// Along the run and across it, each fading from the corner's full offset at the end to
-		// nothing at the zone seam: the end face stays a straight line between its two corners,
-		// and each long face runs straight from the seam to its moved corner.
+		// Along and across offsets fade from full at the end to zero at the seam: end face and long
+		// faces stay straight.
 		double DR = 0.0, DA = 0.0;
 		const double ZStart = EndZone(Size, Skew, true);
 		const double ZEnd = EndZone(Size, Skew, false);
@@ -203,9 +189,8 @@ namespace HutongFootprint
 
 	inline double Cross(const FVector2D& A, const FVector2D& B) { return A.X * B.Y - A.Y * B.X; }
 
-	// A quadrilateral the warp can be trusted on: strictly convex, wound the way the rectangle is,
-	// no edge shorter than MinEdge. The warp's determinant is bilinear in the rectangle's
-	// coordinates, so positive at the four corners is positive everywhere between them.
+	// Strictly convex, rectangle winding, edges ≥ MinEdge. Determinant is bilinear, so positive at
+	// the corners means positive throughout.
 	inline bool IsQuadValid(const FVector2D C[4], double MinEdge = 20.0)
 	{
 		for (int32 i = 0; i < 4; ++i)
@@ -218,7 +203,7 @@ namespace HutongFootprint
 		return true;
 	}
 
-	// Inside a convex quadrilateral wound anticlockwise, edges included.
+	// Inside a CCW convex quad, edges included.
 	inline bool PointInQuad(const FVector2D C[4], const FVector2D& P)
 	{
 		for (int32 i = 0; i < 4; ++i)
@@ -236,7 +221,7 @@ namespace HutongFootprint
 		return FVector2D::Distance(P, A + AB * T);
 	}
 
-	// The nearest edge, for the band a press must clear to count as the inside.
+	// Distance to nearest edge (press must clear this band to count as inside).
 	inline double DistanceToQuadEdge(const FVector2D C[4], const FVector2D& P)
 	{
 		double Best = TNumericLimits<double>::Max();
@@ -247,9 +232,8 @@ namespace HutongFootprint
 		return Best;
 	}
 
-	// Whether the offsets, as the mode reads them, build: under Whole a convex quadrilateral; under
-	// Ends no corner pulled back past the zone it moves in, so the end face never folds over the
-	// body. A corner pushed across past the other corner's line fails the convexity check.
+	// Buildable: Whole needs a convex quad; Ends needs no corner pulled back past its zone (no fold),
+	// and a corner pushed across past the other's line fails convexity.
 	inline bool IsSkewValid(const FVector2D& Size, const FHutongFootprintSkew& Skew, double MinEdge = 20.0)
 	{
 		FVector2D C[4];
@@ -263,7 +247,7 @@ namespace HutongFootprint
 				if (Z <= 0.0) continue;
 				double A, B;
 				EndOffsets(Size, Skew, bStart, A, B);
-				// Outward is positive at the far end and negative at the origin end.
+				// Outward: positive at the far end, negative at the origin end.
 				const double InA = bStart ? A : -A, InB = bStart ? B : -B;
 				if (InA > Z - MinEdge || InB > Z - MinEdge) return false;
 			}
@@ -278,8 +262,7 @@ namespace HutongFootprint
 		return 0.5 * FMath::Abs(Twice);
 	}
 
-	// A footprint that is a run rather than a room: a wall, a corridor, a path. Its plan has a
-	// length and a thickness, and moving a corner of it means nothing.
+	// A run, not a room (wall, corridor, path): corner offsets mean nothing.
 	inline bool IsLineLike(const FVector2D& Size)
 	{
 		const double Lo = FMath::Min(Size.X, Size.Y), Hi = FMath::Max(Size.X, Size.Y);

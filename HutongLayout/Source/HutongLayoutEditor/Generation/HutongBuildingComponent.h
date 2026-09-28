@@ -45,52 +45,41 @@ class UHutongBuildingComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
-	// The preset this piece's parameters came from, and the way to change what a laid-out polygon
-	// will build. Pick another and the parameters are replaced where they stand: the footprint,
-	// the facing and the position are the plan's, so a rectangle drawn as a 正房 becomes a 廂房
-	// without being drawn again. Empty means the parameters have been tuned away from any preset.
+	// Picking another replaces the parameters in place; footprint, facing and position stay, so a
+	// 正房 becomes a 廂房 without redrawing. Empty = tuned away from any preset.
 	UPROPERTY(EditAnywhere, Category="Preset", meta=(DisplayName="Type / Preset", GetOptions="GetPresetOptions", ToolTip="Preset this building's parameters come from; changing it rebuilds in place."))
 	FString Preset;
 
 	UFUNCTION()
 	TArray<FString> GetPresetOptions() const;
 
-	// The preset list this type reads, which is the tool's own key: a house's presets are the
-	// house tool's. Derived from the class name (UHutong<Key>BuildingComponent), so a type gets
-	// its presets with no per-type code — and renaming a component class orphans them, exactly as
-	// renaming a tool's key would.
+	// The tool's preset key, derived from the class name (UHutong<Key>BuildingComponent).
+	// Renaming the class orphans its presets.
 	FName GetPresetKey() const;
 
-	// The params struct, by reflection, so one implementation loads a preset into any of the
-	// fourteen types. The same lookup UHutongPresetProperties makes on a tool's property set.
+	// The params struct by reflection; same lookup as UHutongPresetProperties.
 	bool GetParamsForPreset(const UScriptStruct*& OutType, void*& OutData);
 
-	// Takes a named preset's parameters, which is what picking one in the dropdown does. Also the
-	// two ends of an export: the reference a record's parameters are measured against, and the
-	// base the recorded differences are applied to.
+	// Loads a named preset's parameters. Also the export baseline that recorded diffs are measured against and applied to.
 	bool ApplyPresetParams(const FString& Name);
 
-	// **What the placement is worth as evidence, and what somebody wants to say about it.** A
-	// baked mesh remembers nothing and neither does a rectangle on the ground: a polygon traced
-	// off the map and one put there to close a gap in a street are the same rectangle, and only
-	// the placement can say which it is. Both travel in the scene file with everything else the
-	// placement decided.
+	// Evidence metadata: geometry cannot tell a traced polygon from a gap-filler, so the placement records it. Exported with the scene.
 	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Confidence", ToolTip="How far this placement is attested on the map, 5 to 1."))
 	EHutongConfidence Confidence = EHutongConfidence::Attested;
 
 	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Notes", MultiLine=true, ToolTip="Free text about this placement."))
 	FString Notes;
 
-	UPROPERTY(EditAnywhere, Category="Appearance", meta=(ShowOnlyInnerProperties, ToolTip="Colours and materials for each surface of this building."))
+	UPROPERTY(EditAnywhere, Category="Appearance", meta=(HutongAdvanced, ShowOnlyInnerProperties, ToolTip="Colours and materials for each surface of this building."))
 	FHutongPalette Palette;
 
-	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Detail Level", ToolTip="How much of the building's geometry is built."))
+	UPROPERTY(EditAnywhere, Category="Detail", meta=(HutongAdvanced, DisplayName="Detail Level", ToolTip="How much of the building's geometry is built."))
 	EHutongDetail DetailLevel = EHutongDetail::Near;
 
-	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Bespoke Mesh", ToolTip="Keeps a mesh of its own instead of a shared library mesh."))
+	UPROPERTY(EditAnywhere, Category="Detail", meta=(HutongAdvanced, DisplayName="Bespoke Mesh", ToolTip="Keeps a mesh of its own instead of a shared library mesh."))
 	bool bBespokeMesh = false;
 
-	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Build LOD Chain", ToolTip="Bakes the cheaper detail levels as the mesh's LODs."))
+	UPROPERTY(EditAnywhere, Category="Detail", meta=(HutongAdvanced, DisplayName="Build LOD Chain", ToolTip="Bakes the cheaper detail levels as the mesh's LODs."))
 	bool bBuildLODChain = true;
 
 	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Plan Only (outline, no geometry)", ToolTip="Draws only the footprint outline on the ground and builds no geometry."))
@@ -99,13 +88,12 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="Identity", meta=(DisplayName="Building Id", ToolTip="Unique identifier of this placement."))
 	FGuid BuildingId;
 
-	// The footprint off square. The generators only ever build the rectangle; the built mesh is
-	// warped to these corners afterwards, once per LOD, in BuildLODs. Under Footprint so a
-	// layout-only export carries it, and on the base so every type has it without a line of its own.
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Corner Offsets (角偏移)", ToolTip="Moves each footprint corner off the rectangle; zero keeps it."))
+	// Generators build the rectangle; BuildLODs warps each LOD to these corners. Under Footprint so
+	// a layout-only export carries it.
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="Corner Offsets (角偏移)", ToolTip="Moves each footprint corner off the rectangle; zero keeps it."))
 	FHutongFootprintSkew FootprintSkew;
 
-	// The four local corners the placement actually occupies, rectangle plus offsets, from the origin anticlockwise.
+	// Local corners, rectangle plus offsets, anticlockwise from the origin.
 	void GetFootprintCorners(FVector2D OutCorners[4]) const
 	{
 		HutongFootprint::Corners(GetFootprintSize(), FootprintSkew, OutCorners);
@@ -113,12 +101,11 @@ public:
 
 	bool HasFootprintSkew() const { return !FootprintSkew.IsZero(); }
 
-	// Where this building's 下鹼 tops out above the ground, or negative for a kind without one;
-	// and setting it, so a placement snapped to a neighbour can take the neighbour's line.
+	// 下鹼 top above ground, negative if none. Setter lets a snapped placement match its neighbour.
 	virtual double GetBaseCourseTop() const { return -1.0; }
 	virtual void SetBaseCourseTop(double TopAboveGround) {}
 
-	// The same for a caller that reaches this class by reflection, as PlaceLabels does.
+	// Footprint corners for callers using reflection (PlaceLabels).
 	UFUNCTION(BlueprintPure, Category="Hutong|Footprint")
 	void GetFootprintCornersLocal(FVector2D& C0, FVector2D& C1, FVector2D& C2, FVector2D& C3) const
 	{
@@ -135,50 +122,43 @@ public:
 	// Regenerates the owning actor's static mesh from the current parameters.
 	void Rebuild();
 
-	// The chain this placement bakes, LOD0 first.
-	void BuildLODs(TArray<UE::Geometry::FDynamicMesh3>& OutLODs) const;
+	// The baked LOD chain, LOD0 first. Returns the collision LOD.
+	int32 BuildLODs(TArray<UE::Geometry::FDynamicMesh3>& OutLODs) const;
 
-	// The footprint in the actor's local XY, which with the mesh origin at the rect's min corner is all anything needs to reconstruct the four world corners.
+	// Footprint extent in the actor's local XY; the mesh origin is the min corner.
 	UFUNCTION(BlueprintPure, Category="Hutong|Footprint")
 	virtual FVector2D GetFootprintSize() const { return FVector2D::ZeroVector; }
 
 	// The inverse, for the plan outline's handles.
 	virtual void SetFootprintSize(const FVector2D& Size) {}
 
-	// The eave above the ground, or zero for a piece that has none a gate could stand beside: a
-	// wall's cap and a path are not the row a gate is set into.
+	// Eave above ground; zero for pieces a gate cannot stand beside (walls, paths).
 	virtual double GetEaveHeight() const { return 0.0; }
 
-	// The ridge above the ground, or zero as for the eave. What a gate set into this row has to
-	// stand clear of.
+	// Ridge above ground, zero as for the eave; a gate in this row must clear it.
 	virtual double GetRidgeHeight() const { return 0.0; }
 
 	// What this piece is, for the mode's hover readout.
 	virtual FText GetTypeLabel() const { return NSLOCTEXT("Hutong", "TypeBuilding", "Building"); }
 
-	// What a laid-out one is drawn in. A street of plans is a dozen rectangles on the ground and
-	// the only thing distinguishing them is colour, so it goes beside the label: both answer the
-	// same question about a piece that has no geometry yet.
+	// Plan-only outline colour; tells plan rectangles apart by type.
 	virtual FLinearColor GetPlanColour() const { return HutongPlanColours::Building; }
 
-	// Whatever the component hangs on the actor besides the baked mesh — the lights, at present.
+	// Attachments besides the baked mesh (currently lights).
 	virtual void ApplyPlacementAttachments() { ApplyPlanOutline(); }
 
 	// Which edge of the footprint is the facade, for the plan outline's hatching.
 	virtual bool GetFacade(EHutongBaySide& OutSide) const { return false; }
-	// Turns the facade to another side of the same footprint, for a building placed facing the wrong way.
+	// Turns the facade to another side of the same footprint.
 	virtual bool SetFacade(EHutongBaySide Side) { return false; }
 	// How many quarter turns one press of [ or ] moves the facade.
 	virtual int32 FacadeTurnStep() const { return 1; }
 
-	// Where the columns divide this building's frontage, for the plan's bay divisions and the
-	// hover readout's count. Empty on a type with no bays to report — a wall, a path, or a piece
-	// that is one bay by construction. Every override reads the generator's own BayBoundary, so a
-	// plan cannot draw a division the mesh will not build.
+	// Column divisions of the frontage for the plan and readout; empty when no bays. Overrides read
+	// the generator's BayBoundary so plan and mesh agree.
 	virtual void GetPlanBays(FHutongPlanBays& Out) const {}
 
-	// Which footprint axis those boundaries are measured along: the facade edge where the type has
-	// one, the run otherwise.
+	// Axis of the boundaries: facade edge if any, else the run.
 	bool ArePlanBaysAlongX() const;
 
 	// The openings a plan can slide along the run — a wall's 牆垣式門 and garden doorway.
@@ -187,28 +167,23 @@ public:
 	// Which footprint axis the run lies along, for a type with a run.
 	virtual bool IsRunAlongY() const { return false; }
 
-	// The other half of it, which a layout-only import needs before it can read a footprint: a
-	// line-like piece takes its length off whichever extent is the run.
+	// Needed by layout-only import before reading a footprint: length comes off the run extent.
 	virtual void SetRunAlongY(bool bAlongY) {}
 
-	// What kind of thing this is *within* its class, where a class carries more than one: the
-	// wall's role is drawn by two different tools and decides height, thickness, cap and what
-	// openings are allowed, so it is type rather than parameter and a layout-only record has to
-	// carry it. NAME_None on a class with only one kind in it.
+	// Kind within the class (e.g. wall role), carried by layout-only records; NAME_None if the class has one kind.
 	virtual FName GetTypeVariant() const { return NAME_None; }
 	virtual void SetTypeVariant(FName Variant) {}
 
-	// The variants this class can be converted into, so the conversion list can offer a 院牆 and a
-	// 隔牆 as two things to turn a building into rather than one wall and a follow-up edit. Empty
-	// on a class with only one kind in it.
+	// Variants offered separately in the conversion list (院牆, 隔牆); empty if the class has one kind.
 	virtual void GetTypeVariants(TArray<FName>& Out) const {}
 
 	// Creates, updates or removes the plan outline to match bPlanOnly.
 	void ApplyPlanOutline();
 
-	// A component that is not RF_Transactional is silently left out of every transaction: the
-	// placement tools make one with a bare NewObject, and a corner dragged on it could not be undone.
+	// Sets RF_Transactional: without it, Modify() records nothing and a bare NewObject is not undoable.
 	virtual void PostInitProperties() override;
+	// Editor-module class: cook strips the component, keeps the baked mesh.
+	virtual bool IsEditorOnly() const override { return true; }
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -227,8 +202,7 @@ class UHutongWallBuildingComponent : public UHutongBuildingComponent
 	GENERATED_BODY()
 
 public:
-	// The role is what the run is, so the readout and the plan say it: 院牆 and 隔牆 are the two
-	// tools that draw walls, and a rectangle on the ground carries no other sign of which it is.
+	// Role labels the run, as nothing else distinguishes 院牆 from 隔牆.
 	virtual FText GetTypeLabel() const override
 	{
 		return (Params.Role == EHutongWallRole::Courtyard)
@@ -254,13 +228,13 @@ public:
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(ToolTip="Runs the wall along the actor's local Y axis instead of X."))
 	bool bLengthAlongY = false;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Start Miter", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="How far the start of the run extends past the rectangle, in cm."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="Start Miter", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="How far the start of the run extends past the rectangle, in cm."))
 	double StartExtend = 0.0;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="End Miter", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="How far the end of the run extends past the rectangle, in cm."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="End Miter", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="How far the end of the run extends past the rectangle, in cm."))
 	double EndExtend = 0.0;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Footprint Thickness", UIMin="0", ClampMin="0", Units="cm", ToolTip="Cross extent capping the wall's thickness, in cm; zero applies no cap."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="Footprint Thickness", UIMin="0", ClampMin="0", Units="cm", ToolTip="Cross extent capping the wall's thickness, in cm; zero applies no cap."))
 	double FootprintThickness = 0.0;
 
 
@@ -269,10 +243,8 @@ public:
 		bool bAlongY, UE::Geometry::FDynamicMesh3& OutMesh,
 		EHutongDetail Detail = EHutongDetail::Near);
 
-	// The thickness this run is actually built at. The component's own FootprintThickness is what
-	// BuildMesh caps with — Params.FootprintThickness is only ever set on the local copy inside
-	// BuildWallMesh — so reading the params here reported the role's figure for a compound wall
-	// built on a plotted 24, to snapping, the hover outline, the plan outline and the exchange alike.
+	// Built thickness: capped by the component's FootprintThickness (Params.FootprintThickness is
+	// only set on BuildWallMesh's local copy).
 	double GetBuiltThickness() const
 	{
 		return (FootprintThickness > 0.0)
@@ -287,19 +259,15 @@ public:
 	virtual void SetFootprintSize(const FVector2D& S) override
 	{
 		Length = FMath::Max(bLengthAlongY ? S.Y : S.X, 10.0);
-		// A run laid on a plotted width — a compound's cross wall on its own 24 — is thinner than
-		// its role asks for, and that is a fact about the footprint. Taken only when it narrows,
-		// so a footprint never widens a wall past what its role says — and dropped when the
-		// footprint reaches the role's figure again, or a cap set once stood for ever and a
-		// re-widened run kept reporting the narrow one to snapping, the outline and the exchange.
+		// A narrower cross extent caps the thickness; widening back to the role's figure clears the
+		// cap. Never widens past the role.
 		const double Cross = bLengthAlongY ? S.X : S.Y;
 		FootprintThickness = (Cross > 1.0 && Cross < Params.GetThickness() - 0.01) ? Cross : 0.0;
 	}
 	virtual bool IsRunAlongY() const override { return bLengthAlongY; }
 	virtual void SetRunAlongY(bool bAlongY) override { bLengthAlongY = bAlongY; }
 
-	// 院牆 or 隔牆 — the two wall tools' own answer, and not a parameter: it decides the height,
-	// the thickness, the cap and which openings the run may carry.
+	// 院牆 or 隔牆: a type, not a parameter; decides height, thickness, cap and allowed openings.
 	virtual FName GetTypeVariant() const override
 	{
 		return FName(*StaticEnum<EHutongWallRole>()->GetNameStringByValue((int64)Params.Role));
@@ -321,7 +289,7 @@ public:
 
 	virtual void GetPlanOpenings(TArray<FHutongPlanOpening>& Out) const override
 	{
-		// The gate first, then the garden doorway, so the slider indices are stable whichever is present.
+		// Gate first, then garden doorway: stable slider indices.
 		if (Params.bHasGate)
 		{
 			Out.Add({ Params.GatePosition * Length, Params.GateWidth });
@@ -336,7 +304,7 @@ public:
 		TArray<FHutongPlanOpening> Openings;
 		GetPlanOpenings(Openings);
 		if (!Openings.IsValidIndex(Index) || Length <= 1.0) return;
-		// Held so the whole opening stays inside the run, with a brick either side of it.
+		// Keep the opening inside the run with a brick each side.
 		const double Half = 0.5 * Openings[Index].Width + 10.0;
 		const double Fraction = FMath::Clamp(CentreCm, Half, FMath::Max(Length - Half, Half)) / Length;
 		const bool bGate = Params.bHasGate && Index == 0;
@@ -367,8 +335,7 @@ public:
 	virtual double GetBaseCourseTop() const override { return Params.GetFloorHeight() + Params.GetBaseCourseHeight(); }
 	virtual void SetBaseCourseTop(double TopAboveGround) override { Params.BaseCourseHeight = FMath::Max(TopAboveGround - Params.GetFloorHeight(), 25.0); }
 
-	// Filled in from the footprint first: the eave derives from the bay width, and Params.Width
-	// answers the struct default until then.
+	// Footprint first: eave derives from bay width, and Params.Width is the struct default until filled.
 	virtual double GetEaveHeight() const override { return ParamsForFootprint().GetEaveHeight(); }
 	virtual double GetRidgeHeight() const override
 	{
@@ -407,9 +374,7 @@ public:
 
 	virtual void GetPlanBays(FHutongPlanBays& Out) const override
 	{
-		// Params.Width is tool-driven and answers the struct's own default until the footprint
-		// fills it in, and every derived figure below hangs off it — the same fill
-		// BuildSiheyuanMesh does at spawn.
+		// Fill Width/Depth from the footprint as BuildSiheyuanMesh does; Params.Width is the struct default until then.
 		FHutongSiheyuanParams P = Params;
 		const bool bAlongX = HutongGen::BaySide::IsAlongX(BaySide);
 		P.Width = bAlongX ? FootprintX : FootprintY;
@@ -421,8 +386,8 @@ public:
 		for (int32 i = 0; i <= N; ++i) Out.Boundaries.Add(P.GetBayBoundary(i, N, P.Width, ColR));
 		if (P.bHasFrontDoorCenter) Out.DoorBay = P.GetDoorBayIndex(N);
 
-		// The generator's rows: 檐柱 on the front edge, the facade's line a 廊步 in under a 前廊,
-		// the rear 金柱 a 廊步 inside the 後檐柱, which stand in the back wall on the far edge.
+		// Rows: 檐柱 at the front edge, facade a 廊步 in under a 前廊, rear 金柱 a 廊步 inside the
+		// 後檐柱 in the back wall.
 		double FY, RY;
 		P.GetBuiltVerandaDepths(P.Depth, FMath::Clamp(P.WallThickness, 1.0, FMath::Min(P.Width, P.Depth) * 0.2), FY, RY);
 		if (FY > 0.0) Out.ColumnRows.Add(0.0);
@@ -636,12 +601,24 @@ public:
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Open Side Flipped", ToolTip="Turns the run end-for-end so it opens onto the other side."))
 	bool bFlipOpenSide = false;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bench Gap At", UIMin="-1", UIMax="1", ClampMin="-1", ClampMax="1", ToolTip="Where the bench breaks, as a fraction of the length; negative leaves it unbroken."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="Bench Gap At", UIMin="-1", UIMax="1", ClampMin="-1", ClampMax="1", ToolTip="Where the bench breaks, as a fraction of the length; negative leaves it unbroken."))
 	double BenchGapAt = -1.0;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="No Post At Low End", ToolTip="Leaves out the post at the run's low end, where another run's post stands at the same corner."))
+	bool bOmitLowEndPost = false;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="No Post At High End", ToolTip="Leaves out the post at the run's high end, where another run's post stands at the same corner."))
+	bool bOmitHighEndPost = false;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="No Bench At Low End", ToolTip="Leaves the bench out of the end bay at the run's low end, where the walk turns through a doorway."))
+	bool bNoBenchAtLowEnd = false;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="No Bench At High End", ToolTip="Leaves the bench out of the end bay at the run's high end, where the walk turns through a doorway."))
+	bool bNoBenchAtHighEnd = false;
 
 	virtual void GetPlanBays(FHutongPlanBays& Out) const override
 	{
-		// A corridor's bays are not counted but fall out of the run against the 步 spacing.
+		// Bays follow from run length and 步 spacing.
 		const int32 N = Params.GetBayCount(Length);
 		for (int32 i = 0; i <= N; ++i) Out.Boundaries.Add(Params.GetBayBoundary(i, N, Length));
 	}
@@ -768,8 +745,7 @@ public:
 			: HutongGen::ComputeBayCount(W, Params.MinBayWidth, Params.MaxBayWidth);
 		const double ColR = Params.GetColumnRadiusFor(W, D);
 		for (int32 i = 0; i <= N; ++i) Out.Boundaries.Add(Params.GetBayBoundary(i, N, W, ColR));
-		// A shop has no door bay: the boards come out of whichever bays are open, counted from
-		// the middle, and marking one of them as the way in would say the wrong thing.
+		// No door bay: boards come out of whichever bays are open, counted from the middle.
 		HutongGen::PlanBays::OntoFacade(Out, BaySide, FootprintX, FootprintY);
 	}
 
@@ -836,7 +812,7 @@ public:
 			: HutongGen::ComputeBayCount(W, Params.MinBayWidth, Params.MaxBayWidth);
 		const double ColR = Params.GetColumnRadiusFor(W, D);
 		for (int32 i = 0; i <= N; ++i) Out.Boundaries.Add(Params.GetBayBoundary(i, N, W, ColR));
-		// Like the shop below it, a 樓 has no door bay: the boards come out of whichever bays are open.
+		// No door bay, as for the shop.
 		HutongGen::PlanBays::OntoFacade(Out, BaySide, FootprintX, FootprintY);
 	}
 
@@ -909,9 +885,8 @@ public:
 	virtual bool GetFacade(EHutongBaySide& OutSide) const override { OutSide = BaySide; return true; }
 	virtual bool SetFacade(EHutongBaySide Side) override { BaySide = Side; return true; }
 
-	// The room's bay lines, plus the line where the passage strip meets it, so the plan shows the
-	// way through — in the build frame, facade on -Y, the strip's end line standing in for the
-	// room's end column so the division is at the gable face rather than the column's centre.
+	// Room bay lines plus the passage-strip line, in the build frame (facade on -Y). The strip line
+	// replaces the end column so the division sits at the gable face.
 	static FHutongPlanBays PlanBaysInBuildFrame(const FHutongEarPassageParams& P)
 	{
 		FHutongPlanBays Out;
@@ -969,8 +944,15 @@ public:
 
 	UPROPERTY(EditAnywhere, Category="Pavilion", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the pavilion generator."))
 	FHutongPavilionParams Params;
-	virtual double GetEaveHeight() const override { return Params.GetEaveHeight(); }
-	virtual double GetRidgeHeight() const override { return HutongGen::Ridge::Pavilion(Params, Depth); }
+	// The eave derives from the bay, so from this component's footprint, not the params' own Width/Depth.
+	virtual double GetEaveHeight() const override
+	{
+		FHutongPavilionParams Sized = Params;
+		Sized.Width = FMath::Max(Width, 1.0);
+		Sized.Depth = FMath::Max(Depth, 1.0);
+		return Sized.GetEaveHeight();
+	}
+	virtual double GetRidgeHeight() const override { return HutongGen::Ridge::Pavilion(Params, Width, Depth); }
 
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="150", ClampMin="80", Units="cm", ToolTip="Extent of the pavilion along the actor's local X, in cm."))
 	double Width = 300.0;
@@ -1196,7 +1178,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Forces the number of bays; zero derives it from the bay width limits."))
 	int32 BayCountOverride = 0;
 
-	// The house inside the params with the footprint filled in, which every derived figure hangs off.
+	// Params' house with the footprint filled in.
 	FHutongSiheyuanParams HouseForFootprint() const
 	{
 		FHutongSiheyuanParams H = Params.House;
@@ -1268,11 +1250,20 @@ public:
 
 	virtual double GetBaseCourseTop() const override { return FMath::Max(Params.FloorHeight, 0.0) + Params.GetBaseCourseHeight(); }
 	virtual void SetBaseCourseTop(double TopAboveGround) override { Params.BaseCourseHeight = FMath::Max(TopAboveGround - FMath::Max(Params.FloorHeight, 0.0), 25.0); }
-	virtual double GetEaveHeight() const override { return Params.GetEaveHeight(); }
+	// Params with the footprint filled: the 大式 hall is sized from it.
+	FHutongHallParams SizedParams() const
+	{
+		FHutongHallParams P = Params;
+		const bool bAlongX = HutongGen::BaySide::IsAlongX(BaySide);
+		P.Width = bAlongX ? FootprintX : FootprintY;
+		P.Depth = bAlongX ? FootprintY : FootprintX;
+		return P;
+	}
+	virtual double GetEaveHeight() const override { return SizedParams().GetEaveHeight(); }
 	virtual double GetRidgeHeight() const override
 	{
-		return HutongGen::Ridge::Hall(Params,
-			HutongGen::BaySide::IsAlongX(BaySide) ? FootprintY : FootprintX);
+		const FHutongHallParams P = SizedParams();
+		return HutongGen::Ridge::Hall(P, P.Width, P.Depth);
 	}
 
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="300", ClampMin="120", Units="cm", ToolTip="Extent of the footprint along the actor's local X, in cm."))

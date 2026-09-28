@@ -4,7 +4,7 @@
 #include "DynamicMesh/DynamicMesh3.h"
 #include "FlowerBedGenerator.generated.h"
 
-// 花池: a low kerb of brick or stone retaining earth above the swept ground.
+// 花池: low brick or stone kerb retaining raised earth.
 USTRUCT(BlueprintType)
 struct FHutongFlowerBedParams
 {
@@ -19,10 +19,10 @@ struct FHutongFlowerBedParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bed", meta=(DisplayName="Soil Below Kerb", UIMin="2", UIMax="20", ClampMin="1", Units="cm", ToolTip="How far the soil surface sits below the top of the kerb, in cm."))
 	double SoilDrop = 6.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bed", meta=(DisplayName="Stone Kerb", ToolTip="Builds the kerb in dressed stone instead of brick."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bed", meta=(HutongBasic, DisplayName="Stone Kerb", ToolTip="Builds the kerb in dressed stone instead of brick."))
 	bool bStoneKerb = false;
 
-	// Set by the tool from the drag rect; not user-editable.
+	// Set by the tool from the drag rect.
 	double SizeX = 200.0;
 	double SizeY = 140.0;
 };

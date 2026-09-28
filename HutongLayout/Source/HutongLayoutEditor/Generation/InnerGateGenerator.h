@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Generation/HutongProportions.h"
 #include "Generation/HutongCanon.h"
 #include "DynamicMesh/DynamicMesh3.h"
 #include "Generation/HutongJiajia.h"
@@ -8,7 +9,15 @@
 #include "Generation/HutongDoor.h"
 #include "InnerGateGenerator.generated.h"
 
-// 垂花門: the inner gate, where the family's private courtyard begins.
+// Which 垂花門.
+UENUM(BlueprintType)
+enum class EHutongInnerGateStyle : uint8
+{
+	SinglePost UMETA(DisplayName="Single Post (獨立柱擔梁式)", ToolTip="One column pair in the middle of the depth carrying a beam cantilevered both ways, a hanging post at each of its four ends; the doors between the columns."),
+	OneHallOneRoll UMETA(DisplayName="Hall and Roll (一殿一卷式)", ToolTip="Two column rows: the front carries the doors in the wall line with hanging posts cantilevered ahead of it under a gable roof, the rear a screen door (屏門) under a rolled roof; the sides between open onto the covered walk."),
+};
+
+// 垂花門: inner gate to the family's private courtyard.
 USTRUCT(BlueprintType)
 struct FHutongInnerGateParams
 {
@@ -16,10 +25,19 @@ struct FHutongInnerGateParams
 
 	FHutongInnerGateParams()
 	{
-		// Small and close in: an inner gate's stones are not the household's public face, and the shared struct's defaults are a street gate's.
+		// Small: inner-gate stones are not the public face; the shared defaults are a street gate's.
 		DoorStones.BlockHeight = HutongCanon::Stone::InnerGateHeightCm;
 		DoorStones.Projection = HutongCanon::Stone::InnerGateProjectionCm;
 	}
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(HutongBasic, DisplayName="Style", ToolTip="Which inner gate (垂花門): the single-post form, or the hall-and-roll form of a large court."))
+	EHutongInnerGateStyle Style = EHutongInnerGateStyle::SinglePost;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Hanging Post Reach", EditCondition="Style == EHutongInnerGateStyle::OneHallOneRoll", UIMin="40", UIMax="120", ClampMin="20", Units="cm", ToolTip="How far ahead of the front columns the beams carry the hanging posts (垂蓮柱), in cm."))
+	double CantileverLength = HutongCanon::Gate::InnerGateCantileverCm;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(HutongBasic, DisplayName="Screen Door Open (屏門)", EditCondition="Style == EHutongInnerGateStyle::OneHallOneRoll", ToolTip="Folds the rear screen door (屏門) open so the way runs straight through; shut, it turns the way aside onto the covered walk."))
+	bool bScreenDoorOpen = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Constrain To Historical Size", ToolTip="Holds the footprint and eave height within the inner gate's (垂花門) size band."))
 	bool bConstrainToHistoricalSize = true;
@@ -84,13 +102,13 @@ struct FHutongInnerGateParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Door", meta=(DisplayName="Threshold Height (門檻)", UIMin="0", UIMax="30", ClampMin="0", Units="cm", ToolTip="Height of the threshold (門檻) above the platform, in cm."))
 	double ThresholdHeight = 14.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Door", meta=(DisplayName="Door Leaves Open", ToolTip="Folds both door leaves open flat; off shuts them across the doorway."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Door", meta=(HutongBasic, DisplayName="Door Leaves Open", ToolTip="Folds both door leaves open flat; off shuts them across the doorway."))
 	bool bDoorLeavesOpen = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Door", meta=(DisplayName="Door Pegs (門簪)", UIMin="0", UIMax="4", ClampMin="0", ClampMax="6", ToolTip="Number of door pegs (門簪) across the door head."))
 	int32 DoorPegCount = 4;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Door", meta=(DisplayName="Door Stones (門枕石)", ToolTip="Settings for the door pivot stones (門枕石) at the foot of each jamb."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Door", meta=(HutongBasic, DisplayName="Door Stones (門枕石)", ToolTip="Settings for the door pivot stones (門枕石) at the foot of each jamb."))
 	FHutongDoorStoneParams DoorStones;
 
 	// --- Roof ---
@@ -117,8 +135,8 @@ struct FHutongInnerGateParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(EditCondition="bHasRidgeCourse", UIMin="5", UIMax="50", ClampMin="1", Units="cm", ToolTip="Width of the ridge course, in cm."))
 	double RidgeCourseWidth = 13.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="Rise of the ridge-end tail (蠍子尾) at each end, in cm."))
-	double RidgeEndKick = 16.0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Ridge End Kick (蠍子尾)", EditCondition="bHasRidgeCourse", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="Rise of the ridge-end tail (蠍子尾) at each end, in cm."))
+	double RidgeEndKick = 32.5;   // HutongCanon::Roof::TailRiseInCourses × the ridge course
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Depth", UIMin="0", UIMax="25", ClampMin="0", Units="cm", ToolTip="Depth of the fascia board along each eave, in cm."))
 	double EaveFasciaDepth = 9.0;
@@ -129,40 +147,82 @@ struct FHutongInnerGateParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="18", ClampMin="0", Units="cm", ToolTip="Size of each rafter end (椽頭), in cm; 0 builds none."))
 	double RafterEndSection = 7.0;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	bool bHasTileRuns = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Exposed Frame (徹上明造)", ToolTip="No ceiling: the roof is a shell on rafters carried by the roof frame (梁架: beams, posts and purlins) over the columns, open to view from inside. Close detail levels only; it adds triangles only an interior shows."))
+	bool bExposedFrame = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="10", UIMax="50", ClampMin="4", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))
 	double RafterEndSpacing = 22.0;
 
-	// Set by the tool from the drag rect; not user-editable.
+	// Set by the tool from the drag rect.
 	double Width = 330.0;
 	double Depth = 140.0;
 
-	double GetColumnRadius() const { return FMath::Max(0.5 * ColumnDiameter, 4.0); }
-	double GetColumnHeight() const { return FMath::Max(GetEaveHeight() - FloorHeight, 1.0); }
+	// Set by the compound when walk returns abut the cheeks on the same floor: the 臺基 stops flush,
+	// else its side lips lie coplanar on the walk floor and z-fight.
+	bool bFlushSides = false;
 
-	// Same rule and same floor as every other doorway here.
-	double GetDoorHeadHeight() const
+	double GetColumnRadius() const { return FMath::Max(0.5 * ColumnDiameter, 4.0); }
+
+	bool IsHallAndRoll() const { return Style == EHutongInnerGateStyle::OneHallOneRoll; }
+
+	// As many steps as the platform height needs (a gate lifted onto a walk floor kept two and rose 20 cm a riser).
+	int32 GetStepCount() const
 	{
-		return FMath::Max(DoorHeadHeight, HutongGen::Passage::MinHeadZ(FloorHeight, ThresholdHeight));
+		constexpr double MaxRiserCm = 17.0;
+		const int32 Needed = FMath::CeilToInt32(FMath::Max(FloorHeight, 0.0) / MaxRiserCm) - 1;
+		return FMath::Max(StepCount, Needed);
 	}
 
-	// The 擔梁 rides above the head, so the eave has to clear the whole stack.
+	// Door line across the depth = its wall line: middle for the single-post form, front columns for the other.
+	double GetWallLineY() const
+	{
+		const double D = FMath::Max(Depth, 1.0);
+		if (!IsHallAndRoll()) return 0.5 * D;
+		return FMath::Clamp(FMath::Max(CantileverLength, 20.0), GetColumnRadius(), 0.4 * D);
+	}
+	double GetRearColumnY() const { return FMath::Max(Depth, 1.0) - GetColumnRadius(); }
+	// 天溝 where the front 殿 roof meets the rear 捲棚, both at the eave.
+	double GetValleyY() const
+	{
+		return FMath::Clamp(HutongCanon::Gate::InnerGateFrontRoofShare * GetRearColumnY(),
+			GetWallLineY() + 20.0, GetRearColumnY() - 20.0);
+	}
+	double GetColumnHeight() const { return FMath::Max(GetEaveHeight() - FloorHeight, 1.0); }
+
+	// Walked through upright: standing head height over the threshold, not a low room's crouch.
+	double GetDoorHeadHeight() const
+	{
+		return FMath::Max(DoorHeadHeight, FloorHeight + FMath::Clamp(ThresholdHeight, 0.0, 40.0)
+			+ HutongCanon::Openings::WalkerHeightCm + 10.0);
+	}
+
+	// The 擔梁 rides above the head; the eave clears the whole stack.
 	double GetMinEaveHeight() const
 	{
 		const double PT = FMath::Max(2.0 * GetColumnRadius() * 0.8, 8.0);
-		// Never under the 45 cm the tool holds back from the eave, or that clamp pulls the head back down through the clearance this was raised to give it.
+		// At least the tool's 45 cm eave margin, or that clamp pulls the head back through this clearance.
 		return GetDoorHeadHeight()
 			+ FMath::Max(FMath::Max(DoorFrameThickness, 2.0) + 1.2 * PT, 45.0);
 	}
 
-	// The 80 was the generator's own floor, which nothing outside it could see.
+	// 80 = the generator's former private floor, now visible here.
 	double GetEaveHeight() const { return FMath::Max3(EaveHeight, GetMinEaveHeight(), 80.0); }
+	// Roof above the column tops, the ceiling at the column line, and the roof's base
+	// (HutongGen::Proportions::RoofLift).
+	// The eave step's 舉 of the roof as built: the section scaled to the fixed rise.
+	double GetEaveJu() const { return HutongGen::Jiajia::BuiltEaveJu(HutongGen::Jiajia::MakeSection(EHutongPurlins::Three, 0.5 * Depth, FMath::Max(RoofOverhang, 0.0), RoofApexRoll), GetRoofRise()); }
+	double GetRoofLift() const { return HutongGen::Proportions::RoofLift(FMath::Max(ColumnDiameter, 2.0), FMath::Max(RoofOverhang, 0.0), GetEaveJu()); }
+	double GetUndersideRise() const { return HutongGen::Proportions::UndersideRise(FMath::Max(ColumnDiameter, 2.0), FMath::Max(RoofOverhang, 0.0), GetEaveJu()); }
+	double GetRoofBaseHeight() const { return GetEaveHeight() + GetRoofLift(); }
 	double GetRoofRise() const { return FMath::Max(RoofRise, 10.0); }
 
-	// The band the type occurs at. All zero when the constraint is off.
-	// The same band the gate house uses, from the canon.
+	// Size band from the canon (same as the gate house); all zero when off.
 	using FSizeRange = HutongCanon::Gate::FSizeBand;
 
-	// UNVERIFIED in the same way as the gate house's bands, so widen them rather than trusting the centimetres.
+	// UNVERIFIED like the gate house's bands: widen rather than trust the centimetres.
 	FSizeRange GetSizeRange() const
 	{
 		FSizeRange R;
@@ -170,8 +230,9 @@ struct FHutongInnerGateParams
 		{
 			return R;
 		}
-		// The depth is the 擔梁's full run with the columns halfway.
-		R = HutongCanon::Gate::InnerGateSize;
+		// Depth: the 擔梁's full run with columns halfway, or for the grand form the hanging-post reach
+		// plus the run back to the rear columns.
+		R = IsHallAndRoll() ? HutongCanon::Gate::InnerGateGrandSize : HutongCanon::Gate::InnerGateSize;
 		return R;
 	}
 };

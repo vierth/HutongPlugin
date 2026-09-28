@@ -14,12 +14,11 @@ void UHutongFlowerBedTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongFlowerBedToolProperties>(this);
 
-	// Presets above the params, as everywhere: registration order is panel order, and a preset is how a type is picked.
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("FlowerBed"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongFlowerBedToolProperties, Params));
 	Presets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
-	// Presets after the parameters they save.
+	// Panel order is registration order: presets after the params they save.
 	RegisterSettings(Settings);
 	RegisterSettings(Presets);
 }
@@ -48,7 +47,7 @@ void UHutongFlowerBedTool::AttachBuildingComponent(AStaticMeshActor* Actor, doub
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: the plan outline (and any lights) attach to the actor's root, which the component needs to be live to reach.
+	// After registration: the plan outline and lights attach to the actor's root, which needs the component live.
 	Building->ApplyPlacementAttachments();
 }
 
@@ -78,9 +77,8 @@ TArray<FText> UHutongFlowerBedTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongFlowerBedTool", "HelpSpan",
-		"Drag out the bed. Both axes are free — a flower bed (花池) is whatever shape the ground beside the paving leaves.");
+		"Drag out the flower bed (花池) in any shape.");
 	Lines.Insert(NSLOCTEXT("HutongFlowerBedTool", "HelpWhat",
-		"A courtyard is swept earth with planting in raised beds, not lawn and not pavement. "
-		"The plant itself is a foliage asset; this is the masonry that says where it goes."), 1);
+		"Only the masonry is built; plants are added as foliage."), 1);
 	return Lines;
 }

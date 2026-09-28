@@ -20,7 +20,7 @@ using UE::Geometry::FDynamicMesh3;
 
 UHutongStreetRowToolProperties::UHutongStreetRowToolProperties()
 {
-	// The street row's own type.
+	// Street row's own type.
 	House = HutongPresets::MakeHouse(HutongCanon::House::FrontRow);
 }
 
@@ -34,8 +34,7 @@ void UHutongStreetRowTool::RegisterToolSettings()
 	Settings = NewObject<UHutongStreetRowToolProperties>(this);
 	RegisterSettings(Settings);
 
-	// The house presets, so a row can be 倒座房 or 廂房 by name. The picker's key is the house's,
-	// so StampDetail names the preset on the houses and leaves the gates alone.
+	// House presets, so a row can be 倒座房 or 廂房 by name. Keyed as the house's, so StampDetail names the preset on houses, not gates.
 	HousePresets = NewObject<UHutongPresetProperties>(this);
 	HousePresets->Initialize(TEXT("Siheyuan"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongStreetRowToolProperties, House));
@@ -82,7 +81,7 @@ int32 UHutongStreetRowTool::BayUnder(const FVector& World) const
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
 	const FVector2D L = WorldXYToLocalRect(World);
 	const bool bX = IsRunAlongX();
-	// Across the row too, or a click beside it picks a bay.
+	// Across the row too, else a click beside it picks a bay.
 	const double Across = bX ? L.Y : L.X;
 	const double AcrossMin = bX ? MinY : MinX;
 	const double AcrossMax = bX ? MaxY : MaxX;
@@ -130,7 +129,7 @@ void UHutongStreetRowTool::OnPlacementStarted(const FVector& HitWorld)
 bool UHutongStreetRowTool::OnRectCommitted(const FVector& HitWorld)
 {
 	Extra = EExtra::BuildingsFace;
-	// Whichever side of the run the camera is on, until the hover says otherwise.
+	// Camera's side of the run until the hover decides.
 	if (GCurrentLevelEditingViewportClient)
 	{
 		BuildingSide = SideUnder(GCurrentLevelEditingViewportClient->GetViewLocation());
@@ -167,7 +166,7 @@ bool UHutongStreetRowTool::OnExtraStageClicked(const FVector& HitWorld)
 			if (GateBays.Contains(Bay)) GateBays.Remove(Bay); else GateBays.Add(Bay);
 			return false;
 		}
-		// A click off the row builds; the gates face as the ticks show.
+		// Click off the row builds; gates face as the ticks show.
 		return true;
 	}
 	}
@@ -192,7 +191,7 @@ void UHutongStreetRowTool::AdjustBracketValue(int32 Delta, bool /*bFine*/, bool 
 {
 	if (!Settings) return;
 
-	// Once the bays are being picked the keys slide the gates; before that they count the bays.
+	// Keys slide the gates once bays are being picked; before that they count bays.
 	if (bRectCommitted && Extra != EExtra::BuildingsFace && GateBays.Num() > 0)
 	{
 		const int32 N = GetBayCount();
@@ -209,7 +208,7 @@ void UHutongStreetRowTool::AdjustBracketValue(int32 Delta, bool /*bFine*/, bool 
 
 	const int32 Current = GetBayCount();
 	Settings->BayCountOverride = FMath::Clamp(Current + Delta, 1, 32);
-	// Bays that no longer exist cannot be gates.
+	// Drop gate bays that no longer exist.
 	const int32 N = Settings->BayCountOverride;
 	for (auto It = GateBays.CreateIterator(); It; ++It) if (*It >= N) It.RemoveCurrent();
 }
@@ -224,7 +223,7 @@ void UHutongStreetRowTool::AdjustHeight(double DeltaCm)
 		return;
 	}
 
-	// As the house tool's keys: the eave moves and the derivation stands aside.
+	// As the house tool: keys move the eave, derivation stands aside.
 	FHutongSiheyuanParams& P = Settings->House;
 	P = HutongGen::StreetRow::RowHouse(P, RunLength(), RowDepth(), GetBayCount());
 	P.EaveHeight = FMath::Clamp(P.EaveHeight + DeltaCm,
@@ -297,10 +296,9 @@ TArray<FText> UHutongStreetRowTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines.Insert(LOCTEXT("HelpRow",
-		"After the footprint: pick the side the buildings face, then click the bays that are gates; F turns the gates to face the other way. "
-		"Each run of ordinary bays is one house or shop and each gate bay is one gate house, all separate and editable."), 1);
+		"After the footprint, move toward the street side, then click the bays that are gates. F turns the gates round."), 1);
 	Lines.Insert(LOCTEXT("HelpBays",
-		"The bays are equal divisions of the length, from the building's own bay width limits; [ and ] change the count before the gates are picked and slide the gates after."), 2);
+		"[ and ] change the bay count, then slide the gates once picked. Every house, shop and gate is its own building."), 2);
 	return Lines;
 }
 
@@ -332,13 +330,13 @@ void UHutongStreetRowTool::Render(IToolsContextRenderAPI* RenderAPI)
 	const double AcrossMin = bX ? MinY : MinX;
 	const double AcrossMax = bX ? MaxY : MaxX;
 
-	// Where one building ends and the next begins.
+	// Building boundaries.
 	for (int32 i = 1; i < N; ++i)
 	{
 		DrawPreviewLine(PDI, At(i * W, AcrossMin), At(i * W, AcrossMax), Division, 2.0f);
 	}
 
-	// The gate bays, and the bay under the cursor while they are being picked.
+	// Gate bays, plus the hovered bay while picking.
 	auto Bracket = [&](int32 Bay, const FLinearColor& C, float Thick, double Inset)
 	{
 		const double A0 = Bay * W + Inset, A1 = (Bay + 1) * W - Inset;
@@ -358,7 +356,7 @@ void UHutongStreetRowTool::Render(IToolsContextRenderAPI* RenderAPI)
 
 	if (!bRectCommitted) return;
 
-	// Facing ticks: green along the buildings' side for the whole run, orange along the gates' side over the gate bays only.
+	// Facing ticks: green on the buildings' side over the whole run, orange on the gates' side over gate bays only.
 	const double TickLen = FMath::Max(30.0, 0.04 * L);
 	auto Ticks = [&](HutongGen::EBaySide Side, const FLinearColor& C, double From, double To, int32 Count)
 	{
@@ -388,10 +386,10 @@ void UHutongStreetRowTool::SpawnFinalActor()
 	const TArray<HutongGen::StreetRow::FPiece> Pieces = HutongGen::StreetRow::LayOut(L, N, GateBays);
 	if (Pieces.Num() == 0) return;
 
-	// One eave for the whole row, whatever each piece's own bays would derive.
+	// One eave for the whole row, whatever each piece would derive.
 	const FHutongSiheyuanParams House = HutongGen::StreetRow::RowHouse(Settings->House, L, D, N);
 
-	// The gates rise above the row, so the row's ridge is settled first.
+	// Gates rise above the row, so the row ridge comes first.
 	double RowRidgeZ = 0.0;
 	for (const HutongGen::StreetRow::FPiece& P : Pieces)
 	{
@@ -401,7 +399,7 @@ void UHutongStreetRowTool::SpawnFinalActor()
 			: HutongGen::Ridge::Shop(Settings->Shop));
 	}
 	FHutongGateHouseParams Gate = Settings->Gate;
-	// The bay is the gate's footprint, whatever the band says.
+	// Bay is the gate's footprint, whatever the band says.
 	Gate.bConstrainToHistoricalSize = false;
 	HutongGen::GateRow::LiftGateAboveRidge(Gate, D, RowRidgeZ, Settings->GateRidgeClearance);
 
@@ -446,7 +444,7 @@ void UHutongStreetRowTool::SpawnFinalActor()
 		};
 
 		TArray<FDynamicMesh3> LODs;
-		HutongGen::Detail::BuildPlacementLODs(bPlanOnly, SX, SY,
+		const int32 CollisionLOD = HutongGen::Detail::BuildPlacementLODs(bPlanOnly, SX, SY,
 			GetDetailLevel(), ShouldBuildLODChain(), BuildAt, LODs);
 		if (!bPlanOnly && (LODs.Num() == 0 || LODs[0].TriangleCount() == 0)) continue;
 
@@ -456,7 +454,7 @@ void UHutongStreetRowTool::SpawnFinalActor()
 			: (Settings->Kind == EHutongStreetRowKind::Houses ? TEXT("Hutong_Fang") : TEXT("Hutong_Pumianfang"));
 		AStaticMeshActor* Actor = bPlanOnly
 			? HutongGen::SpawnEmptyActor(World, Xform, NameBase)
-			: HutongGen::SpawnStaticMeshActor(World, LODs, Xform, NameBase, Palette);
+			: HutongGen::SpawnStaticMeshActor(World, LODs, Xform, NameBase, Palette, CollisionLOD);
 		if (!Actor) continue;
 
 		UHutongBuildingComponent* Building = nullptr;

@@ -26,7 +26,7 @@ class UHutongAppearanceProperties : public UInteractiveToolPropertySet
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, Category="Appearance", meta=(ShowOnlyInnerProperties, ToolTip="Colours and materials for each surface of new placements."))
+	UPROPERTY(EditAnywhere, Category="Appearance", meta=(HutongAdvanced, ShowOnlyInnerProperties, ToolTip="Colours and materials for each surface of new placements."))
 	FHutongPalette Palette;
 };
 
@@ -35,20 +35,18 @@ class UHutongDetailProperties : public UInteractiveToolPropertySet
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, Category="Detail", meta=(DisplayName="Detail Level", ToolTip="How much detail new placements are built with."))
+	UPROPERTY(EditAnywhere, Category="Detail", meta=(HutongAdvanced, DisplayName="Detail Level", ToolTip="How much detail new placements are built with."))
 	EHutongDetail Level = EHutongDetail::Near;
 
-	UPROPERTY(EditAnywhere, AdvancedDisplay, Category="Detail", meta=(DisplayName="Bespoke Mesh", ToolTip="Marks new placements as carrying a bespoke mesh."))
+	UPROPERTY(EditAnywhere, AdvancedDisplay, Category="Detail", meta=(HutongAdvanced, DisplayName="Bespoke Mesh", ToolTip="Marks new placements as carrying a bespoke mesh."))
 	bool bBespokeMesh = false;
 
-	UPROPERTY(EditAnywhere, AdvancedDisplay, Category="Detail", meta=(DisplayName="Build LOD Chain", ToolTip="Also bakes every cheaper detail level as an LOD of each new placement."))
+	UPROPERTY(EditAnywhere, AdvancedDisplay, Category="Detail", meta=(HutongAdvanced, DisplayName="Build LOD Chain", ToolTip="Also bakes every cheaper detail level as an LOD of each new placement."))
 	bool bBuildLODChain = true;
 };
 
-// **What the next placement is worth as evidence.** Carried on the tool as well as on the
-// building because a block is traced in one sitting off one sheet: the confidence and the note
-// belong to the run of polygons being drawn, not to each of them separately. Both are stamped
-// onto every placement and stay editable on it afterwards.
+// What the next placement is worth as evidence; stamped onto each placement, editable there.
+// On the tool because a block is traced in one sitting off one sheet.
 UCLASS()
 class UHutongMetadataProperties : public UInteractiveToolPropertySet
 {
@@ -66,30 +64,26 @@ class UHutongSnapProperties : public UInteractiveToolPropertySet
 {
 	GENERATED_BODY()
 public:
-	// **On by default: a run laid beside another is meant to meet it**, and a few centimetres of
-	// daylight between two footprints is invisible until something is walked down. What is
-	// irritating is not position snapping but the *rotation* changing under the cursor, and that is
-	// its own switch below. The key suppresses this one placement by placement.
+	// On by default: a run beside another is meant to meet it, and a small gap is invisible until
+	// walked. Rotation snapping, the irritant, is its own switch. The snap key inverts per placement.
 	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Snap To Placed Buildings", ToolTip="Snaps placements to placed footprints."))
 	bool bEnabled = true;
 
-	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Snap Radius", EditCondition="bEnabled", UIMin="10", UIMax="200", ClampMin="1", Units="cm", ToolTip="Distance within which the cursor snaps to a placed footprint, in cm."))
+	UPROPERTY(EditAnywhere, Category="Snapping", meta=(HutongAdvanced, DisplayName="Snap Radius", EditCondition="bEnabled", UIMin="10", UIMax="200", ClampMin="1", Units="cm", ToolTip="Distance within which the cursor snaps to a placed footprint, in cm."))
 	double Radius = 55.0;
 
-	// **Off by default, and the one part of snapping that is.** It is both halves of turning a
-	// placement: the anchor taking the bearing of the building it snapped to, and hold-R pulling
-	// onto a neighbour's line or a quarter turn off it. A position that jumps to a corner is the
-	// corner you aimed at; a yaw that jumps is the building turning itself while you watch.
-	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Adopt Neighbour Angle", EditCondition="bEnabled", ToolTip="Rotates the placement onto a neighbour's line when snapped."))
+	// Off by default: a yaw jumping under the cursor reads as the building turning itself.
+	// Gates both the anchor adopting the snapped bearing and hold-R pulling onto a neighbour's line.
+	UPROPERTY(EditAnywhere, Category="Snapping", meta=(HutongAdvanced, DisplayName="Adopt Neighbour Angle", EditCondition="bEnabled", ToolTip="Rotates the placement onto a neighbour's line when snapped."))
 	bool bAdoptAngle = false;
 
-	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Snap Lane To Street Module (胡同/小街/大街)", EditCondition="bEnabled", ToolTip="Snaps the run to a standard street width."))
+	UPROPERTY(EditAnywhere, Category="Snapping", meta=(HutongAdvanced, DisplayName="Snap Lane To Street Module (胡同/小街/大街)", EditCondition="bEnabled", ToolTip="Snaps the run to a standard street width."))
 	bool bSnapLaneWidth = true;
 
-	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Lane Snap Tolerance", EditCondition="bEnabled && bSnapLaneWidth", UIMin="5", UIMax="100", ClampMin="1", Units="cm", ToolTip="Tolerance for snapping to a standard lane width, in cm."))
+	UPROPERTY(EditAnywhere, Category="Snapping", meta=(HutongAdvanced, DisplayName="Lane Snap Tolerance", EditCondition="bEnabled && bSnapLaneWidth", UIMin="5", UIMax="100", ClampMin="1", Units="cm", ToolTip="Tolerance for snapping to a standard lane width, in cm."))
 	double LaneToleranceCm = 30.0;
 
-	UPROPERTY(EditAnywhere, Category="Snapping", meta=(DisplayName="Angle Tolerance", EditCondition="bEnabled && bAdoptAngle", UIMin="1", UIMax="25", ClampMin="0", Units="deg", ToolTip="Angle within which a rotation snaps to a neighbour's line, in degrees."))
+	UPROPERTY(EditAnywhere, Category="Snapping", meta=(HutongAdvanced, DisplayName="Angle Tolerance", EditCondition="bEnabled && bAdoptAngle", UIMin="1", UIMax="25", ClampMin="0", Units="deg", ToolTip="Angle within which a rotation snaps to a neighbour's line, in degrees."))
 	double AngleToleranceDeg = 7.0;
 };
 
@@ -98,19 +92,19 @@ class UHutongPlacementProperties : public UInteractiveToolPropertySet
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(VisibleAnywhere, Category="Placement", meta=(Units="cm", ToolTip="Width of the rectangle being placed, in cm."))
+	UPROPERTY(VisibleAnywhere, Category="Placement", meta=(HutongAdvanced, Units="cm", ToolTip="Width of the rectangle being placed, in cm."))
 	double Width = 0.0;
 
-	UPROPERTY(VisibleAnywhere, Category="Placement", meta=(Units="cm", ToolTip="Depth of the rectangle being placed, in cm."))
+	UPROPERTY(VisibleAnywhere, Category="Placement", meta=(HutongAdvanced, Units="cm", ToolTip="Depth of the rectangle being placed, in cm."))
 	double Depth = 0.0;
 
-	UPROPERTY(VisibleAnywhere, Category="Placement", meta=(Units="cm", ToolTip="Height the placement is previewed at, in cm."))
+	UPROPERTY(VisibleAnywhere, Category="Placement", meta=(HutongAdvanced, Units="cm", ToolTip="Height the placement is previewed at, in cm."))
 	double Height = 0.0;
 
-	UPROPERTY(VisibleAnywhere, Category="Placement", meta=(Units="deg", ToolTip="Yaw of the rectangle being placed, in degrees."))
+	UPROPERTY(VisibleAnywhere, Category="Placement", meta=(HutongAdvanced, Units="deg", ToolTip="Yaw of the rectangle being placed, in degrees."))
 	double Rotation = 0.0;
 
-	UPROPERTY(VisibleAnywhere, Category="Placement", meta=(ToolTip="Extra readout for the current tool, such as the bay count."))
+	UPROPERTY(VisibleAnywhere, Category="Placement", meta=(HutongAdvanced, ToolTip="Extra readout for the current tool, such as the bay count."))
 	FString Detail;
 };
 
@@ -155,26 +149,28 @@ public:
 	void SetOpeningKeyHeld(bool bHeld) { bOpeningKeyHeld = bHeld; }
 	bool bOpeningKeyHeld = false;
 	bool IsPlacingActive() const { return bIsDragging; }
-	// A handle drag on a laid-out building in hand, which no tool switch may interrupt.
+
+	// True when GetHoverSummaryText describes the cursor's building, not the fallback selection.
+	bool IsHoverUnderCursor() const { return HudBuilding.IsValid(); }
+	// A handle drag in progress; no tool switch may interrupt it.
 	bool IsEditingPlan() const { return PlanEdit != EPlanEdit::None; }
 
 	// [ and ] during placement.
 	virtual void AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse) {}
 
-	// F during placement: turns round whatever second facing the tool has (the street row's gates).
+	// F during placement: flips the tool's second facing (street row's gates).
 	virtual void FlipFacing() {}
 
 	// - and = adjust the tool's primary height by DeltaCm.
 	virtual void AdjustHeight(double DeltaCm) {}
 
-	// The height the corner posts preview, which is the same value AdjustHeight moves.
+	// Corner-post preview height: the value AdjustHeight moves. Zero disables.
 	virtual double GetPreviewHeight() const { return 0.0; }
 
-	// How far this run's own face lies from the line the cursor is drawing.
+	// Distance from the cursor's line to this run's own face.
 	virtual double GetLaneFaceOffset() const { return 0.0; }
 
-	// Whether this placement is forming a street at all. A run inside a compound is not, and
-	// pulling its anchor onto a canonical lane width moves it for a reason that does not apply.
+	// False when the placement forms no street (a run inside a compound): no lane-width snap.
 	virtual bool WantsLaneWidthSnap() const { return true; }
 
 	// One-line instruction for the current placement stage.
@@ -182,56 +178,56 @@ public:
 
 	// The help lines shown in the mode panel, in order.
 	virtual TArray<FText> GetToolHelpLines() const;
+	// False drops the hold-R line from the help.
+	virtual bool HasRotateKey() const { return true; }
 
-	// The one line of keys that stays on screen; the help lines above live behind a collapsed header.
+	// The one always-visible line of keys; help lines sit behind a collapsed header.
 	virtual FText GetKeyHintText() const;
 
 	// [ and ] with nothing being placed.
 	bool TurnSelectedFacing(int32 Delta);
 
-	// The clicks a placement takes, named, and which one the tool is waiting for.
+	// Named clicks of a placement, and the one awaited.
 	virtual TArray<FText> GetStageNames() const;
 	virtual int32 GetStageIndex() const;
 
-	// Where the placement readout is drawn: a fixed corner of the viewport.
+	// Fixed viewport corner the placement readout is drawn at.
 	static FVector2D HudCorner(FCanvas* Canvas);
 
-	// Holds a block of HUD text inside the viewport, for the readouts that follow something.
+	// Keeps a following HUD text block inside the viewport.
 	static FVector2D ClampToViewport(FCanvas* Canvas, const FVector2D& At, const FVector2D& BlockSize);
-	// The viewport's width in the DPI-independent units the HUD is drawn in.
+	// Viewport width in the HUD's DPI-independent units.
 	static double ViewportWidth(FCanvas* Canvas);
-	// Text broken onto lines no wider than MaxWidth, on spaces where it can, mid-word where it must.
+	// Wraps to MaxWidth at spaces, mid-word only when needed.
 	static TArray<FString> WrapToWidth(const FString& Text, const UFont* Font, double MaxWidth);
 
 	// "820 x 540 cm · 37° · 3 bays @ 340 cm" — the HUD line under the stage prompt.
 	FText GetPlacementSummaryText() const;
 
-	// What the cursor is resting on, for the mode panel to poll.
+	// Readout of what the cursor rests on, polled by the mode panel.
 	FText GetHoverSummaryText() const;
 
 protected:
-	// What the cursor is resting on while nothing is being placed, and where on screen it is.
+	// Building under the cursor while nothing is being placed.
 	TWeakObjectPtr<class UHutongBuildingComponent> HoveredBuilding;
 
-	// Where the ray struck it, in the world.
+	// World hit point on it.
 	FVector HoveredWorldPoint = FVector::ZeroVector;
 
-	// What the outline was actually drawn for this frame, latched by Render for DrawHUD to read.
+	// Outline drawn this frame, latched by Render for DrawHUD.
 	mutable TWeakObjectPtr<class UHutongBuildingComponent> HudBuilding;
 	mutable FVector HudWorldPoint = FVector::ZeroVector;
 
-	// Which way is "into the neighbour" at the anchor, from the snap it landed on, or zero when the anchor did not snap.
+	// Direction into the neighbour at the anchor's snap; zero if unsnapped.
 	FVector2D AnchorSnapInward = FVector2D::ZeroVector;
-	// The building the anchor snapped to, for a placement that sizes itself to what it joins. Empty when the anchor did not snap, and dropped with the bearings.
+	// Building the anchor snapped to, for placements sized to what they join; dropped with the bearings.
 	TWeakObjectPtr<class UHutongBuildingComponent> AnchorSnapBuilding;
 
 	// ---- Editing a laid-out building in place ----
-	// Skew: one corner dragged off the rectangle, Shift held on a corner handle.
-	// RunVertex: the end of a wall leg dragged, the vertex of the run it belongs to moving with
-	// every leg that meets there, so the joins stay melded and a snapped end slides along a face.
-	// Marquee: a press on open ground dragged out into a box; what it covers is selected on release.
-	// Divide: a bay-line marker pressed; released unmoved, the building is divided there.
-	// Fuse: the marker on an end shared with a like neighbour; released unmoved, the two fuse.
+	// Skew: Shift-drag a corner handle off the rectangle.
+	// RunVertex: a wall leg's end; every leg meeting at that run vertex moves, joins stay melded.
+	// Marquee: open-ground drag box; selects what it covers on release.
+	// Divide / Fuse: marker press released unmoved divides at the bay line / fuses with the like neighbour.
 	enum class EPlanEdit : uint8 { None, Move, Resize, Rotate, Opening, Skew, RunVertex, Marquee, Divide, Fuse };
 	FVector MarqueeStart = FVector::ZeroVector;
 	FVector MarqueeEnd = FVector::ZeroVector;
@@ -241,12 +237,11 @@ protected:
 	FTransform EditStartTransform;
 	FVector2D EditStartSize = FVector2D::ZeroVector;
 	FHutongFootprintSkew EditStartSkew;
-	// Under Ends a corner goes one way per drag, along the run or across it, chosen by which way
-	// the cursor first pulls: 0 local X, 1 local Y, INDEX_NONE until it has pulled far enough to say.
+	// Ends mode: one axis per drag, from the dominant pull. 0 local X, 1 local Y, INDEX_NONE undecided.
 	int32 EditSkewAxis = INDEX_NONE;
 	bool bSkewAxisHeld = false;
 	FVector EditGrabLocal = FVector::ZeroVector;
-	// The run under a vertex drag: its legs as they stood, and which vertex moves.
+	// Vertex drag: the run's legs as they stood, and the moving vertex.
 	struct FRunLegState
 	{
 		TWeakObjectPtr<class UHutongBuildingComponent> Building;
@@ -263,117 +258,107 @@ protected:
 	bool bEditRunSideOn = false;
 	static void CaptureLegState(class UHutongBuildingComponent* Building, FRunLegState& Out);
 	static void RestoreLegState(const FRunLegState& State);
-	// The wall legs the level holds, for gathering a run.
+	// All wall legs in the level, for gathering a run.
 	TArray<class UHutongWallBuildingComponent*> GatherWallLegs() const;
 	double EditStartCursorAngleDeg = 0.0;
 	double EditStartYawDeg = 0.0;
 	double EditStartOpeningCentre = 0.0;
 	bool bPlanDragMoved = false;
-	// The press's own pixel. A capture delivers drag events for a cursor that has not moved, so
-	// without a slop a plain selection click committed a no-op edit and left an empty undo entry.
+	// Press pixel, for the drag slop: capture sends drag events for an unmoved cursor, else a click leaves an empty undo entry.
 	FVector2D PlanPressPixel = FVector2D::ZeroVector;
 	bool bPlanPressHasPixel = false;
-	// What the cursor is over on the selected building, refreshed each frame for the drawing.
+	// Handle under the cursor on the selected building, refreshed each frame.
 	int32 HoverPlanHandle = INDEX_NONE;
 
-	// Handle ids: 0..3 corners from the origin anticlockwise, 4..7 edge midpoints (−Y, +X, +Y, −X), 8 the rotate ring, 9 the inside of the footprint.
+	// Handle ids: 0..3 corners anticlockwise from origin, 4..7 edge midpoints (−Y, +X, +Y, −X), 8 rotate ring, 9 inside.
 	static constexpr int32 PlanHandleRing = 8;
 	static constexpr int32 PlanHandleInside = 9;
-	// 10 and up: the sliders on a wall's openings, one per opening in GetPlanOpenings order.
+	// 10+: wall opening sliders, in GetPlanOpenings order.
 	static constexpr int32 PlanHandleOpening = 10;
-	// The fuse markers on the origin end and the far end, offered only where a like neighbour stands on the line.
+	// Fuse markers at origin / far end, only where a like neighbour stands on the line.
 	static constexpr int32 PlanHandleFuseStart = 1000;
 	static constexpr int32 PlanHandleFuseEnd = 1001;
-	// 1010 and up: the divide markers on the interior bay lines, in GetPlanBays order from 1.
+	// 1010+: divide markers on interior bay lines, GetPlanBays order from 1.
 	static constexpr int32 PlanHandleBay = 1010;
 
-	// The like building standing end to end with this one on its line at that end, if any.
+	// Like building end to end with this one on its line at that end, if any.
 	class UHutongBuildingComponent* FindFuseNeighbour(const class UHutongBuildingComponent* Building, bool bAtEnd) const;
-	// World position of a divide marker (bay line) or a fuse marker (an end), on the footprint's centre line.
+	// World position of a divide or fuse marker on the footprint's centre line.
 	FVector PlanBayMarkerWorld(const class UHutongBuildingComponent* Building, double Along) const;
-	// The click that divides or fuses, once the press on its marker has been released unmoved.
+	// Acts once the marker press is released unmoved.
 	void DivideAtMarker(class UHutongBuildingComponent* Building, int32 BayLine);
 	void FuseAtMarker(class UHutongBuildingComponent* Building, bool bAtEnd);
 
-	// The one selected building, of any kind; and the same only when it is laid out and not built.
+	// The single selected building of any kind; the second only if laid out, not built.
 	class UHutongBuildingComponent* GetSelectedBuilding() const;
 	class UHutongBuildingComponent* GetSelectedPlanBuilding() const;
 	FVector PlanOpeningWorld(const class UHutongBuildingComponent* Building, int32 Index, double& OutWidth) const;
-	// Corners 0..3 are the placement's own, offsets included; 4..7 the midpoints of the edges between them.
+	// Corners 0..3 include skew offsets; 4..7 are the edge midpoints between them.
 	static FVector PlanHandleLocal(const FVector2D Corners[4], int32 Handle);
-	// Shift on a corner handle angles the footprint instead of resizing it; read live, as rotate reads it.
+	// Shift on a corner handle skews instead of resizing; read live, like rotate.
 	static bool IsSkewKeyDown();
-	// The drag behaviour's registered Shift binding; the state itself is read live.
+	// Registered Shift binding on the drag behaviour, so selection cannot outrank it; state read live.
 	static constexpr int32 SkewModifierID = 1;
-	// Handles are sized in world units off the footprint.
+	// Handles sized in world units off the footprint.
 	static double PlanHandleSize(const FVector2D& Size);
-	// The corner squares under Shift: on a run they must fit inside its thickness, or the two at one end are one blob.
+	// Shift corner squares; on a run they fit its thickness, else an end's two merge.
 	static double PlanCornerHandleSize(const FVector2D& Size);
-	// A wall, a path, a corridor: a footprint whose short side is a fraction of its long one.
+	// Wall, path, corridor: short side a fraction of the long.
 	static bool IsLineLikePlan(const FVector2D& Size);
 	static bool PlanHandleEnabled(const FVector2D& Size, int32 Handle);
-	// Whether a ground point inside a footprint counts as a grab (select / move).
+	// Whether a ground point inside a footprint is a grab (select / move).
 	bool IsPlanGrabPoint(const FVector2D& Size, double EdgeDistance, const FVector& Ground) const;
 	FVector PlanRotateHandleWorld(const class UHutongBuildingComponent* Building, FVector& OutEdgeMid) const;
-	// Which handle, ring or inside a ground point is on for this building; INDEX_NONE for none.
+	// Handle, ring or inside hit by a ground point; INDEX_NONE for none.
 	int32 HitTestPlan(const class UHutongBuildingComponent* Building, const FVector& Ground) const;
 	void BeginPlanEdit(class UHutongBuildingComponent* Building, int32 Hit, const FVector& Ground);
 	void UpdatePlanEdit(const FVector& Ground);
 	void CommitPlanEdit();
 	void CancelPlanEdit();
 	void DrawPlanHandles(FPrimitiveDrawInterface* PDI) const;
-	// The prompt while a laid-out building is selected or being edited; empty otherwise.
+	// Prompt while a laid-out building is selected or edited; empty otherwise.
 	FText GetPlanEditPromptText() const;
 
 
-	// What the cursor is resting on, from the editor's own cursor, run once a frame out of Render.
+	// Hover trace off the editor's cursor, once a frame from Render.
 	void UpdateHoverInspectionFromViewport();
 	void DrawHoverInspection(FPrimitiveDrawInterface* PDI) const;
 	void DrawHoverInspectionHUD(FCanvas* Canvas, IToolsContextRenderAPI* RenderAPI) const;
 
-	// Does this ray have something under it worth hovering for?
+	// Whether the ray hits a building worth hovering.
 	bool TraceHoveredBuilding(const FInputDeviceRay& Ray, FHitResult& OutHit) const;
 
-	// A laid-out building has no collision.
+	// Ground query: laid-out buildings have no collision.
 	class UHutongBuildingComponent* FindPlanBuildingAt(const FVector& Ground, double* OutEdgeDistance = nullptr) const;
 
-	// World centimetres per screen pixel at a point, for the active viewport.
+	// World cm per screen pixel at P, active viewport.
 	double WorldPerPixelAt(const FVector& P) const;
 
-	// **The one answer to whether this placement snaps**, so the checkbox and the key are not read
-	// separately at six sites that could disagree. The key does the *other* thing for the placement,
-	// whichever way the checkbox stands: with snapping off it snaps, with snapping on it lets go.
+	// Single answer for all six snap sites: the key inverts the checkbox for this placement.
 	bool SnappingActive() const;
 
-	// The key: Alt (Option on a Mac) or Command, **latched for the placement** once seen.
-	// A click that begins with Alt down never reaches a tool — the editor's tools context hands it
-	// to the camera so Alt-orbit keeps working — so the key cannot be what is held at the moment
-	// of the click. It is read on the frames it can be, and holding it at any point during a
-	// placement carries for the rest of that placement.
+	// Alt/Option or Command, latched for the placement once seen: a click starting with Alt
+	// down goes to the camera (Alt-orbit), never the tool, so the key is read on hover frames.
 	bool IsSnapKeyLatched() const;
 
-	// The keys themselves, without the latch: what the prompt is describing.
+	// Raw key state, no latch; what the prompt describes.
 	static bool IsSnapKeyDown();
 
-	// What the key is about to do, which follows the standing setting rather than being fixed.
+	// What the key will do, given the current setting.
 	FText SnapKeyClause() const;
 
-	// The placed buildings, gathered once rather than by walking the level per query. Everything
-	// that asks about a neighbour — the corner snap, the lane readout, the angle snap and the
-	// laid-out footprint under the cursor — reads this.
+	// Placed footprints, gathered once; every neighbour query reads this.
 	const TArray<HutongSnap::FFootprint>& GetFootprints() const;
 
-	// The hover readout runs out of Render, so it is asked every frame whether the mouse moved or
-	// not, and answering costs a complex-collision trace. Held between frames on the cursor's own
-	// pixel position: a still cursor is over what it was over last frame, and HoveredBuilding
-	// still holds what that was.
+	// Render asks for hover every frame and each trace is a complex-collision query:
+	// held while the cursor pixel is unchanged.
 	mutable FIntPoint LastHoverCursorPx = FIntPoint(-1, -1);
 	mutable bool bHoverTraceValid = false;
 
-	// Set the moment the key is seen down, cleared when nothing is being placed or edited.
+	// Set when the key is seen down; cleared when nothing is placed or edited.
 	mutable bool bSnapKeyLatched = false;
 
-	// The snap radius with its pixel floor applied at this point.
+	// Snap radius with its pixel floor applied at P.
 	double EffectiveSnapRadius(const FVector& P) const;
 	static constexpr double SnapPixelFloor = 14.0;
 
@@ -382,17 +367,17 @@ protected:
 		EHutongDetail Level) {}
 	virtual FString GetActorNameBase() const { return TEXT("HutongActor"); }
 
-	// Attach the UHutongBuildingComponent that keeps the placed actor editable, filled with the same parameters and footprint that produced the mesh.
+	// Attaches the editable building component, with the params and footprint the mesh was built from.
 	virtual void AttachBuildingComponent(AStaticMeshActor* Actor, double SizeX, double SizeY) {}
 
-	// What the next placement is built at, and what the placed component has to be told so a later rebuild does not silently promote it back to Near.
+	// Next placement's level; stamped on the component so a rebuild does not revert to Near.
 	EHutongDetail GetDetailLevel() const;
 
-	// Whether the next placement bakes the levels below its own as LODs.
+	// Whether the next placement bakes the cheaper levels as LODs.
 	bool ShouldBuildLODChain() const;
 
-	// The chain for the current placement, built through BuildMeshForRect.
-	void BuildLODsForRect(double SizeX, double SizeY, TArray<UE::Geometry::FDynamicMesh3>& OutLODs);
+	// LOD chain for the current placement, via BuildMeshForRect.
+	int32 BuildLODsForRect(double SizeX, double SizeY, TArray<UE::Geometry::FDynamicMesh3>& OutLODs);
 
 	// Copies both detail fields onto a freshly created component.
 	void StampDetail(class UHutongBuildingComponent* Building) const;
@@ -403,7 +388,7 @@ protected:
 	// Returns LOCAL-frame bounds (offsets from StartWorld in the placement-yaw frame).
 	virtual void GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const;
 
-	// Puts an extent the tool has fixed under the cursor instead of in the anchor's quadrant.
+	// Carries a tool-fixed extent under the cursor, not in the anchor's quadrant.
 	static void HoldExtentAtCursor(double& Lo, double& Hi, double Size);
 
 	// Registers a tool property set.
@@ -424,30 +409,31 @@ protected:
 	// Called every hover tick during placement (after CurrentWorld / rotation handling).
 	virtual void OnPlacementHover(const FVector& HitWorld) {}
 
-	// For a type with a facade: the side the camera is on before the rect is committed, and the
-	// side nearest a ground point once it is — the same answer for every tool that asks.
+	// Facade side: the camera's before the rect is committed, nearest a ground point after.
 	EHutongBaySide ComputeDefaultBaySide() const;
 	EHutongBaySide ComputeClosestSide(double Hx, double Hy) const;
 
 	// Rotated rect-local frame anchored at StartWorld; yaw rotation is around world Z.
 	FVector2D WorldXYToLocalRect(const FVector& World) const;
 	FVector LocalRectToWorld(double LocalX, double LocalY) const;
-	// The same frame stood on another origin — for a preview drawn before there is an anchor.
+	// Same frame on another origin, for previews before an anchor exists.
 	FVector LocalRectToWorldFrom(const FVector& Origin, double LocalX, double LocalY) const;
 
-	// Drawn every frame while nothing is being placed, with the ground point under the cursor.
+	// Drawn each frame while nothing is being placed.
 	virtual void RenderIdlePreview(FPrimitiveDrawInterface* PDI, const FVector& CursorGround) {}
+	// False: the tool draws its own outline and height posts while placing (a round plan).
+	virtual bool DrawsRectFootprint() const { return true; }
 
-	// The editor's own cursor, dropped onto the ground plane.
+	// Editor cursor projected onto the ground plane.
 	bool GetViewportCursorGround(FVector& OutGround) const;
 
 	void UpdateRotateFromCursor(const FVector& CursorWorld);
 
-	// Draws a preview line twice: a wider near-black pass first, then the colored line on top.
+	// Preview line: wider near-black pass, then the coloured line on top.
 	static void DrawPreviewLine(FPrimitiveDrawInterface* PDI, const FVector& A, const FVector& B,
 		const FLinearColor& Color, float Thickness);
 
-	// Dashed variant, for geometry that is not on the ground. Dash length is in world cm.
+	// Dashed, for off-ground geometry. DashLength in world cm.
 	static void DrawDashedPreviewLine(FPrimitiveDrawInterface* PDI, const FVector& A, const FVector& B,
 		const FLinearColor& Color, float Thickness, double DashLength = 30.0);
 
@@ -472,45 +458,42 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UHutongSnapProperties> Snap;
 
-	// Whichever of the tool's own sets is the preset picker, noticed by RegisterSettings rather
-	// than named by each of the fourteen tools: it is what says which of a type a placement is,
-	// and StampDetail is the one place that has to read it.
+	// The tool's preset picker, found by RegisterSettings so no tool names it; read by StampDetail.
 	UPROPERTY()
 	TObjectPtr<class UHutongPresetProperties> PresetSettings;
 
-	// The cache a set saves to and restores from: a preset picker's is this tool's own.
+	// Property cache key; a preset picker's is per tool.
 	FString CacheIdentifierFor(const UInteractiveToolPropertySet* PropertySet) const;
 
-	// Puts the picker on Name and loads it when nothing has been picked yet. After both the picker
-	// and its params set are registered: the params restore would overwrite a preset loaded before it.
+	// Loads Name into the picker if nothing is picked. Call after both picker and params are
+	// registered: the params restore overwrites a preset loaded earlier.
 	void ApplyDefaultPreset(class UHutongPresetProperties* Picker, const FString& Name);
 
-	// Applies the snap to a ground hit, and remembers what it landed on so Render can mark it and the anchor can adopt its angle.
+	// Snaps a ground hit, recording the target for Render's marker and the anchor's angle.
 	FVector ApplySnap(const FVector& World, bool bIsAnchor);
 
 	// Live snap feedback, reset every hover.
 	bool bSnapActive = false;
 	FVector SnapPoint = FVector::ZeroVector;
-	// What the cursor end snapped to last, kept while the cursor stays near it: an end resting on
-	// a face slides along the face and does not drop off it, or jump to a corner, with a pixel's
-	// movement. An edge is held as the line through the point; a corner as the point.
+	// Cursor end's last snap, held while near: an edge as its line, a corner as its point,
+	// so an end slides along a face instead of dropping off or hopping to a corner.
 	HutongSnap::FResult StickyCursorSnap;
 	bool bStickyCursorValid = false;
-	// Both bearings dropped, so nothing a miter is built from outlives the placement that found it.
+	// Drops both ends' bearings so no miter outlives its placement.
 	void ClearSnapBearings();
 
-	// Yaw of whatever the anchor snapped to, or a large negative for nothing.
+	// Yaw of the anchor's snap target; -1000 for none.
 	double AnchorSnapYawDeg = -1000.0;
-	// The same for the far end, updated on every hover so it is current when the click lands.
+	// Same for the far end, updated every hover.
 	double CursorSnapYawDeg = -1000.0;
-	// The other edge at a snapped corner, for each end; and the cursor end's inward direction.
+	// Second edge at a snapped corner, per end; and the cursor end's inward direction.
 	double AnchorSnapYaw2Deg = -1000.0;
 	double CursorSnapYaw2Deg = -1000.0;
 	FVector2D CursorSnapInward = FVector2D::ZeroVector;
-	// The building the cursor end snapped to, for the same reason the anchor's is kept.
+	// Building the cursor end snapped to.
 	TWeakObjectPtr<class UHutongBuildingComponent> CursorSnapBuilding;
 
-	// The miter a run of the given thickness needs to fill its corner with a neighbour at NeighbourYawDeg, or zero if that end joined nothing.
+	// Miter extension filling the corner with a neighbour at NeighbourYawDeg; zero if unjoined.
 	double MiterExtend(double RunYawDeg, double NeighbourYawDeg, double Thickness) const;
 
 	UPROPERTY()
@@ -530,18 +513,18 @@ protected:
 	double RotateAnchorCursorAngleDeg = 0.0;
 	double RotateAnchorYawDeg = 0.0;
 
-	// The stage machine behind OnClicked, split out so the readout refresh happens once for every click regardless of which stage handled it.
+	// Stage machine behind OnClicked; the readout refreshes once per click whichever stage handled it.
 	void ProcessClick(const FVector& Hit);
 
 	bool TryRayHitGround(const FInputDeviceRay& Ray, FVector& OutHit) const;
 	FInputRayHit GroundRayHit(const FInputDeviceRay& Ray) const;
-	// Virtual so a tool that places more than one thing can take the whole step over.
+	// Virtual for tools that place more than one actor.
 	virtual void SpawnFinalActor();
-	// After the component is on: the 下鹼 line of whatever the placement snapped to, when both have one.
+	// After the component is attached: adopts the snapped neighbour's 下鹼 line, if both have one.
 	void AdoptNeighbourBaseCourse(AStaticMeshActor* Actor);
 	void AdoptBaseCourseFrom(AStaticMeshActor* Actor, const class UHutongBuildingComponent* Neighbour);
 
 
-	// Pushes the current rect into the Placement set, notifying the details panel only when a value actually changed.
+	// Writes the rect into the Placement set; notifies the details panel only on a real change.
 	void UpdatePlacementReadout();
 };

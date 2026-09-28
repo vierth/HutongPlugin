@@ -35,6 +35,12 @@ public:
 	TSharedPtr<FUICommandInfo> BeginCompoundTool;
 	TSharedPtr<FUICommandInfo> BeginStreetRowTool;
 	TSharedPtr<FUICommandInfo> BeginGalleryTool;
+	TSharedPtr<FUICommandInfo> BeginGalleryWallsTool;
+	TSharedPtr<FUICommandInfo> BeginGalleryHousesTool;
+	TSharedPtr<FUICommandInfo> BeginGalleryGatesTool;
+	TSharedPtr<FUICommandInfo> BeginGalleryCourtyardTool;
+	TSharedPtr<FUICommandInfo> BeginGalleryStreetTool;
+	TSharedPtr<FUICommandInfo> BeginGalleryTemplesTool;
 	TSharedPtr<FUICommandInfo> BeginMeasureTool;
 	TSharedPtr<FUICommandInfo> BeginImportTool;
 	TSharedPtr<FUICommandInfo> BeginFlowerBedTool;

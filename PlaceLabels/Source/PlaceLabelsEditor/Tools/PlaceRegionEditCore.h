@@ -45,7 +45,7 @@ namespace PlaceLabelsEdit
 	void DrawDiamondHandle(FPrimitiveDrawInterface* PDI, const FVector& P, const FLinearColor& Color,
 		double Size, float Thickness);
 
-	// A removal. Drawn rotated 45 degrees off the corner cross for the same reason.
+	// A removal: the corner cross rotated 45 degrees.
 	void DrawCrossOutHandle(FPrimitiveDrawInterface* PDI, const FVector& P, const FLinearColor& Color,
 		double Size, float Thickness);
 
@@ -85,7 +85,7 @@ namespace PlaceLabelsEdit
 		// Points of the polygon under construction or under edit, in world space.
 		const TArray<FVector>* OwnPoints = nullptr;
 
-		// Index within OwnPoints that is currently being dragged, and so is not a snap target.
+		// OwnPoints index being dragged; not a snap target.
 		int32 IgnoreOwnIndex = INDEX_NONE;
 	};
 
@@ -100,11 +100,8 @@ namespace PlaceLabelsEdit
 	FSnapResult ResolveSnap(const FVector& TracedHit, const FSnapSettings& Settings,
 		const FSnapQuery& Query);
 
-	// Every region component in the world with a usable polygon.
-	// Every region in the world. Snapping and welding want an outline they can work against, so
-	// they pass true; the browser, validation and the exchange must see the rest — a region cut
-	// below three corners in the Details panel is exactly the broken state the warn-never-block
-	// design exists to surface, and filtering it out here made it the one state nothing could see.
+	// Every region in the world. Snapping and welding pass true; browser, validation and exchange
+	// must also see broken regions (under three corners) to surface them.
 	void GatherRegions(UWorld* World, TArray<TWeakObjectPtr<UPlaceRegionComponent>>& OutRegions,
 		bool bOnlyWithUsableOutline = false);
 

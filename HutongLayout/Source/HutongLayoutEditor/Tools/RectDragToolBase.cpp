@@ -46,17 +46,13 @@ using UE::Geometry::FDynamicMesh3;
 
 namespace
 {
-	// How far the cursor leaves the press's pixel before a plan edit is a drag and not a click.
+	// Cursor travel before a plan press becomes a drag, not a click.
 	constexpr double PlanClickSlopPixels = 4.0;
-	// A box on open ground asks for a real drag: a trackpad click wanders a few pixels, and at
-	// the handle slop every such click became an empty box instead of the placement it was.
+	// Open-ground box needs a real drag: trackpad clicks wander a few pixels and made empty boxes.
 	constexpr double MarqueeSlopPixels = 12.0;
 
-	// **An orthographic cursor ray does not start at a camera.** It starts on the view plane, and
-	// in the top-down view a map is traced in that plane is the ground — so the origin arrives at
-	// Z = 0 with the whole scene behind it. The origin is arbitrary along such a ray, so it is
-	// pulled back until everything is in front of it. Ten kilometres: past any district, and well
-	// inside the trace length below.
+	// Ortho cursor ray starts on the view plane (Z = 0 in top view) with the scene behind it; pull
+	// the origin back 10 km, inside the trace length.
 	constexpr double OrthoRayBackOff = 1000000.0;
 
 	bool IsActiveViewportOrtho()
@@ -68,7 +64,7 @@ namespace
 	}
 }
 
-// The name of the key that ignores snapping, for the prompts.
+// Snap-bypass key name, for prompts.
 FText SnapKeyName();
 
 void URectDragToolBase::Setup()
@@ -79,16 +75,15 @@ void URectDragToolBase::Setup()
 	ClickBehavior->Initialize(this);
 	AddInputBehavior(ClickBehavior);
 
-	// Ahead of the click: a press over a laid-out building is this behaviour's, and it declines everything else so the click still places.
+	// Ahead of the click: claims presses over a laid-out building, declines the rest so the click
+	// still places.
 	DragBehavior = NewObject<UClickDragInputBehavior>(this);
 	DragBehavior->Initialize(this);
 	DragBehavior->SetDefaultPriority(FInputCapturePriority(FInputCapturePriority::DEFAULT_TOOL_PRIORITY - 1));
-	// Shift is this behaviour's own binding, for angling a corner. Declared here rather than only
-	// read at the press: the editor's click-selection behaviour lists Shift as an optional binding
-	// and is promoted a step for it when held, past a plain tool-priority drag — so the press went
-	// to selection and the corner never moved. A behaviour with a registered modifier is promoted
-	// the same step when that modifier is down, and this one only ever asks for a press over a
-	// handle of the selected building.
+	// Shift registered, not just read at press: the editor's click-selection lists Shift as
+	// optional and is promoted past a plain drag when it is held, stealing the press. A registered
+	// modifier promotes this behaviour equally; it only claims presses on selected-building
+	// handles.
 	DragBehavior->Modifiers.RegisterModifier(SkewModifierID, FInputDeviceState::IsShiftKeyDown);
 	AddInputBehavior(DragBehavior);
 
@@ -98,13 +93,11 @@ void URectDragToolBase::Setup()
 
 	// Panel order is registration order.
 
-	// First: the confidence and the note belong to the sitting, not to the placement, and they are
-	// what a tracer sets before drawing anything.
+	// Metadata first: confidence and note belong to the sitting and are set before drawing.
 	MetadataSettings = NewObject<UHutongMetadataProperties>(this);
 	RegisterSettings(MetadataSettings);
 
-	// Then the tool's own sets, the preset picker first among them: what is being placed comes
-	// right under who is placing it, before the readout of where.
+	// Then the tool's own sets, preset picker first.
 	RegisterToolSettings();
 
 	Placement = NewObject<UHutongPlacementProperties>(this);
@@ -130,9 +123,9 @@ bool URectDragToolBase::ShouldBuildLODChain() const
 	return DetailSettings ? DetailSettings->bBuildLODChain : true;
 }
 
-void URectDragToolBase::BuildLODsForRect(double SizeX, double SizeY, TArray<FDynamicMesh3>& OutLODs)
+int32 URectDragToolBase::BuildLODsForRect(double SizeX, double SizeY, TArray<FDynamicMesh3>& OutLODs)
 {
-	HutongGen::Detail::BuildPlacementLODs(IsPlanOnly(), SizeX, SizeY,
+	return HutongGen::Detail::BuildPlacementLODs(IsPlanOnly(), SizeX, SizeY,
 		GetDetailLevel(), ShouldBuildLODChain(),
 		[this, SizeX, SizeY](FDynamicMesh3& Mesh, EHutongDetail Level)
 		{
@@ -162,27 +155,20 @@ void URectDragToolBase::StampDetail(UHutongBuildingComponent* Building) const
 		Building->Notes = MetadataSettings->Notes;
 	}
 	Building->bPlanOnly = IsPlanOnly();
-	// **Which preset laid a building down is a fact about the placement, and nothing was recording
-	// it.** A 正房 and a 耳房 are one generator, so a building that does not carry the name is one
-	// whose type nothing can answer for afterwards — the params are on it, but which of the shipped
-	// buildings they came from is not. The picker's own selection is what the house tool's prompt
-	// already calls the loaded preset, so it is the same answer said in one more place. Empty when
-	// no preset was picked, which is the truth rather than a gap.
-	//
-	// **Only when the picker is picking this kind of building.** The compound and the gallery stamp
-	// every piece they lay out through here, and their own picker names a compound — writing that
-	// onto a 正房 would put a confident wrong answer where a blank one is honest. The two keys come
-	// from opposite ends (the tool's save key, the component's class name) and agreeing is what
-	// says the name means this building.
+	// Record which preset laid the building: 正房 and 耳房 share a generator, so params alone cannot
+	// name it. Empty when none was picked.
+	// Only when the picker picks this type: compound and gallery stamp pieces through here with a
+	// compound picker. The tool's save key matching the component's class name confirms the name
+	// fits.
 	if (PresetSettings && PresetSettings->GetToolKey() == Building->GetPresetKey())
 	{
 		Building->Preset = PresetSettings->Preset;
 	}
 }
 
-// The property cache is keyed by set class, and every preset picker is the one class: with no
-// identifier of its own, the house's choice was restored onto the street row's picker. The other
-// sets are shared on purpose — a detail level or a palette is the sitting's, not a type's.
+// Property cache keys by set class and every preset picker is one class, so each needs its own id
+// or one tool's choice restores onto another's. Other sets (detail level, palette) are shared on
+// purpose.
 FString URectDragToolBase::CacheIdentifierFor(const UInteractiveToolPropertySet* PropertySet) const
 {
 	return PropertySet->IsA<UHutongPresetProperties>() ? GetClass()->GetName() : FString();
@@ -203,8 +189,7 @@ void URectDragToolBase::RegisterSettings(UInteractiveToolPropertySet* PropertySe
 		PropertySet->RestoreProperties(this, CacheIdentifierFor(PropertySet));
 		RegisteredSettings.Add(PropertySet);
 	}
-	// Noticed here rather than assigned by each tool: every tool that has a preset picker registers
-	// it through this one call, and a fifteenth tool costs nothing.
+	// Detected here so every tool with a picker gets it through this one call.
 	if (UHutongPresetProperties* AsPresets = Cast<UHutongPresetProperties>(PropertySet))
 	{
 		PresetSettings = AsPresets;
@@ -223,7 +208,7 @@ void URectDragToolBase::UpdatePlacementReadout()
 	const double NewDepth = bIsDragging ? MaxY - MinY : 0.0;
 	const double NewRotation = bIsDragging ? PlacementYawDeg : 0.0;
 	const FString NewDetail = bIsDragging ? GetPlacementDetail() : FString();
-	// Height is a tool setting rather than part of the drag, so it stays shown between placements.
+	// Height is a tool setting, so it stays shown between placements.
 	const double NewHeight = GetPreviewHeight();
 
 	if (FMath::IsNearlyEqual(NewWidth, Placement->Width)
@@ -235,7 +220,8 @@ void URectDragToolBase::UpdatePlacementReadout()
 		return;
 	}
 
-	// No NotifyOfPropertyChangeByTool here: that rebuilds the whole details panel, and this runs on every hover tick.
+	// No NotifyOfPropertyChangeByTool: it rebuilds the whole details panel, and this runs per hover
+	// tick.
 	Placement->Width = NewWidth;
 	Placement->Depth = NewDepth;
 	Placement->Height = NewHeight;
@@ -263,7 +249,7 @@ void URectDragToolBase::GetEffectiveRectBounds(double& OutMinX, double& OutMinY,
 
 void URectDragToolBase::HoldExtentAtCursor(double& Lo, double& Hi, double Size)
 {
-	// Whichever end the drag reached is where the cursor is; the other is the anchor at zero.
+	// Cursor is at whichever end the drag reached; the anchor is at zero.
 	const double Cursor = (Hi > 0.0) ? Hi : Lo;
 	Lo = Cursor - 0.5 * Size;
 	Hi = Cursor + 0.5 * Size;
@@ -296,7 +282,7 @@ bool URectDragToolBase::GetViewportCursorGround(FVector& OutGround) const
 		? static_cast<FEditorViewportClient*>(Viewport->GetClient()) : nullptr;
 	if (Client == nullptr) return false;
 
-	// Only while the mouse is actually over the viewport.
+	// Only while the mouse is over the viewport.
 	const TSharedPtr<SEditorViewport> Widget = Client->GetEditorViewportWidget();
 	if (!Widget.IsValid() || !FSlateApplication::IsInitialized()) return false;
 	if (!Widget->GetCachedGeometry().IsUnderLocation(FSlateApplication::Get().GetCursorPos())) return false;
@@ -315,14 +301,14 @@ void URectDragToolBase::Render(IToolsContextRenderAPI* RenderAPI)
 
 	if (!bIsDragging)
 	{
-		// Idle frames with the key up end the last placement's suppression; a placement or a plan
-		// edit in flight keeps whatever it has, which is what lets the key be released to click.
+		// Idle with the key up ends the last placement's suppression; an in-flight placement or
+		// edit keeps it, so the key can be released before clicking.
 		if (!IsEditingPlan() && !IsSnapKeyDown()) bSnapKeyLatched = false;
 		UpdateHoverInspectionFromViewport();
 		DrawHoverInspection(PDI);
 		FVector Ground;
 		const bool bGround = GetViewportCursorGround(Ground);
-		// What the cursor is over, for the handle under it to light up before it is pressed.
+		// Hovered handle, highlighted before the press.
 		HoverPlanHandle = INDEX_NONE;
 		if (bGround && !IsEditingPlan())
 		{
@@ -334,7 +320,7 @@ void URectDragToolBase::Render(IToolsContextRenderAPI* RenderAPI)
 		DrawPlanHandles(PDI);
 		if (PlanEdit == EPlanEdit::Marquee && bPlanDragMoved)
 		{
-			// The box on the ground, in the selection's own blue.
+			// Ground box, in the selection's blue.
 			const FLinearColor BoxColor(0.35f, 0.75f, 1.0f, 1.0f);
 			const FVector Lift(0.0, 0.0, 3.0);
 			const FVector A = MarqueeStart + Lift, C = MarqueeEnd + Lift;
@@ -361,12 +347,15 @@ void URectDragToolBase::Render(IToolsContextRenderAPI* RenderAPI)
 
 	const FLinearColor Color(1.0f, 0.9f, 0.15f, 1.0f);
 	const float Thickness = 5.0f;
-	DrawPreviewLine(PDI, C0, C1, Color, Thickness);
-	DrawPreviewLine(PDI, C1, C2, Color, Thickness);
-	DrawPreviewLine(PDI, C2, C3, Color, Thickness);
-	DrawPreviewLine(PDI, C3, C0, Color, Thickness);
+	if (DrawsRectFootprint())
+	{
+		DrawPreviewLine(PDI, C0, C1, Color, Thickness);
+		DrawPreviewLine(PDI, C1, C2, Color, Thickness);
+		DrawPreviewLine(PDI, C2, C3, Color, Thickness);
+		DrawPreviewLine(PDI, C3, C0, Color, Thickness);
+	}
 
-	// The snap marker: a small cross on the point the placement has locked onto.
+	// Snap marker: small cross on the locked point.
 	if (bSnapActive)
 	{
 		const FLinearColor SnapColor(0.25f, 1.0f, 0.45f, 1.0f);
@@ -376,9 +365,9 @@ void URectDragToolBase::Render(IToolsContextRenderAPI* RenderAPI)
 		DrawPreviewLine(PDI, SnapPoint, SnapPoint + FVector(0, 0, 1.6 * Arm), SnapColor, 3.0f);
 	}
 
-	// Corner posts and a top outline, so the height being edited is visible in perspective.
+	// Corner posts and top outline show the height in perspective.
 	const double PreviewHeight = GetPreviewHeight();
-	if (PreviewHeight <= 0.0) return;
+	if (PreviewHeight <= 0.0 || !DrawsRectFootprint()) return;
 
 	const FVector Up(0.0, 0.0, PreviewHeight);
 	const FLinearColor HeightColor(0.45f, 0.8f, 1.0f, 1.0f);
@@ -393,24 +382,43 @@ void URectDragToolBase::Render(IToolsContextRenderAPI* RenderAPI)
 	}
 }
 
+// One task per line, naming only settings the current view shows: students skimmed the paragraphs.
+// Tools replace line 0 and insert their own from line 1.
 TArray<FText> URectDragToolBase::GetToolHelpLines() const
 {
-	return {
+	TArray<FText> Lines = {
 		LOCTEXT("HelpAnchor", "Click the ground to anchor a corner, move, then click to set the footprint."),
-		LOCTEXT("HelpHeight", "- and = raise or lower the height in 20 cm steps (Shift 5 cm, Ctrl 100 cm). Corner posts preview it."),
-		LOCTEXT("HelpRotate", "Hold R while placing to rotate around the anchor; hold Shift for 5° steps. The angle is left alone otherwise — tick Adopt Neighbour Angle under Snapping to have rotation pull onto nearby buildings' bearings and quarter turns off them."),
-		FText::Format(LOCTEXT("HelpSnap", "Placements snap to the corners and edges of buildings already placed, and a run lands on a standard lane width; the angle is not snapped unless Adopt Neighbour Angle is ticked. Tap {0} to place freely for one placement, or untick Snap To Placed Buildings under Snapping and the key then does the opposite. Tap the key first and release it before clicking: a press that starts with Option down belongs to the camera."), SnapKeyName()),
-		LOCTEXT("HelpPlan", "Drag a box on open ground to select every building it touches, Shift to add to the selection. Click inside a laid-out footprint to select it and drag to move it; drag its handles to resize, the ring to rotate. With any building selected and nothing being placed, [ and ] turn its facade to the next side. Click on a footprint's edge to start a new footprint against it; Ctrl+click to place inside it."),
-		LOCTEXT("HelpDetail", "Detail Level sets how much of the next placement is built: Block (塊) is a massing block, Far (遠) the generator with the ornament off, Near (近) the full building. Promote, rebuild, export and import what is already down under Placed Buildings at the foot of the panel."),
-		LOCTEXT("HelpCancel", "Esc cancels an in-progress placement; Ctrl+Z undoes a placed actor."),
+		LOCTEXT("HelpCancel", "Esc cancels the placement; Esc again puts the tool down. Ctrl+Z undoes the last placement."),
+		LOCTEXT("HelpHeight", "- and = raise or lower the height (Shift finer, Ctrl coarser). The corner posts show it."),
+		FText::Format(LOCTEXT("HelpSnap", "Placements snap to the buildings already down. Tap and release {0} before clicking to place one freely."), SnapKeyName()),
+		LOCTEXT("HelpEdge", "Click on a footprint's edge to start a new one against it; Ctrl+click to place inside it."),
+		LOCTEXT("HelpSelect", "Drag a box on open ground to select buildings (Shift adds). Drag a selected footprint to move it, its handles to resize, its ring to rotate."),
+		LOCTEXT("HelpFacade", "With a building selected and nothing being placed, [ and ] turn its facade to the next side."),
+		LOCTEXT("HelpScene", "Rebuild, promote, export and import what is already placed on the Scene tab."),
 	};
+	if (HasRotateKey())
+	{
+		Lines.Insert(LOCTEXT("HelpRotate", "Hold R while placing and move the mouse to rotate; Shift snaps to 5°."), 3);
+	}
+	const UHutongLayoutModeSettings* Settings = UHutongLayoutEdMode::GetActiveSettings();
+	if (Settings && Settings->bShowAdvancedSettings)
+	{
+		Lines.Add(LOCTEXT("HelpDetail", "Detail Level sets how much of the next placement is built: Block (塊) a massing block, Far (遠) no ornament, Near (近) the full building."));
+		Lines.Add(LOCTEXT("HelpAngle", "Adopt Neighbour Angle (under Snapping) turns a snapped placement onto its neighbour's line."));
+	}
+	return Lines;
 }
 
+// Only the keys that act at this stage; the prompt above says what to click.
 FText URectDragToolBase::GetKeyHintText() const
 {
-	return FText::Format(LOCTEXT("KeyHint", "- = height · R rotate · {0} {1} · Esc cancel, again to put the tool down · Ctrl+Z undo"),
-		SnapKeyName(),
+	const FText SnapHint = FText::Format(LOCTEXT("KeyHintSnapKey", "{0} {1}"), SnapKeyName(),
 		SnappingActive() ? LOCTEXT("KeyHintNoSnap", "no snap") : LOCTEXT("KeyHintSnap", "snap"));
+	if (IsPlacingActive() || IsEditingPlan())
+	{
+		return FText::Format(LOCTEXT("KeyHintPlacing", "- = height · R rotate · {0} · Esc cancel"), SnapHint);
+	}
+	return FText::Format(LOCTEXT("KeyHintIdle", "- = height · {0} · Esc put the tool down"), SnapHint);
 }
 
 TArray<FText> URectDragToolBase::GetStageNames() const
@@ -426,8 +434,7 @@ int32 URectDragToolBase::GetStageIndex() const
 
 FText URectDragToolBase::SnapKeyClause() const
 {
-	// The key does the other thing, so what it is about to do is not fixed — named in one place so
-	// the prompts cannot describe it three different ways.
+	// The key inverts the snap setting; named once so the prompts agree.
 	return SnappingActive()
 		? FText::Format(LOCTEXT("SnapKeyOff", " Snapping on; tap {0} to place freely."), SnapKeyName())
 		: FText::Format(LOCTEXT("SnapKeyOn", " Snapping off; tap {0} to snap to neighbours."), SnapKeyName());
@@ -443,7 +450,7 @@ FText URectDragToolBase::GetPlanEditPromptText() const
 	case EPlanEdit::Resize:
 		return FText::Format(LOCTEXT("PromptPlanResize", "Resizing: release to set. The far edge stays put.{0} Esc puts it back."), Free);
 	case EPlanEdit::Rotate:
-		// The key's clause is about position snapping, and nothing is being positioned here.
+		// The key's clause is about position snapping; nothing is positioned here.
 		return LOCTEXT("PromptPlanRotate", "Rotating about the centre: release to set. Shift snaps to 5°. Esc puts it back.");
 	case EPlanEdit::Opening:
 		return LOCTEXT("PromptPlanOpening", "Sliding the doorway along the wall: release to set. A built wall rebuilds on release. Esc puts it back.");
@@ -504,7 +511,7 @@ FText URectDragToolBase::GetStagePromptText() const
 	}
 	if (!bRectCommitted)
 	{
-		return FText::Format(LOCTEXT("PromptSize", "Move to size the footprint, then click to place. - and = change height, hold R to rotate, Esc to cancel.{0}"), SnapKeyClause());
+		return LOCTEXT("PromptSize", "Move to size the footprint, then click to place.");
 	}
 	return LOCTEXT("PromptCommit", "Click to place. Esc to cancel.");
 }
@@ -518,18 +525,14 @@ void URectDragToolBase::DrawHUD(FCanvas* Canvas, IToolsContextRenderAPI* RenderA
 	}
 	if (Canvas == nullptr || RenderAPI == nullptr) return;
 
-	// **The readout sits in the viewport's top-left, not beside the rectangle.** Pinned to the
-	// rect's far corner it lay over the thing being drawn at exactly the sizes where the numbers
-	// matter, walked off the edge on a rect dragged toward one, and vanished outright whenever
-	// WorldToPixel refused a corner behind the camera. A corner of the screen is always legible,
-	// always in the same place, and never on top of the geometry. **Wrapped to the viewport**: a
-	// prompt is a sentence or two, and on a narrow viewport it ran off the right edge unread.
-	// The engine's bitmap font: a Slate font item draws nothing in this canvas pass, and this
-	// block went missing entirely on it. The Chinese in the prompts is lost to it, as it always was.
+	// Readout pinned top-left, not beside the rect: there it covered the geometry, ran off-screen
+	// and vanished when WorldToPixel failed. Wrapped to the viewport width.
+	// Engine bitmap font: a Slate font draws nothing in this canvas pass. The prompts' Chinese is
+	// lost.
 	const FVector2D At = HudCorner(Canvas);
 	const UFont* Font = UEngine::GetMediumFont();
 	if (Font == nullptr) return;
-	// Wrapped short of the measured width: the bitmap font draws a little wider than it measures.
+	// Wrap short of the measured width: the bitmap font draws wider than it measures.
 	const double MaxWidth = FMath::Max(0.85 * (ViewportWidth(Canvas) - At.X - 24.0), 120.0);
 
 	TArray<FString> Lines;
@@ -544,10 +547,10 @@ void URectDragToolBase::DrawHUD(FCanvas* Canvas, IToolsContextRenderAPI* RenderA
 	};
 	Add(GetStagePromptText(), FLinearColor(1.0f, 0.9f, 0.15f));
 	Add(GetPlacementSummaryText(), FLinearColor::White);
-	// The keys this tool answers to, the same line the panel keeps on screen.
+	// Key hints, same line as the panel.
 	Add(GetKeyHintText(), FLinearColor(0.78f, 0.78f, 0.78f));
 
-	// A dark backing, so the block reads over a map as well as over the ground.
+	// Dark backing, legible over a map.
 	double Widest = 0.0;
 	for (const FString& Line : Lines) Widest = FMath::Max(Widest, (double)Font->GetStringSize(*Line));
 	FCanvasTileItem Backing(At - FVector2D(8.0, 6.0), FVector2D(Widest * 1.15 + 16.0, Lines.Num() * 16.0 + 12.0), FLinearColor(0.0f, 0.0f, 0.0f, 0.6f));
@@ -597,7 +600,7 @@ TArray<FString> URectDragToolBase::WrapToWidth(const FString& Text, const UFont*
 			}
 			if (!Line.IsEmpty()) Out.Add(Line);
 			Line.Reset();
-			// A word wider than the line on its own — a run of Chinese has no spaces — breaks where it must.
+			// A word wider than the line (Chinese has no spaces) breaks mid-word.
 			FString Piece;
 			for (int32 i = 0; i < Word.Len(); ++i)
 			{
@@ -621,7 +624,7 @@ TArray<FString> URectDragToolBase::WrapToWidth(const FString& Text, const UFont*
 
 FVector2D URectDragToolBase::HudCorner(FCanvas* Canvas)
 {
-	// Clear of the viewport's own toolbar, in DPI-independent units like everything drawn here.
+	// Clear of the viewport toolbar; DPI-independent units.
 	return FVector2D(24.0, 56.0);
 }
 
@@ -634,7 +637,7 @@ FVector2D URectDragToolBase::ClampToViewport(FCanvas* Canvas, const FVector2D& A
 		? Canvas->GetRenderTarget()->GetSizeXY() : FIntPoint(1920, 1080);
 	const FVector2D Screen(Backbuffer.X / DPIScale, Backbuffer.Y / DPIScale);
 
-	// A margin, so text near an edge is inside it rather than half off it.
+	// Margin keeps text off the edge.
 	constexpr double Margin = 8.0;
 	return FVector2D(
 		FMath::Clamp(At.X, Margin, FMath::Max(Screen.X - BlockSize.X - Margin, Margin)),
@@ -660,7 +663,7 @@ FText URectDragToolBase::GetPlacementSummaryText() const
 void URectDragToolBase::DrawPreviewLine(FPrimitiveDrawInterface* PDI, const FVector& A, const FVector& B,
 	const FLinearColor& Color, float Thickness)
 {
-	// Thickness is in screen pixels, not world centimetres.
+	// Thickness in screen pixels, not cm.
 	static const FLinearColor Backing(0.02f, 0.02f, 0.02f, 1.0f);
 	PDI->DrawLine(A, B, Backing, SDPG_Foreground, Thickness + 4.0f, 0.0f, true);
 	PDI->DrawLine(A, B, Color, SDPG_Foreground, Thickness, 0.0f, true);
@@ -673,7 +676,7 @@ void URectDragToolBase::DrawDashedPreviewLine(FPrimitiveDrawInterface* PDI, cons
 	const double Length = Delta.Size();
 	if (Length < UE_KINDA_SMALL_NUMBER) return;
 
-	// Round to an odd number of half-periods so a dash lands on both ends of the line.
+	// Odd number of half-periods: a dash lands on both ends.
 	const int32 Steps = FMath::Max(3, 2 * FMath::RoundToInt32(Length / (2.0 * DashLength)) + 1);
 	const FVector Step = Delta / Steps;
 	for (int32 i = 0; i < Steps; i += 2)
@@ -689,10 +692,8 @@ bool URectDragToolBase::TryRayHitGround(const FInputDeviceRay& Ray, FVector& Out
 	if (FMath::IsNearlyZero(Dir.Z)) return false;
 	const double Plane = (bIsDragging) ? StartWorld.Z : 0.0;
 	const double t = (Plane - Origin.Z) / Dir.Z;
-	// A perspective ray that reaches the plane only behind its origin has it behind the camera and
-	// must miss. An orthographic ray's origin sits on the view plane, which in a top-down viewport
-	// is this very plane, so t there is zero or negative for every cursor position on it — a fact
-	// about where the origin was put, not about what the cursor is over.
+	// Perspective: plane behind the origin is behind the camera, a miss. Ortho top view: the origin
+	// lies on this plane so t <= 0 everywhere, not a miss.
 	if (t <= 0.0 && !IsActiveViewportOrtho()) return false;
 	OutHit = Origin + Dir * t;
 	return true;
@@ -707,9 +708,8 @@ FInputRayHit URectDragToolBase::GroundRayHit(const FInputDeviceRay& Ray) const
 
 FInputRayHit URectDragToolBase::IsHitByClick(const FInputDeviceRay& ClickPos)
 {
-	// A click on a built building is a selection — the editor's to make, after which the mode
-	// brings up that building's tool — not the first corner of a new placement over its roof.
-	// Only a placement already in hand keeps its finishing click wherever that lands.
+	// A click on a built building is the editor's selection, not a new placement's first corner. A
+	// placement in hand keeps its finishing click anywhere.
 	if (!bIsDragging)
 	{
 		FHitResult Hit;
@@ -730,7 +730,7 @@ void URectDragToolBase::OnClicked(const FInputDeviceRay& ClickPos)
 bool URectDragToolBase::IsSnapKeyDown()
 {
 	if (!FSlateApplication::IsInitialized()) return false;
-	// Alt — which on a Mac is Option — or Command.
+	// Alt (Option on Mac) or Command.
 	const FModifierKeysState& Mods = FSlateApplication::Get().GetModifierKeys();
 	return Mods.IsAltDown() || Mods.IsCommandDown();
 }
@@ -739,8 +739,8 @@ bool URectDragToolBase::IsSnapKeyLatched() const
 {
 	if (IsSnapKeyDown())
 	{
-		// Latched here as well as read, so a placement that is mid-flight keeps it after the key
-		// comes up — the click that finishes the placement has to arrive with the key released.
+		// Latched so an in-flight placement keeps it after release; the finishing click arrives
+		// with the key up.
 		bSnapKeyLatched = true;
 		return true;
 	}
@@ -749,9 +749,8 @@ bool URectDragToolBase::IsSnapKeyLatched() const
 
 bool URectDragToolBase::SnappingActive() const
 {
-	// One comparison, so the standing setting and the key cannot be read in different orders at
-	// different sites. The key inverts whichever way the checkbox stands, which is why a prompt
-	// only ever has to name the one thing the key is about to do.
+	// One comparison, so setting and key are read consistently. The key inverts the checkbox, so a
+	// prompt names one action.
 	return Snap && (Snap->bEnabled != IsSnapKeyLatched());
 }
 
@@ -768,9 +767,8 @@ FVector URectDragToolBase::ApplySnap(const FVector& World, bool bIsAnchor)
 {
 	bSnapActive = false;
 
-	// Each call answers for one end of the run, so that end's own last answer goes first. Left
-	// standing, a miss keeps the previous placement's bearing and MiterExtend builds a corner for
-	// a neighbour that is not there — on the run being drawn and on the next one placed.
+	// Reset this end's last answer first: a stale bearing makes MiterExtend miter to a missing
+	// neighbour.
 	if (bIsAnchor)
 	{
 		AnchorSnapYawDeg = -1000.0;
@@ -791,22 +789,23 @@ FVector URectDragToolBase::ApplySnap(const FVector& World, bool bIsAnchor)
 		return World;
 	}
 
-	// Lane width first, and only for the anchor: a run's position across the street is set by where it starts.
+	// Lane width first, anchor only: the start sets the run's position across the street.
 	if (bIsAnchor && Snap->bSnapLaneWidth && WantsLaneWidthSnap())
 	{
-		// Queried without a bearing: at the first click nothing about the run's direction is known and PlacementYawDeg is whatever the last placement left behind.
+		// No bearing: at the first click the run's direction is unknown and PlacementYawDeg is
+		// stale.
 		const HutongSnap::FGap Gap = HutongSnap::FindParallelGap(
 			GetFootprints(), World, HutongSnap::AnyYaw, 2.0 * HutongGen::Urban::PitchCm);
 		if (Gap.bFound)
 		{
-			// Measured face to face, the way the readout reports it and the way a street is actually wide.
+			// Face to face, as the readout reports and a street is measured.
 			const double Offset = GetLaneFaceOffset();
 			const double Clear = FMath::Max(Gap.DistanceCm - Offset, 0.0);
 			const double Canonical = HutongGen::Urban::NearestCanonicalWidth(
 				Clear, FMath::Max(Snap->LaneToleranceCm, 0.0));
 			if (Canonical > 0.0)
 			{
-				// Move along the line to the neighbour, so only the distance changes.
+				// Slide along the line to the neighbour so only the distance changes.
 				const double Shift = Clear - Canonical;
 				const FVector Moved = World + FVector(Gap.Toward.X, Gap.Toward.Y, 0.0) * Shift;
 				bSnapActive = true;
@@ -824,11 +823,9 @@ FVector URectDragToolBase::ApplySnap(const FVector& World, bool bIsAnchor)
 	const double Radius = EffectiveSnapRadius(World);
 	HutongSnap::FResult R = HutongSnap::FindSnap(GetFootprints(), World, Radius);
 
-	// The cursor end keeps what it had while it stays near it — unless the corner at the end of a
-	// held face is now in reach: a held edge is the line through it, and along that line the
-	// corner where it meets the neighbour's next face is the point a run wants, with both
-	// bearings, not the one face's. A corner off that line is some other building's, and a held
-	// corner is kept as it is, or an end on a thin end face hops between its two corners per pixel.
+	// The cursor end keeps its held snap while near, unless the corner at the end of a held face
+	// comes in reach: that corner (both bearings) beats the face. A held corner is kept, or an end
+	// on a thin end face flips between its corners per pixel.
 	bool bFreshCorner = false;
 	if (!bIsAnchor && bStickyCursorValid && R.bSnapped && R.EdgeYaw2Deg > -900.0)
 	{
@@ -848,7 +845,7 @@ FVector URectDragToolBase::ApplySnap(const FVector& World, bool bIsAnchor)
 		FVector Held = S.Point;
 		if (S.EdgeYawDeg > -900.0 && S.EdgeYaw2Deg < -900.0)
 		{
-			// An edge: the line through the point, held within the radius across it and a few along.
+			// Edge: line through the point, held within the radius across and a little along.
 			const double Yaw = FMath::DegreesToRadians(S.EdgeYawDeg);
 			const FVector2D E(FMath::Cos(Yaw), FMath::Sin(Yaw));
 			const FVector2D D(World.X - S.Point.X, World.Y - S.Point.Y);
@@ -889,7 +886,7 @@ FVector URectDragToolBase::ApplySnap(const FVector& World, bool bIsAnchor)
 	bSnapActive = true;
 	SnapPoint = R.Point;
 
-	// The anchor takes its neighbour's angle, and only the anchor's own end takes a miter from it.
+	// Anchor takes the neighbour's angle; only the anchor end gets a miter from it.
 	if (bIsAnchor)
 	{
 		AnchorSnapInward = R.Inward;
@@ -924,7 +921,7 @@ double URectDragToolBase::MiterExtend(double RunYawDeg, double NeighbourYawDeg, 
 	double Delta = FMath::Fmod(FMath::Abs(RunYawDeg - NeighbourYawDeg), 180.0);
 	if (Delta > 90.0) Delta = 180.0 - Delta;
 
-	// Collinear needs nothing; the run already continues its neighbour.
+	// Collinear: no miter.
 	if (Delta < 1.0) return 0.0;
 
 	const double HalfInterior = 0.5 * (180.0 - Delta);
@@ -960,7 +957,7 @@ void URectDragToolBase::ProcessClick(const FVector& Hit)
 		if (bSpawn)
 		{
 			SpawnFinalActor();
-			// What was just placed has to be snappable on the next click.
+			// The just-placed building must be snappable on the next click.
 			HutongSnap::Invalidate();
 			ClearSnapBearings();
 			bIsDragging = false;
@@ -984,7 +981,7 @@ FInputRayHit URectDragToolBase::BeginHoverSequenceHitTest(const FInputDeviceRay&
 	const FInputRayHit Ground = GroundRayHit(PressPos);
 	if (Ground.bHit) return Ground;
 
-	// A ray aimed at a building from anywhere near eye level never reaches Z = 0.
+	// A ray aimed at a building from near eye level never reaches Z = 0.
 	FHitResult Hit;
 	if (TraceHoveredBuilding(PressPos, Hit))
 	{
@@ -1026,8 +1023,7 @@ bool URectDragToolBase::TraceHoveredBuilding(const FInputDeviceRay& Ray, FHitRes
 	if (World == nullptr) return false;
 
 	const FVector Dir = (FVector)Ray.WorldRay.Direction;
-	// The scene stands behind an orthographic ray's own origin, so the trace has to start further
-	// back than the view plane the cursor was deprojected onto.
+	// The scene lies behind an ortho ray's origin; start the trace further back.
 	FVector Origin = (FVector)Ray.WorldRay.Origin;
 	if (IsActiveViewportOrtho()) Origin -= Dir * OrthoRayBackOff;
 
@@ -1052,8 +1048,8 @@ UHutongBuildingComponent* URectDragToolBase::FindPlanBuildingAt(const FVector& G
 		UHutongBuildingComponent* B = F.Building.Get();
 		if (!B || !F.bPlanOnly) continue;
 		if (F.Size.X <= 0.0 || F.Size.Y <= 0.0) continue;
-		// Every mesh here is built from the actor's origin, and the footprint is the placement's
-		// own four corners, which with a skew are not the rectangle's.
+		// Meshes are built from the actor origin; the footprint is the placement's own corners (not
+		// the rect under skew).
 		const FVector Local3 = F.ActorToWorld.InverseTransformPosition(Ground);
 		const FVector2D Local(Local3.X, Local3.Y);
 		FVector2D Quad[4];
@@ -1088,8 +1084,8 @@ double URectDragToolBase::WorldPerPixelAt(const FVector& P) const
 
 const TArray<HutongSnap::FFootprint>& URectDragToolBase::GetFootprints() const
 {
-	// No age-out while the mouse is down: a drag cannot change what is in the level, and a
-	// mid-drag refresh is a walk of the whole district for an answer that has not moved.
+	// No age-out while the mouse is down: a drag cannot change the level, and a refresh walks the
+	// whole district.
 	const double MaxAge = (bIsDragging || IsEditingPlan()) ? -1.0 : 1.0;
 	return HutongSnap::Cache().Get(GetWorld(), MaxAge);
 }
@@ -1131,15 +1127,14 @@ void URectDragToolBase::UpdateHoverInspectionFromViewport()
 		? static_cast<FEditorViewportClient*>(Viewport->GetClient()) : nullptr;
 	if (Client == nullptr) return;
 
-	// A still cursor is over whatever it was over last frame, and HoveredBuilding still says what
-	// that was — so the trace is skipped and the members stand as they are.
+	// Still cursor: skip the trace, keep HoveredBuilding.
 	const FIntPoint CursorPx(Viewport->GetMouseX(), Viewport->GetMouseY());
 	if (bHoverTraceValid && CursorPx == LastHoverCursorPx) return;
 	LastHoverCursorPx = CursorPx;
 	bHoverTraceValid = true;
 	HoveredBuilding.Reset();
 
-	// The editor's own cursor, so this does not depend on a hover sequence being live.
+	// Editor cursor, independent of a live hover sequence.
 	const FViewportCursorLocation Cursor = Client->GetCursorWorldLocationFromMousePos();
 
 	FInputDeviceRay Ray;
@@ -1165,8 +1160,7 @@ void URectDragToolBase::UpdateHoverInspectionFromViewport()
 
 FText URectDragToolBase::GetHoverSummaryText() const
 {
-	// What the cursor is over, else what is selected: the readout should not go blank the moment
-	// the cursor leaves the footprint for one of its own handles.
+	// Hovered, else selected: the readout stays when the cursor moves onto a handle.
 	const UHutongBuildingComponent* Building = HudBuilding.Get();
 	if (Building == nullptr) Building = GetSelectedBuilding();
 	const AActor* Actor = Building ? Building->GetOwner() : nullptr;
@@ -1184,8 +1178,7 @@ FText URectDragToolBase::GetHoverSummaryText() const
 		}
 	}
 
-	// What the piece is: the type it was placed with, and the preset that says which of that
-	// type it is — a 正房 and a 耳房 are one generator and the preset is the whole difference.
+	// Type plus preset: 正房 and 耳房 share a generator; the preset tells them apart.
 	const FString What = Building->Preset.IsEmpty()
 		? FString::Printf(TEXT("%s  ·  no preset"), *Building->GetTypeLabel().ToString())
 		: FString::Printf(TEXT("%s  ·  %s"), *Building->GetTypeLabel().ToString(), *Building->Preset);
@@ -1196,17 +1189,15 @@ FText URectDragToolBase::GetHoverSummaryText() const
 		? FString::Printf(TEXT("  ·  %d bays (間)"), Bays.Boundaries.Num() - 1)
 		: FString();
 
-	// What is on the ground: a laid-out rectangle has no mesh to count, and saying so is the
-	// answer to why nothing is standing there.
+	// Plan-only has no mesh; saying so explains the empty ground.
 	const FString Built = Building->bPlanOnly
 		? FString(TEXT("plan only"))
 		: FString::Printf(TEXT("%d tris"), Triangles);
 	const FString DetailText =
 		StaticEnum<EHutongDetail>()->GetDisplayNameTextByValue((int64)Building->DetailLevel).ToString();
 
-	// What the polygon is worth as evidence, which is the half of the answer the geometry cannot
-	// give: a traced building and a guessed one look the same from here. The note follows it when
-	// there is one, cut to a line — the Details panel is where a long one is read.
+	// Confidence: traced and guessed look alike. The note follows, cut to one line; Details shows
+	// it whole.
 	const FString Confidence = FString::Printf(TEXT("confidence %s"),
 		*StaticEnum<EHutongConfidence>()->GetDisplayNameTextByValue((int64)Building->Confidence).ToString());
 	FString NoteText = Building->Notes.TrimStartAndEnd().Replace(TEXT("\n"), TEXT(" "));
@@ -1225,7 +1216,7 @@ FText URectDragToolBase::GetHoverSummaryText() const
 
 void URectDragToolBase::DrawHoverInspection(FPrimitiveDrawInterface* PDI) const
 {
-	// Latched for DrawHUD, which runs after this in the same frame and must report what was outlined.
+	// Latched for DrawHUD, later this frame.
 	HudBuilding = HoveredBuilding;
 	HudWorldPoint = HoveredWorldPoint;
 
@@ -1235,7 +1226,7 @@ void URectDragToolBase::DrawHoverInspection(FPrimitiveDrawInterface* PDI) const
 	const AActor* Actor = Building->GetOwner();
 	if (Actor == nullptr) return;
 
-	// The footprint, not the actor's bounds. Bounds take in the eaves, the platform's overhang and the 下鹼's projection.
+	// Footprint, not bounds: bounds include eaves, platform overhang, 下鹼.
 	const FVector2D Size = Building->GetFootprintSize();
 	if (Size.X <= 0.0 || Size.Y <= 0.0) return;
 
@@ -1250,17 +1241,16 @@ void URectDragToolBase::DrawHoverInspection(FPrimitiveDrawInterface* PDI) const
 	FVector Corners[4];
 	for (int32 i = 0; i < 4; ++i) Corners[i] = Xform.TransformPosition(FVector(Quad[i].X, Quad[i].Y, 0.0));
 
-	// Cool blue, which is the preview's colour for a thing that is not the footprint being dragged.
+	// Cool blue: the preview's colour for anything but the dragged footprint.
 	const FLinearColor Mark(0.25f, 0.85f, 1.0f);
 	for (int32 i = 0; i < 4; ++i)
 	{
 		PDI->DrawLine(Corners[i], Corners[(i + 1) % 4], Mark, SDPG_Foreground, 2.0f);
-		// A short post at each corner.
+		// Short corner posts.
 		PDI->DrawLine(Corners[i], Corners[i] + FVector(0.0, 0.0, 70.0), Mark, SDPG_Foreground, 1.0f);
 	}
 
-	// The bays, drawn across the footprint the way the plan outline draws them, so how many 間 a
-	// building is can be read off one that is already standing as well as one still on the ground.
+	// Bay lines as in the plan outline, so the 間 count reads on built buildings too.
 	FHutongPlanBays Bays;
 	Building->GetPlanBays(Bays);
 	const bool bAlongX = Building->ArePlanBaysAlongX();
@@ -1282,17 +1272,15 @@ void URectDragToolBase::DrawHoverInspectionHUD(FCanvas* Canvas, IToolsContextRen
 	const FSceneView* View = RenderAPI->GetSceneView();
 	if (View == nullptr) return;
 
-	// The same text the mode panel shows, split onto its own lines: the panel is the half that
-	// can be verified from a headless run, so the two must not be written twice.
+	// Same text as the mode panel (headless-testable), split into lines; written once.
 	TArray<FString> Lines;
 	GetHoverSummaryText().ToString().ParseIntoArray(Lines, TEXT("\n"));
 	if (Lines.Num() == 0) return;
 
-	// Slate's font, not GetMediumFont. The engine's medium font is a bitmap with no CJK glyphs in it, and every one of these type labels is half Chinese.
+	// Slate font, not GetMediumFont: the bitmap medium font has no CJK glyphs.
 	const FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle("Regular", 10);
 
-	// Projected from the point the ray struck. This one stays by the cursor — it names the thing
-	// under it — but is held inside the viewport so a building hovered near an edge still reads.
+	// Projected from the hit point; stays by the cursor, clamped inside the viewport.
 	FVector2D Pixel;
 	if (!View->WorldToPixel(HudWorldPoint, Pixel)) return;
 	const float DPIScale = FMath::Max(Canvas->GetDPIScale(), UE_KINDA_SMALL_NUMBER);
@@ -1314,7 +1302,7 @@ void URectDragToolBase::DrawHoverInspectionHUD(FCanvas* Canvas, IToolsContextRen
 
 void URectDragToolBase::OnEndHover()
 {
-	// The cursor has left, so nothing is under it.
+	// Cursor left; nothing hovered.
 	HoveredBuilding.Reset();
 
 }
@@ -1376,7 +1364,7 @@ void URectDragToolBase::UpdateRotateFromCursor(const FVector& CursorWorld)
 	}
 	else if (SnappingActive() && Snap->bAdoptAngle)
 	{
-		// To the neighbours' bearings, and to quarter turns off them — not to a world grid.
+		// Snap to neighbours' bearings and quarter turns off them, not a world grid.
 		const TArray<double> Yaws = HutongSnap::GatherEdgeYaws(
 			GetFootprints(), StartWorld, FMath::Max(Snap->Radius, 1.0) * 12.0);
 		NewYaw = HutongSnap::SnapYaw(NewYaw, Yaws, FMath::Max(Snap->AngleToleranceDeg, 0.0));
@@ -1386,7 +1374,7 @@ void URectDragToolBase::UpdateRotateFromCursor(const FVector& CursorWorld)
 	if (NewYaw < 0.0) NewYaw += 360.0;
 	PlacementYawDeg = NewYaw;
 
-	// Keep rect rigid: re-project the captured local-frame extent into world.
+	// Keep rect rigid: re-project the captured local extent into world.
 	CurrentWorld = LocalRectToWorld(RotateAnchorLocalRect.X, RotateAnchorLocalRect.Y);
 }
 
@@ -1398,13 +1386,13 @@ void URectDragToolBase::SpawnFinalActor()
 	const double SizeY = MaxY - MinY;
 	if (SizeX < 10.0 || SizeY < 10.0) return;
 
-	// Delayed rather than shown outright.
+	// Delayed, not shown outright.
 	FScopedSlowTask Task(1.0f, LOCTEXT("PlacingActor", "Building geometry…"));
 	Task.MakeDialogDelayed(0.4f);
 	Task.EnterProgressFrame(1.0f);
 
 	TArray<FDynamicMesh3> LODs;
-	BuildLODsForRect(SizeX, SizeY, LODs);
+	const int32 CollisionLOD = BuildLODsForRect(SizeX, SizeY, LODs);
 
 	UWorld* World = GetToolManager()->GetContextQueriesAPI()->GetCurrentEditingWorld();
 	const FVector ActorLocXY = LocalRectToWorld(MinX, MinY);
@@ -1415,10 +1403,10 @@ void URectDragToolBase::SpawnFinalActor()
 	UInteractiveToolManager* ToolManager = GetToolManager();
 	ToolManager->BeginUndoTransaction(NSLOCTEXT("HutongLayout", "PlaceActor", "Place Hutong Actor"));
 	const FHutongPalette Palette = Appearance ? Appearance->Palette : FHutongPalette();
-	// Plan-only: an actor with no mesh, drawn by the outline the component attaches.
+	// Plan-only: meshless actor, drawn by the component's outline.
 	AStaticMeshActor* Actor = IsPlanOnly()
 		? HutongGen::SpawnEmptyActor(World, Xform, GetActorNameBase())
-		: HutongGen::SpawnStaticMeshActor(World, LODs, Xform, GetActorNameBase(), Palette);
+		: HutongGen::SpawnStaticMeshActor(World, LODs, Xform, GetActorNameBase(), Palette, CollisionLOD);
 	if (Actor)
 	{
 		AttachBuildingComponent(Actor, SizeX, SizeY);
@@ -1429,14 +1417,13 @@ void URectDragToolBase::SpawnFinalActor()
 
 void URectDragToolBase::AdoptNeighbourBaseCourse(AStaticMeshActor* Actor)
 {
-	// The anchor's neighbour first, since that is the end drawn from.
+	// Anchor's neighbour first: that end is drawn from.
 	AdoptBaseCourseFrom(Actor, AnchorSnapBuilding.Get() ? AnchorSnapBuilding.Get() : CursorSnapBuilding.Get());
 }
 
 void URectDragToolBase::AdoptBaseCourseFrom(AStaticMeshActor* Actor, const UHutongBuildingComponent* Neighbour)
 {
-	// A piece placed against another is part of the same frontage, and its 下鹼 runs through at
-	// the neighbour's line.
+	// Placed against another: same frontage, 下鹼 continues at the neighbour's line.
 	UHutongBuildingComponent* Placed = Actor ? Actor->FindComponentByClass<UHutongBuildingComponent>() : nullptr;
 	if (!Placed || Placed->GetBaseCourseTop() <= 0.0) return;
 	if (!Neighbour || Neighbour == Placed) return;
@@ -1455,10 +1442,10 @@ namespace
 	const FLinearColor PlanEdgeColor(0.55f, 1.0f, 0.65f);
 	const FLinearColor PlanRotateColor(0.45f, 0.8f, 1.0f);
 	const FLinearColor PlanActiveColor(1.0f, 0.45f, 0.1f);
-	// Shift held: the corners now angle the footprint rather than resize it.
+	// Shift: corners angle the footprint instead of resizing it.
 	const FLinearColor PlanSkewColor(0.85f, 0.55f, 1.0f);
 	const FLinearColor PlanDoorColor(1.0f, 0.3f, 0.25f);
-	// The bay-line markers that divide, and the end markers that fuse.
+	// Bay-line divide markers and end fuse markers.
 	const FLinearColor PlanDivideColor(0.3f, 0.9f, 0.95f);
 	const FLinearColor PlanFuseColor(0.45f, 1.0f, 0.55f);
 	constexpr double PlanMinSize = 20.0;
@@ -1516,12 +1503,12 @@ bool URectDragToolBase::TurnSelectedFacing(int32 Delta)
 	{
 		EHutongBaySide Side = EHutongBaySide::MinusY;
 		B->GetFacade(Side);
-		// The sides are declared in turning order (−Y, +X, +Y, −X), so a step is an addition.
+		// Sides in turning order (−Y, +X, +Y, −X): a step is an addition.
 		const int32 Next = (((int32)Side + Delta * B->FacadeTurnStep()) % 4 + 4) % 4;
 		if (B->GetOwner()) B->GetOwner()->Modify();
 		B->Modify();
 		if (!B->SetFacade((EHutongBaySide)Next)) continue;
-		// The same seam a panel edit goes through: a built building re-bakes, a laid-out one redraws its hatching.
+		// Same seam as a panel edit: built re-bakes, laid-out redraws its hatching.
 		B->Rebuild();
 		B->ApplyPlacementAttachments();
 	}
@@ -1574,7 +1561,7 @@ bool URectDragToolBase::IsSkewKeyDown()
 
 double URectDragToolBase::PlanHandleSize(const FVector2D& Size)
 {
-	// A tenth of the shorter side, held between a hand's breadth and a pace.
+	// A tenth of the shorter side, clamped between a hand's breadth and a pace.
 	const double Basis = IsLineLikePlan(Size) ? 0.03 * FMath::Max(Size.X, Size.Y) : 0.1 * FMath::Min(Size.X, Size.Y);
 	return FMath::Clamp(Basis, 50.0, 160.0);
 }
@@ -1600,16 +1587,15 @@ bool URectDragToolBase::PlanHandleEnabled(const FVector2D& Size, int32 Handle)
 bool URectDragToolBase::IsPlanGrabPoint(const FVector2D& Size, double EdgeDistance, const FVector& Ground) const
 {
 	if (IsLineLikePlan(Size)) return true;
-	// The band a neighbouring placement starts in cannot be allowed to swallow the footprint: on a
-	// 垂花門 at its smallest the snap radius reaches past the middle from both long edges, and a plan
-	// nothing can be pressed on is one that can only be placed again.
+	// Cap the neighbour-snap band: on the smallest 垂花門 it reaches past the middle from both long
+	// edges, leaving nothing pressable.
 	const double Band = FMath::Min(EffectiveSnapRadius(Ground), 0.3 * FMath::Min(Size.X, Size.Y));
 	return EdgeDistance > Band;
 }
 
 FVector URectDragToolBase::PlanRotateHandleWorld(const UHutongBuildingComponent* Building, FVector& OutEdgeMid) const
 {
-	// Beyond the front, or beyond −Y for a type with no front, two handle-widths out so it never sits on a corner however the footprint is shaped.
+	// Past the front (−Y with no front), two handle-widths out, clear of any corner.
 	const AActor* Owner = Building->GetOwner();
 	const FTransform Xf = Owner->GetActorTransform();
 	const FVector2D Size = Building->GetFootprintSize();
@@ -1632,7 +1618,7 @@ int32 URectDragToolBase::HitTestPlan(const UHutongBuildingComponent* Building, c
 	const FVector2D Size = Building->GetFootprintSize();
 	const double Pick = 0.75 * PlanHandleSize(Size);
 
-	// The opening sliders come first and are offered on any building that has them, built or laid out; everything below is for a laid-out one.
+	// Opening sliders first, on any building with them; the rest is laid-out only.
 	{
 		TArray<FHutongPlanOpening> Openings;
 		Building->GetPlanOpenings(Openings);
@@ -1642,8 +1628,8 @@ int32 URectDragToolBase::HitTestPlan(const UHutongBuildingComponent* Building, c
 			if (FVector::Dist2D(Ground, PlanOpeningWorld(Building, i, Width)) <= Pick) return PlanHandleOpening + i;
 		}
 	}
-	// The divide markers on the bay lines and the fuse markers on a shared end, on any building
-	// with bays, built or laid out. Picked small, so the inside of a laid-out plan stays a grab.
+	// Divide markers on bay lines, fuse markers on shared ends, built or laid out. Small picks keep
+	// the plan interior grabbable.
 	if (HutongDetailOps::CanDivide(Building))
 	{
 		const double MarkerPick = 0.5 * PlanHandleSize(Size);
@@ -1661,9 +1647,8 @@ int32 URectDragToolBase::HitTestPlan(const UHutongBuildingComponent* Building, c
 	FVector2D Quad[4];
 	Building->GetFootprintCorners(Quad);
 
-	// Under Shift the corners are offered to be angled, on every kind of footprint: a wall meets
-	// an off-square neighbour with its end cut on the bias. Picked at the size they are drawn,
-	// which on a run is well inside the thickness.
+	// Shift: corners angle on any footprint (a wall end cut on the bias to meet an off-square
+	// neighbour). Picked at drawn size, inside a run's thickness.
 	const bool bSkew = IsSkewKeyDown();
 	const double CornerPick = 0.75 * PlanCornerHandleSize(Size);
 	if (bSkew)
@@ -1677,12 +1662,12 @@ int32 URectDragToolBase::HitTestPlan(const UHutongBuildingComponent* Building, c
 		}
 		if (Nearest != INDEX_NONE) return Nearest;
 	}
-	// A built building offers nothing else: a plain click on it is a placement click and stays one.
+	// A built building offers nothing else: a plain click places.
 	if (!Building->bPlanOnly) return INDEX_NONE;
 
 	FVector EdgeMid;
 	if (FVector::Dist2D(Ground, PlanRotateHandleWorld(Building, EdgeMid)) <= Pick) return PlanHandleRing;
-	// Corners before edges, so a small footprint's corner wins over the midpoint beside it.
+	// Corners before edges: a small footprint's corner beats the adjacent midpoint.
 	for (int32 H = 0; H < 8; ++H)
 	{
 		if (!PlanHandleEnabled(Size, H)) continue;
@@ -1743,8 +1728,7 @@ void URectDragToolBase::BeginPlanEdit(UHutongBuildingComponent* Building, int32 
 	else if (Hit >= 4 && Hit < 8 && Cast<UHutongWallBuildingComponent>(Building)
 		&& ((Building->IsRunAlongY() && (Hit == 4 || Hit == 6)) || (!Building->IsRunAlongY() && (Hit == 5 || Hit == 7))))
 	{
-		// The end of a wall leg: not the rectangle's edge but the run's vertex, and the legs
-		// meeting there go with it.
+		// Wall leg end: the run's vertex, not the rect edge; the legs meeting there move with it.
 		UHutongWallBuildingComponent* Wall = Cast<UHutongWallBuildingComponent>(Building);
 		if (HutongWallRun::Gather(Wall, GatherWallLegs(), EditRun))
 		{
@@ -1774,7 +1758,7 @@ void URectDragToolBase::BeginPlanEdit(UHutongBuildingComponent* Building, int32 
 		EditHandle = Hit;
 		EditSkewAxis = INDEX_NONE;
 		bSkewAxisHeld = false;
-		// The corner keeps its distance from the cursor instead of jumping under it on the press.
+		// Corner keeps its offset from the cursor instead of jumping on the press.
 		const FVector Local = Xf.InverseTransformPosition(Ground);
 		EditGrabLocal = FVector(Local.X, Local.Y, 0.0);
 	}
@@ -1809,9 +1793,8 @@ FInputRayHit URectDragToolBase::CanBeginClickDragSequence(const FInputDeviceRay&
 	}
 	if (!bOver)
 	{
-		// Open ground: a drag from here is a box selection, a click still a placement — both are
-		// this behaviour's now and told apart on release. Built geometry is left to the editor's
-		// own selection, as the click behaviour leaves it.
+		// Open ground: drag = box select, click = placement, told apart on release. Built geometry
+		// is left to the editor's selection.
 		FHitResult Hit;
 		if (TraceHoveredBuilding(PressPos, Hit)) return FInputRayHit();
 	}
@@ -1831,11 +1814,11 @@ void URectDragToolBase::OnClickPress(const FInputDeviceRay& PressPos)
 	int32 Hit = Building ? HitTestPlan(Building, Ground) : INDEX_NONE;
 	if (Hit == INDEX_NONE)
 	{
-		// The press is on another laid-out building: select it, and let the same press move it.
+		// On another laid-out building: select it; the same press moves it.
 		Building = FindPlanBuildingAt(Ground);
 		if (!Building || !Building->GetOwner() || GEditor == nullptr)
 		{
-			// Nothing under it: a box begins here.
+			// Nothing under it: start a box.
 			PlanEdit = EPlanEdit::Marquee;
 			EditedPlan.Reset();
 			EditHandle = INDEX_NONE;
@@ -1858,8 +1841,8 @@ void URectDragToolBase::OnClickDrag(const FInputDeviceRay& DragPos)
 	const FVector Ground = GroundOf(DragPos, bOk);
 	if (!bOk) return;
 
-	// A drag event is not movement: the cursor has to leave the press's own pixel by a slop before
-	// this is an edit rather than the selection click it started as.
+	// Drag events fire without movement: require slop past the press pixel before it is an edit,
+	// not a click.
 	if (!bPlanDragMoved && bPlanPressHasPixel && DragPos.bHas2D
 		&& FVector2D::Distance(DragPos.ScreenPosition, PlanPressPixel) <= (PlanEdit == EPlanEdit::Marquee ? MarqueeSlopPixels : PlanClickSlopPixels))
 	{
@@ -1884,7 +1867,7 @@ void URectDragToolBase::OnClickRelease(const FInputDeviceRay& ReleasePos)
 		CancelPlanEdit();
 		if (!bMoved)
 		{
-			// Never dragged: the click it was, which places.
+			// Never dragged: a click, which places.
 			FVector Hit;
 			if (TryRayHitGround(ReleasePos, Hit))
 			{
@@ -1893,7 +1876,7 @@ void URectDragToolBase::OnClickRelease(const FInputDeviceRay& ReleasePos)
 			}
 			return;
 		}
-		// Every building the box touches: a corner or the centre of its footprint inside it.
+		// The box takes a building if a footprint corner or its centre is inside.
 		const FVector2D Lo(FMath::Min(Start.X, End.X), FMath::Min(Start.Y, End.Y));
 		const FVector2D Hi(FMath::Max(Start.X, End.X), FMath::Max(Start.Y, End.Y));
 		auto Inside = [&](const FVector& P) { return P.X >= Lo.X && P.X <= Hi.X && P.Y >= Lo.Y && P.Y <= Hi.Y; };
@@ -1914,7 +1897,7 @@ void URectDragToolBase::OnClickRelease(const FInputDeviceRay& ReleasePos)
 		}
 		if (GEditor == nullptr) return;
 		const FScopedTransaction Transaction(LOCTEXT("MarqueeSelect", "Select Hutong Buildings"));
-		// Shift adds, as the editor's own box does.
+		// Shift adds, like the editor's box.
 		if (!IsSkewKeyDown()) GEditor->SelectNone(false, true);
 		for (AActor* Actor : Picked) GEditor->SelectActor(Actor, true, false, true);
 		GEditor->NoteSelectionChange();
@@ -1922,7 +1905,7 @@ void URectDragToolBase::OnClickRelease(const FInputDeviceRay& ReleasePos)
 	}
 	if (PlanEdit == EPlanEdit::Divide || PlanEdit == EPlanEdit::Fuse)
 	{
-		// The marker is a button: released where it was pressed, it acts; dragged off, nothing.
+		// The marker is a button: released on it, it acts; dragged off, nothing.
 		const bool bMoved = bPlanDragMoved;
 		const EPlanEdit Kind = PlanEdit;
 		const int32 Handle = EditHandle;
@@ -1933,7 +1916,7 @@ void URectDragToolBase::OnClickRelease(const FInputDeviceRay& ReleasePos)
 		else FuseAtMarker(B, Handle == PlanHandleFuseEnd);
 		return;
 	}
-	// A press that never moved was a selection, and there is nothing to commit.
+	// An unmoved press was a selection; nothing to commit.
 	if (bPlanDragMoved) CommitPlanEdit();
 	else CancelPlanEdit();
 }
@@ -2040,7 +2023,7 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 		return;
 	case EPlanEdit::Move:
 	{
-		// The grabbed point follows the cursor; the origin corner then snaps to the neighbours, ignoring the building itself.
+		// Grab point follows the cursor; the origin corner snaps to neighbours, excluding self.
 		FVector Origin = Ground - EditStartTransform.GetRotation().RotateVector(EditGrabLocal);
 		Origin.Z = Z;
 		if (SnappingActive())
@@ -2071,7 +2054,7 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 		if (SideY > 0) MaxY = FMath::Max(Local.Y, PlanMinSize);
 
 		B->SetFootprintSize(FVector2D(MaxX - MinX, MaxY - MinY));
-		// A minus-side drag keeps the far edge where it is.
+		// A minus-side drag keeps the far edge fixed.
 		const FVector2D Accepted = B->GetFootprintSize();
 		const FVector Shift(SideX < 0 ? S.X - Accepted.X : 0.0, SideY < 0 ? S.Y - Accepted.Y : 0.0, 0.0);
 		Owner->SetActorTransform(EditStartTransform);
@@ -2080,8 +2063,8 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 	}
 	case EPlanEdit::Skew:
 	{
-		// The corner follows the cursor and the other three stay where they are. It stops where
-		// the footprint would fold: the last corner set that still builds is kept.
+		// Corner follows the cursor, the other three fixed; stops at the last set that still builds
+		// (no fold).
 		const FVector2D S = EditStartSize;
 		const FVector2D Rect[4] = { FVector2D(0.0, 0.0), FVector2D(S.X, 0.0), FVector2D(S.X, S.Y), FVector2D(0.0, S.Y) };
 		const FVector2D StartOffset = EditStartSkew.Get(EditHandle);
@@ -2089,11 +2072,8 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 		FHutongFootprintSkew Candidate = B->FootprintSkew;
 		const bool bEnds = Candidate.Mode == EHutongSkewMode::Ends;
 
-		// Under Ends the corner goes one way per drag, along the run or across it, whichever the
-		// cursor pulls towards. Read off the whole pull, not its first centimetres — a hand that
-		// wobbles across before it sets off along the run must not lock the wrong axis — and held
-		// once the pull is two handles long, so a diagonal never flips the corner between two
-		// lines after that.
+		// Ends mode: one axis per drag (along or across), read from the whole pull so an early
+		// wobble cannot pick it; locked once the pull is two handles long.
 		const FVector RawLocal = EditStartTransform.InverseTransformPosition(Ground);
 		const FVector2D Pull(RawLocal.X - EditGrabLocal.X, RawLocal.Y - EditGrabLocal.Y);
 		if (bEnds && !bSkewAxisHeld)
@@ -2104,7 +2084,7 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 			bSkewAxisHeld = Pull.Size() >= 2.0 * Handle;
 		}
 
-		// Where the corner sits unsnapped: under the cursor as it was grabbed, held to its axis under Ends.
+		// Unsnapped corner: at the grab offset, held to its axis under Ends.
 		const FVector2D Grab = FVector2D(EditGrabLocal.X, EditGrabLocal.Y) - StartLocal;
 		FVector2D CornerLocal = FVector2D(RawLocal.X, RawLocal.Y) - Grab;
 		if (bEnds)
@@ -2121,17 +2101,15 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 			HutongSnap::FResult R;
 			if (bEnds)
 			{
-				// Held to one line, the corner joins a neighbour where that line crosses the
-				// neighbour's face — a mitre. Found from the corner's own position along the line,
-				// so the cursor need not be anywhere near the face it is aiming for.
+				// An axis-held corner mitres where its line crosses a neighbour's face, found along
+				// the line, so the cursor need not be near the face.
 				const FVector AxisDir = EditStartTransform.TransformVector(EditSkewAxis == 0 ? FVector(1, 0, 0) : FVector(0, 1, 0)).GetSafeNormal2D();
 				R = HutongSnap::FindSnapAlongLine(GetFootprints(), CornerStart, FVector2D(AxisDir.X, AxisDir.Y), CornerFree, 2.0 * SnapR, Owner);
 			}
 			else
 			{
-				// To a neighbour's corner or edge — but never to the very spot this corner started
-				// on: a wall butted against another shares that corner with it, and snapping there
-				// held the corner still however far the cursor went.
+				// To a neighbour's corner or edge, never the start spot: a butted wall shares that
+				// corner and snapping there held it still.
 				R = HutongSnap::FindSnap(GetFootprints(), CornerFree, SnapR, Owner);
 				if (R.bSnapped && FVector::Dist2D(R.Point, CornerStart) <= 2.0) R.bSnapped = false;
 			}
@@ -2154,7 +2132,7 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 		bool bPointSnapped = false;
 		if (SnappingActive())
 		{
-			// To anything but the run's own legs, which move with the vertex.
+			// Snap to anything but the run's own legs, which move with the vertex.
 			TArray<HutongSnap::FFootprint> Others;
 			for (const HutongSnap::FFootprint& F : GetFootprints())
 			{
@@ -2167,7 +2145,7 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 				bPointSnapped = true;
 				if (R.EdgeYawDeg > -900.0)
 				{
-					// Resting on that face: the end is cut flush along it, and slides along it.
+					// On that face: end cut flush along it, slides along it.
 					Face.bSet = true;
 					Face.Point = FVector2D(G.X, G.Y);
 					const double Yaw = FMath::DegreesToRadians(R.EdgeYawDeg);
@@ -2176,9 +2154,8 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 			}
 			SnapForSide = R;
 		}
-		// The leg's bearing is kept under Shift, or when the pull sits within a few pixels of
-		// the line it was on: a wall lengthened along itself stays straight, and everything else
-		// is free. An angular band was not free — on a long leg it was tens of centimetres wide.
+		// Leg bearing kept under Shift or while the pull stays within a few pixels of its line. Not
+		// an angular band: on a long leg that was tens of cm wide.
 		const int32 K = EditRunVertex;
 		const int32 N = EditRun.Vertices.Num() - 1;
 		if (!bPointSnapped)
@@ -2199,9 +2176,8 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 		}
 		TArray<FVector2D> Vertices = EditRun.Vertices;
 		Vertices[K] = FVector2D(G.X, G.Y);
-		// A face running along the leg: the leg's outer face goes on it, the body on the
-		// neighbour's side. A lone wall shifts whole and stays parallel; a leg in a run shifts
-		// this end and keeps its far vertex with the run.
+		// Face along the leg: outer face on it, body on the neighbour's side. A lone wall shifts
+		// whole and parallel; a run leg shifts this end, far vertex stays.
 		if (SnapForSide.bSnapped)
 		{
 			const FVector2D Dir = (K > 0 ? Vertices[K] - Vertices[K - 1] : Vertices[1] - Vertices[0]).GetSafeNormal();
@@ -2228,7 +2204,8 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 	}
 	case EPlanEdit::Opening:
 	{
-		// The cursor's distance along the run, in the actor's frame; the component clamps it so the opening stays inside the wall.
+		// Cursor distance along the run, actor frame; the component clamps the opening inside the
+		// wall.
 		const FVector Local = EditStartTransform.InverseTransformPosition(Ground);
 		B->SetPlanOpeningCentre(EditHandle, B->IsRunAlongY() ? Local.Y : Local.X);
 		break;
@@ -2249,7 +2226,7 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 		}
 		else if (SnappingActive() && Snap->bAdoptAngle)
 		{
-			// To the neighbours' bearings and quarter turns off them, as hold-R does.
+			// Snap to neighbour bearings and quarter turns, as hold-R does.
 			const TArray<double> Yaws = HutongSnap::GatherEdgeYaws(
 				GetFootprints(), Centre, FMath::Max(Snap->Radius, 1.0) * 12.0, Owner);
 			Yaw = HutongSnap::SnapYaw(Yaw, Yaws, FMath::Max(Snap->AngleToleranceDeg, 0.0));
@@ -2263,7 +2240,7 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 	default:
 		return;
 	}
-	// A built wall is not re-baked per frame: the slider is drawn from the params, and the mesh catches up on release.
+	// A built wall is not re-baked per frame: slider drawn from params, mesh updates on release.
 	if (B->bPlanOnly) B->ApplyPlanOutline();
 	UpdatePlacementReadout();
 }
@@ -2310,12 +2287,12 @@ TArray<UHutongWallBuildingComponent*> URectDragToolBase::GatherWallLegs() const
 
 void URectDragToolBase::CommitPlanEdit()
 {
-	// The building has moved, so every cached corner of it is stale.
+	// Building moved: cached corners are stale.
 	ON_SCOPE_EXIT { HutongSnap::Invalidate(); bHoverTraceValid = false; };
 
 	if (PlanEdit == EPlanEdit::RunVertex)
 	{
-		// Every leg rewound and reapplied inside one transaction, as the single-building edit is.
+		// All legs rewound and reapplied in one transaction, like a single-building edit.
 		TArray<FRunLegState> Final;
 		bool bChanged = false;
 		for (const FRunLegState& Start : EditRunStart)
@@ -2368,8 +2345,7 @@ void URectDragToolBase::CommitPlanEdit()
 		const bool bOpening = PlanEdit == EPlanEdit::Opening && FinalOpenings.IsValidIndex(EditHandle);
 		const double FinalCentre = bOpening ? FinalOpenings[EditHandle].Centre : 0.0;
 
-		// A drag that moved the cursor and nothing else — a corner never pulled clear of its handle —
-		// is a selection click, not an edit, and leaves no undo entry.
+		// Cursor moved but nothing changed: a selection click, no undo entry.
 		const bool bUnchanged = Final.Equals(EditStartTransform, 1.0e-6) && FinalSize.Equals(EditStartSize, 1.0e-6)
 			&& FinalSkew == EditStartSkew && (!bOpening || FMath::IsNearlyEqual(FinalCentre, EditStartOpeningCentre));
 		if (bUnchanged)
@@ -2470,7 +2446,7 @@ void URectDragToolBase::DrawPlanHandles(FPrimitiveDrawInterface* PDI) const
 	const FVector AX = Xf.TransformVector(FVector(1, 0, 0)).GetSafeNormal2D();
 	const FVector AY = Xf.TransformVector(FVector(0, 1, 0)).GetSafeNormal2D();
 
-	// The opening sliders, on any building that has them.
+	// Opening sliders, on any building with them.
 	{
 		TArray<FHutongPlanOpening> Openings;
 		B->GetPlanOpenings(Openings);
@@ -2494,8 +2470,8 @@ void URectDragToolBase::DrawPlanHandles(FPrimitiveDrawInterface* PDI) const
 			for (int32 k = 0; k < 4; ++k) DrawPreviewLine(PDI, Q[k], Q[(k + 1) % 4], Col, T);
 		}
 	}
-	// The divide markers, a diamond on each interior bay line, and the fuse markers, a bowtie on
-	// an end a like neighbour stands against. The line under the hovered marker is drawn across.
+	// Divide diamonds on interior bay lines, fuse bowties on ends a like neighbour abuts. The
+	// hovered marker's line is drawn across.
 	if (HutongDetailOps::CanDivide(B))
 	{
 		const bool bAlongX = B->ArePlanBaysAlongX();
@@ -2541,14 +2517,14 @@ void URectDragToolBase::DrawPlanHandles(FPrimitiveDrawInterface* PDI) const
 	}
 	FVector2D Quad[4];
 	B->GetFootprintCorners(Quad);
-	// Shift: the corner handles mean "angle this corner", and say so by colour. On a built
-	// building they appear only then, since that is the only edit it offers; on a run they appear
-	// only then too, small enough to sit inside its thickness, since a run's plain handles are its ends.
+	// Shift: corner handles mean angle, coloured so. Built buildings and runs show them only under
+	// Shift: built offers no other edit, a run's plain handles are its ends. Run handles sit inside
+	// its thickness.
 	const bool bSkewMode = IsSkewKeyDown() || PlanEdit == EPlanEdit::Skew;
 	if (!B->bPlanOnly && !bSkewMode) return;
 	const double CornerR = 0.5 * PlanCornerHandleSize(Size);
 
-	// Corners: a square with a cross in it, turned with the footprint.
+	// Corners: crossed square, turned with the footprint.
 	for (int32 H = 0; H < 8; ++H)
 	{
 		const bool bCorner = H < 4;
@@ -2573,7 +2549,7 @@ void URectDragToolBase::DrawPlanHandles(FPrimitiveDrawInterface* PDI) const
 		}
 	}
 
-	// The line the dragged corner is held to, through it and past the footprint both ways.
+	// Line the skewed corner is held to, extended past the footprint both ways.
 	if (PlanEdit == EPlanEdit::Skew && EditedPlan.Get() == B && EditSkewAxis != INDEX_NONE && EditHandle >= 0 && EditHandle < 4)
 	{
 		const FVector P = Xf.TransformPosition(PlanHandleLocal(Quad, EditHandle)) + Lift;
@@ -2584,7 +2560,7 @@ void URectDragToolBase::DrawPlanHandles(FPrimitiveDrawInterface* PDI) const
 
 	if (!B->bPlanOnly) return;
 
-	// The rotate ring: a circle standing off the front, tied to the edge by a line, with a short arc arrow inside it so it reads as a turn and not a fifth kind of handle.
+	// Rotate ring off the front, tied to the edge, with an arc arrow so it reads as a turn.
 	FVector EdgeMid;
 	const FVector Ring = PlanRotateHandleWorld(B, EdgeMid) + Lift;
 	const FLinearColor RC = ColorFor(PlanHandleRing, PlanRotateColor);
@@ -2599,7 +2575,7 @@ void URectDragToolBase::DrawPlanHandles(FPrimitiveDrawInterface* PDI) const
 			Ring + FVector(R * FMath::Cos(A0), R * FMath::Sin(A0), 0.0),
 			Ring + FVector(R * FMath::Cos(A1), R * FMath::Sin(A1), 0.0), RC, RT);
 	}
-	// Three quarters of an inner arc, ending in an arrowhead.
+	// Three-quarter inner arc ending in an arrowhead.
 	const double Ri = 0.55 * R;
 	constexpr int32 ArcSegments = 12;
 	for (int32 i = 0; i < ArcSegments; ++i)

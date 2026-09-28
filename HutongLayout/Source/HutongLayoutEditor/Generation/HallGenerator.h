@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Generation/HutongProportions.h"
 #include "Generation/HutongCanon.h"
 #include "DynamicMesh/DynamicMesh3.h"
 #include "Generation/HutongJiajia.h"
@@ -9,27 +10,92 @@
 #include "Generation/HutongRoofTile.h"
 #include "HallGenerator.generated.h"
 
-// 殿: the hall of a small temple, and this type exists because of its roof.
+// 小式: the small temple of a lane, walls on three sides; 大式: 則例 卷二's 九檁歇山 hall, 前後廊, 斗栱.
+UENUM(BlueprintType)
+enum class EHutongHallStyle : uint8
+{
+	Small  UMETA(DisplayName = "Small Temple (小式殿)"),
+	Grand  UMETA(DisplayName = "Grand Hall, Nine Purlins, Hip-and-Gable (大式 九檁歇山殿)"),
+};
+
+// 殿: hall of a small temple, defined by its roof.
 USTRUCT(BlueprintType)
 struct FHutongHallParams
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(DisplayName="Roof Type", ToolTip="Roof form built over the hall."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(HutongBasic, DisplayName="Style", ToolTip="A small lane temple, or the grand nine-purlin hall of the Qing building regulations (則例), sized from its frontage."))
+	EHutongHallStyle Style = EHutongHallStyle::Small;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(HutongBasic, DisplayName="Roof Type", EditCondition="Style == EHutongHallStyle::Small", EditConditionHides, ToolTip="Roof form built over the hall."))
 	EHutongRoofType RoofType = EHutongRoofType::Xieshan;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(HutongBasic, DisplayName="Bracket Sets (斗栱)", EditCondition="Style == EHutongHallStyle::Grand", EditConditionHides, ToolTip="Builds the bracket sets (斗栱) between the lintels and the eave."))
+	bool bHasDougong = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(DisplayName="Ridge Beasts (正吻, 走獸)", EditCondition="Style == EHutongHallStyle::Grand", EditConditionHides, ToolTip="Builds the ridge-end beasts (正吻) and the figures (仙人走獸) up the hips."))
+	bool bHasRidgeOrnament = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(UIMin="300", UIMax="650", ClampMin="150", Units="cm", ToolTip="Height of the eave above the ground, in cm."))
 	double EaveHeight = 430.0;
 
-	// The figures the roof is built with, read by generator, massing block, preview and ridge estimate alike.
-	double GetEaveHeight() const { return FMath::Max(EaveHeight, 100.0); }
-	// A consequence of the 舉架 over the hall's own depth; no field overrides it.
-	double GetRoofRise(double OverDepth) const
+	bool IsGrand() const { return Style == EHutongHallStyle::Grand; }
+	// 大式: cm per 尺, the figure's plan fitted to the footprint (the end columns' outer faces).
+	double GetGrandScale() const
 	{
-		const HutongGen::FHutongRoofSection S = HutongGen::Jiajia::MakeSection(
-			Purlins, 0.5 * FMath::Max(OverDepth, 1.0), FMath::Max(RoofOverhang, 0.0), RoofApexRoll);
-		return FMath::Max(S.Rise(), 20.0);
+		namespace G = HutongCanon::GrandHall;
+		return FMath::Max(FMath::Min(FMath::Max(Width, 1.0) / (G::Frontage + G::EaveColumn), FMath::Max(Depth, 1.0) / (G::Depth + G::EaveColumn)), 1.0);
 	}
+	double GetGrandCover() const { return HutongCanon::Frame::RoofCover * HutongCanon::GrandHall::EaveColumn * GetGrandScale(); }
+	// The roof's surface over the 檐柱 line: 正心桁 top, rafter, cover.
+	double GetGrandSurfaceAtColumns() const
+	{
+		namespace G = HutongCanon::GrandHall;
+		return (G::PlatformHeight + G::ToPurlin + 0.5 * G::Purlin + G::Rafter) * GetGrandScale() + GetGrandCover();
+	}
+
+	// Roof figures shared by generator, massing block, preview and ridge estimate. The 大式 hall's read
+	// Width and Depth, so fill them first.
+	double GetEaveHeight() const
+	{
+		namespace G = HutongCanon::GrandHall;
+		return IsGrand() ? (G::PlatformHeight + G::ColumnHeight) * GetGrandScale() : FMath::Max(EaveHeight, 100.0);
+	}
+	double GetRoofOverhangBuilt() const { return IsGrand() ? HutongCanon::GrandHall::Overhang * GetGrandScale() : FMath::Max(RoofOverhang, 0.0); }
+	// Roof above the column tops, the ceiling at the column line, and the roof's base
+	// (HutongGen::Proportions::RoofLift).
+	double GetRoofLift() const
+	{
+		if (IsGrand()) return GetGrandSurfaceAtColumns() - HutongCanon::GrandHall::OverhangJu * GetRoofOverhangBuilt() - GetEaveHeight();
+		return HutongGen::Proportions::RoofLift(FMath::Max(ColumnDiameter, 2.0), FMath::Max(RoofOverhang, 0.0), HutongGen::Jiajia::EaveJu(Purlins));
+	}
+	double GetUndersideRise() const
+	{
+		if (IsGrand()) return HutongCanon::GrandHall::OverhangJu * GetRoofOverhangBuilt() - GetGrandCover();
+		return HutongGen::Proportions::UndersideRise(FMath::Max(ColumnDiameter, 2.0), FMath::Max(RoofOverhang, 0.0), HutongGen::Jiajia::EaveJu(Purlins));
+	}
+	double GetRoofBaseHeight() const { return GetEaveHeight() + GetRoofLift(); }
+	// The 舉架 over a depth; the 大式 hall's is the figure's own steps, 廊步 then three 金步.
+	HutongGen::FHutongRoofSection GetRoofSection(double OverDepth) const
+	{
+		if (!IsGrand())
+		{
+			return HutongGen::Jiajia::MakeSection(Purlins, 0.5 * FMath::Max(OverDepth, 1.0), FMath::Max(RoofOverhang, 0.0), RoofApexRoll);
+		}
+		namespace G = HutongCanon::GrandHall;
+		const double K = GetGrandScale();
+		HutongGen::FHutongRoofSection S;
+		S.Run.Add(G::Overhang * K);
+		S.Ju.Add(G::OverhangJu);
+		for (int32 i = 0; i < int32(UE_ARRAY_COUNT(G::Steps)); ++i)
+		{
+			S.Run.Add(G::Steps[i] * K);
+			S.Ju.Add(G::Ju[i]);
+		}
+		return S;
+	}
+	// From the 舉架 over the hall's depth; no override field.
+	double GetRoofRise(double OverDepth) const { return FMath::Max(GetRoofSection(OverDepth).Rise(), 20.0); }
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(UIMin="20", UIMax="80", ClampMin="8", Units="cm", ToolTip="Thickness of the walls, in cm."))
 	double WallThickness = 42.0;
@@ -74,7 +140,7 @@ struct FHutongHallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bays", meta=(DisplayName="Column Taper (收分)", UIMin="0", UIMax="0.02", ClampMin="0", ClampMax="0.05", ToolTip="Column taper (收分) as a fraction of the column height."))
 	double ColumnTaperRatio = HutongCanon::Module::ColumnTaperRatio;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bays", meta=(DisplayName="Has Brackets (雀替)", ToolTip="Builds sparrow braces (雀替) in the top corners of each bay."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bays", meta=(HutongBasic, DisplayName="Has Brackets (雀替)", ToolTip="Builds sparrow braces (雀替) in the top corners of each bay."))
 	bool bHasBrackets = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bays", meta=(DisplayName="Bracket Reach", EditCondition="bHasBrackets", UIMin="20", UIMax="90", ClampMin="5", Units="cm", ToolTip="Length of each sparrow brace (雀替) along the beam, in cm."))
@@ -94,7 +160,7 @@ struct FHutongHallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Facade", meta=(DisplayName="Threshold Height (門檻)", UIMin="0", UIMax="40", ClampMin="0", Units="cm", ToolTip="Height of the threshold (門檻) above the floor, in cm."))
 	double ThresholdHeight = 22.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Facade", meta=(DisplayName="Door Leaves Open", ToolTip="Builds the door leaves folded open instead of shut."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Facade", meta=(HutongBasic, DisplayName="Door Leaves Open", ToolTip="Builds the door leaves folded open instead of shut."))
 	bool bDoorLeavesOpen = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Facade", meta=(DisplayName="Door Pegs (門簪)", UIMin="0", UIMax="4", ClampMin="0", ClampMax="6", ToolTip="Number of door pegs (門簪) projecting above the door head."))
@@ -117,7 +183,7 @@ struct FHutongHallParams
 
 	// --- Roof ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Tile (瓦作)", ToolTip="Tile type laid on the roof."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(HutongBasic, DisplayName="Roof Tile (瓦作)", ToolTip="Tile type laid on the roof."))
 	EHutongRoofTile RoofTile = EHutongRoofTile::Tong;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Row Spacing (壟)", UIMin="12", UIMax="60", ClampMin="6", Units="cm", ToolTip="Spacing of tile rows (壟) across the roof, in cm."))
@@ -156,6 +222,18 @@ struct FHutongHallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Depth (勾頭滴水)", UIMin="0", UIMax="35", ClampMin="0", Units="cm", ToolTip="Depth of the eave cap and drip tile (勾頭滴水) band, in cm."))
 	double EaveFasciaDepth = 14.0;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	bool bHasTileRuns = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Exposed Frame (徹上明造)", ToolTip="No ceiling: the roof is a shell on rafters carried by the roof frame (梁架: beams, posts and purlins) over the columns, open to view from inside. Close detail levels only; it adds triangles only an interior shows."))
+	bool bExposedFrame = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="15", ClampMin="0", Units="cm", ToolTip="Size of the rafter ends under the eave, in cm; zero omits them."))
+	double RafterEndSection = 9.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="10", UIMax="50", ClampMin="4", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))
+	double RafterEndSpacing = 24.0;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Eave Segments", UIMin="4", UIMax="20", ClampMin="2", ClampMax="32", ToolTip="Number of segments each eave is divided into when building the roof."))
 	int32 RoofEaveSegments = 9;
 
@@ -164,26 +242,25 @@ struct FHutongHallParams
 
 	double GetColumnRadius() const { return FMath::Max(0.5 * ColumnDiameter, 4.0); }
 
-	// The radius the columns are actually laid on, which a narrow plan holds down. The bay
-	// boundaries are inset by it, so the plan has to ask for the same number the generator uses.
+	// Column radius as laid, capped on narrow plans. Bay boundaries inset by it, so the plan must
+	// ask for the same value as the generator.
 	double GetColumnRadiusFor(double Frontage, double PlanDepth) const
 	{
 		return FMath::Min(GetColumnRadius(), 0.2 * FMath::Min(FMath::Max(Frontage, 1.0), FMath::Max(PlanDepth, 1.0)));
 	}
 	double GetColumnHeight() const { return FMath::Max(EaveHeight - FloorHeight, 1.0); }
 
-	// Bay spacing goes through the shared helper.
 	double GetBayBoundary(int32 Index, int32 BayCount, double FacadeLength, double ColumnRadius) const
 	{
 		return HutongGen::BayBoundary(Index, BayCount, FacadeLength, ColumnRadius,
 			SideBayWidthRatio, BayCount / 2);
 	}
 
-	// Set by the tool from the drag rect; not user-editable.
+	// Set by the tool from the drag rect.
 	double Width = 900.0;
 	double Depth = 620.0;
 
-	// Forces the bay count instead of deriving it. Driven by the bracket keys during placement.
+	// Forces the bay count; bracket keys drive it during placement.
 	int32 BayCountOverride = 0;
 };
 

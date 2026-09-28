@@ -17,12 +17,11 @@ void UHutongShopfrontTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongShopfrontToolProperties>(this);
 
-	// Registered before the params, and the order here is the panel order.
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("Shopfront"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongShopfrontToolProperties, Params));
 	Presets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
-	// Presets after the parameters they save.
+	// Panel order is registration order: presets after the params they save.
 	RegisterSettings(Settings);
 	RegisterSettings(Presets);
 }
@@ -30,20 +29,20 @@ void UHutongShopfrontTool::RegisterToolSettings()
 void UHutongShopfrontTool::OnPlacementStarted(const FVector& HitWorld)
 {
 	BaySide = ComputeDefaultBaySide();
-	// The right bay count depends on the frontage being drawn.
+	// Bay count depends on the frontage being drawn; reset.
 	if (Settings) Settings->Params.BayCountOverride = 0;
 }
 
 void UHutongShopfrontTool::CancelPlacement()
 {
 	Super::CancelPlacement();
-	// The override is only meaningful for the footprint that was being drawn.
+	// Override applies only to the footprint it was set on.
 	if (Settings) Settings->Params.BayCountOverride = 0;
 }
 
 bool UHutongShopfrontTool::OnRectCommitted(const FVector& HitWorld)
 {
-	// Defer to a third click so the facing side can be picked by hovering.
+	// Third click picks the facing side by hover.
 	return false;
 }
 
@@ -72,9 +71,9 @@ void UHutongShopfrontTool::AttachBuildingComponent(AStaticMeshActor* Actor, doub
 	if (!Building) return;
 
 	if (Settings) Building->Params = Settings->Params;
-	// The count that was previewed, mirrored onto the component.
+	// Previewed count copied to the component.
 	if (Settings) Building->BayCountOverride = Settings->Params.BayCountOverride;
-	// The component keeps the rect's own extents and the side, not the frontage/depth pair.
+	// Component stores rect extents and side, not frontage/depth.
 	Building->FootprintX = SizeX;
 	Building->FootprintY = SizeY;
 	Building->BaySide = BaySide;
@@ -84,7 +83,7 @@ void UHutongShopfrontTool::AttachBuildingComponent(AStaticMeshActor* Actor, doub
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: the plan outline (and any lights) attach to the actor's root, which the component needs to be live to reach.
+	// After registration: plan outline and lights attach to the actor root, which needs the component live.
 	Building->ApplyPlacementAttachments();
 }
 
@@ -137,7 +136,7 @@ void UHutongShopfrontTool::Render(IToolsContextRenderAPI* RenderAPI)
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
 	if (MaxX - MinX < 1.0 || MaxY - MinY < 1.0) return;
 
-	// A bar along the street-facing edge.
+	// Bar along the street-facing edge.
 	const HutongGen::BaySide::FEdge Edge =
 		HutongGen::BaySide::GetEdge(BaySide, MinX, MinY, MaxX, MaxY);
 	const double SpanMin = Edge.bAlongX ? MinX : MinY;
@@ -166,9 +165,9 @@ TArray<FText> UHutongShopfrontTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongShopfrontTool", "HelpDrag",
-		"Click to anchor, move, click to fix the footprint, move to pick the side facing the street, click to place.");
+		"Click to anchor, move, click to fix the footprint, move toward the street side, click to place.");
 	Lines.Insert(NSLOCTEXT("HutongShopfrontTool", "HelpOpen",
-		"Open Bays below lifts the board doors (排板門) out of that many bays, counted from the middle. Zero boards the shop up for the night."), 1);
+		"Open Bays takes the board doors (排板門) out of that many middle bays; 0 shuts the shop."), 1);
 	return Lines;
 }
 
@@ -188,7 +187,7 @@ int32 UHutongShopfrontTool::ComputeBayCountForSide() const
 void UHutongShopfrontTool::AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse)
 {
 	if (!Settings || Delta == 0) return;
-	// Seeded from the count currently on screen.
+	// Seeded from the count on screen.
 	const int32 Current = ComputeBayCountForSide();
 	Settings->Params.BayCountOverride = FMath::Clamp(Current + Delta, 1, 24);
 }

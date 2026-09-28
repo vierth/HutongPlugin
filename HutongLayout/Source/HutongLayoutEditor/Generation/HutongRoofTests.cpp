@@ -3,6 +3,7 @@
 #include "DynamicMesh/DynamicMesh3.h"
 #include "DynamicMesh/DynamicMeshAttributeSet.h"
 #include "Generation/HallGenerator.h"
+#include "Generation/PavilionGenerator.h"
 #include "Generation/SiheyuanGenerator.h"
 #include "Generation/GateHouseGenerator.h"
 #include "Generation/ShopfrontGenerator.h"
@@ -16,16 +17,19 @@
 #include "Generation/HutongCanon.h"
 #include "Generation/FrameGenerator.h"
 #include "Generation/HutongUrban.h"
+#include "Generation/HutongShell.h"
+#include "Generation/HutongRidge.h"
 #include "Misc/AutomationTest.h"
+#include "Generation/HutongPalette.h"
+#include "DynamicMesh/DynamicMeshAABBTree3.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// The roof primitives have to be closed, two-manifold and wound outward.
+// Roof primitives must be closed, two-manifold and wound outward.
 namespace
 {
 	using UE::Geometry::FDynamicMesh3;
 
-	// Both now live in Generation/HutongMeshInspect.h.
 	using HutongMeshInspect::FShellReport;
 	using HutongMeshInspect::InspectShell;
 }
@@ -74,7 +78,7 @@ bool FHutongXieshanRoofTest::RunTest(const FString& Parameters)
 		Cases.Add({ TEXT("收山 at the maximum"), S });
 	}
 	{
-		// Square plan, and a flare pushed into its clamps on the shorter eave.
+		// Square plan, flare pushed into its clamps on the shorter eave.
 		FXieshanRoofSpec S = Base();
 		S.Width = 400.0; S.Depth = 400.0;
 		S.FlareLength = 10000.0; S.FlareRun = 10000.0; S.FlareRise = 60.0;
@@ -86,20 +90,20 @@ bool FHutongXieshanRoofTest::RunTest(const FString& Parameters)
 		Cases.Add({ TEXT("no fascia"), S });
 	}
 	{
-		// Odd segment counts, so the 收山 row lands off a natural division.
+		// Odd segment counts, so the 收山 row falls off a natural division.
 		FXieshanRoofSpec S = Base();
 		S.SlopeSegments = 7; S.EaveSegments = 3; S.ShouInset = 61.0;
 		Cases.Add({ TEXT("odd segments"), S });
 	}
 	{
-		// 捲棚歇山: the rakes arrive at the crown horizontally and meet in an arc.
+		// 捲棚歇山: rakes reach the crown horizontally and meet in an arc.
 		FXieshanRoofSpec S = Base();
 		S.Section.ApexRoll = 0.35;
 		S.FlareLength = 130.0; S.FlareRun = 55.0; S.FlareRise = 40.0;
 		Cases.Add({ TEXT("捲棚 crown"), S });
 	}
 	{
-		// A roll deep enough to reach past the 收山 line and round the top of the hipped skirt too.
+		// A roll deep enough to pass the 收山 line and round the hipped skirt's top too.
 		FXieshanRoofSpec S = Base();
 		S.Section.ApexRoll = 0.95; S.ShouInset = 40.0;
 		Cases.Add({ TEXT("捲棚 past 收山"), S });
@@ -119,7 +123,7 @@ bool FHutongXieshanRoofTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("%s: positive volume (wound outward)"), C.Name), R.Volume > 0.0);
 	}
 
-	// 勾頭 round a flared eave: a hundred separate closed solids sitting in the fascia band, which must not disturb the shell they hang off.
+	// 勾頭 round a flared eave: ~100 separate closed solids in the fascia band, leaving the shell undisturbed.
 	{
 		FXieshanRoofSpec S = Base();
 		S.FlareLength = 130.0; S.FlareRun = 55.0; S.FlareRise = 40.0;
@@ -140,7 +144,7 @@ bool FHutongXieshanRoofTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("勾頭: positive volume"), R.Volume > 0.0);
 	}
 
-	// The strips are separate closed solids that merely touch the shell.
+	// Strips are separate closed solids touching the shell.
 	{
 		FXieshanRoofSpec S = Base();
 		S.FlareLength = 120.0; S.FlareRun = 45.0; S.FlareRise = 35.0;
@@ -165,7 +169,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongHallTest,
 
 bool FHutongHallTest::RunTest(const FString& Parameters)
 {
-	// Not a closure test — a building is deliberately a heap of overlapping solids.
+	// Not a closure test: a building is deliberately a heap of overlapping solids.
 	const double Plans[][2] = { {900.0, 620.0}, {380.0, 380.0}, {2400.0, 700.0}, {320.0, 900.0} };
 	const EHutongRoofType Roofs[] = {
 		EHutongRoofType::Xieshan, EHutongRoofType::Wudian, EHutongRoofType::Cuanjian };
@@ -200,17 +204,17 @@ bool FHutongJiajiaTest::RunTest(const FString& Parameters)
 	{
 		const FHutongRoofSection S = Jiajia::MakeSectionWithRatios({ 0.5, 0.7 }, 200.0, 0.0, 0.0);
 		TestEqual(TEXT("五檁: half span is the two 步架"), S.HalfSpan(), 200.0);
-		// 100 x 0.5 + 100 x 0.7. The rise is a consequence, and this is the sum it comes from.
+		// 100 x 0.5 + 100 x 0.7: the sum the rise comes from.
 		TestEqual(TEXT("五檁: rise is 舉 x run, summed"), S.Rise(), 120.0);
 		TestEqual(TEXT("五檁: eave sits on the eave line"), S.HeightAtDistanceFromRidge(200.0), 0.0);
-		// The crease between 檐步 and 脊步, at half the span: 100 cm of run at 五舉.
+		// Crease between 檐步 and 脊步 at half the span: 100 cm run at 五舉.
 		TestEqual(TEXT("五檁: the 步架 crease is at 五舉"), S.HeightAtDistanceFromRidge(100.0), 50.0);
 		TestEqual(TEXT("五檁: ridge is the full rise"), S.HeightAtDistanceFromRidge(0.0), 120.0);
-		// Halfway up the eave step: straight, so exactly half of it. A smooth curve would not be.
+		// Halfway up the straight eave step: exactly half its rise (a curve would not be).
 		TestEqual(TEXT("五檁: the 檐步 is straight"), S.HeightAtDistanceFromRidge(150.0), 25.0);
 	}
 
-	// The eave overhang is a leading segment carrying the eave step's own 舉.
+	// The eave overhang is a leading segment at the eave step's 舉.
 	{
 		const FHutongRoofSection S = Jiajia::MakeSectionWithRatios({ 0.5, 0.7 }, 200.0, 60.0, 0.0);
 		TestEqual(TEXT("overhang: adds to the span"), S.HalfSpan(), 260.0);
@@ -219,7 +223,7 @@ bool FHutongJiajiaTest::RunTest(const FString& Parameters)
 			S.HeightAtDistanceFromRidge(200.0), 30.0);
 	}
 
-	// Depth is (檁數 - 1) x 步架 — the whole reason the purlin count is the thing being set.
+	// Depth = (檁數 - 1) x 步架, which is why purlin count is the input.
 	TestEqual(TEXT("五檁 depth"), Jiajia::DepthFor(EHutongPurlins::Five, 100.0), 400.0);
 	TestEqual(TEXT("七檁 depth"), Jiajia::DepthFor(EHutongPurlins::Seven, 100.0), 600.0);
 	TestEqual(TEXT("三檁 is one 步架 a side"), Jiajia::StepsPerSide(EHutongPurlins::Three), 1);
@@ -237,7 +241,7 @@ bool FHutongJiajiaTest::RunTest(const FString& Parameters)
 			TestTrue(FString::Printf(TEXT("roll %.2f: rises toward the ridge"), Roll), Z >= Last - 1e-9);
 			Last = Z;
 		}
-		// Sharp, the crown is the fold; rolled, it is a fillet below it, still above the band's join.
+		// Sharp: crown is the fold. Rolled: a fillet below it, still above the band join.
 		const double Crown = S.HeightAtDistanceFromRidge(0.0);
 		if (Roll <= 0.0)
 		{
@@ -261,7 +265,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRoofTileTest,
 
 bool FHutongRoofTileTest::RunTest(const FString& Parameters)
 {
-	// 勾頭 exist on 筒瓦 and not on 合瓦, so the rank rule has to show up as geometry rather than as a flag nothing reads.
+	// 勾頭 on 筒瓦, not 合瓦: the rank rule must show in geometry, not an unread flag.
 	auto Build = [](EHutongRoofTile Tile)
 	{
 		FHutongSiheyuanParams P;
@@ -277,10 +281,10 @@ bool FHutongRoofTileTest::RunTest(const FString& Parameters)
 	const int32 Tong = Build(EHutongRoofTile::Tong);
 	TestTrue(TEXT("合瓦 builds"), He > 0);
 	TestTrue(TEXT("筒瓦 adds 勾頭 along the eave"), Tong > He);
-	// Logged rather than asserted.
+	// Logged, not asserted.
 	UE_LOG(LogTemp, Display, TEXT("%s"), *FString::Printf(TEXT("合瓦 %d tris, 筒瓦 %d tris (+%d for the 勾頭)"), He, Tong, Tong - He));
 
-	// And the rank rule is wired to the gate styles rather than left loose.
+	// The rank rule is wired to the gate styles.
 	FHutongGateHouseParams G;
 	G.Style = EHutongGateStyle::Guangliang;
 	TestTrue(TEXT("廣亮大門 is entitled to 筒瓦"), G.GetRoofTile() == EHutongRoofTile::Tong);
@@ -307,7 +311,7 @@ bool FHutongBayProportionTest::RunTest(const FString& Parameters)
 	TestTrue(FString::Printf(TEXT("柱高 is 8/10 of it (%.0f of %.0f)"), P.GetColumnHeight(), Central),
 		FMath::IsNearlyEqual(P.GetColumnHeight() / Central, 0.8, 0.01));
 
-	// A wider bay wants a taller column.
+	// Wider bay, taller column.
 	FHutongSiheyuanParams Wide = P;
 	Wide.Width = 1300.0;
 	Wide.BayCountOverride = 3;
@@ -318,7 +322,7 @@ bool FHutongBayProportionTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a longer row of the same bays does not"),
 		More.GetEaveHeight() < Wide.GetEaveHeight());
 
-	// The 柱高 floor: it holds the smallest type up and leaves everything else to the ratio.
+	// 柱高 floor holds the smallest type up; the ratio governs the rest.
 	{
 		FHutongSiheyuanParams Ear;
 		Ear.Width = 460.0; Ear.MinBayWidth = 220.0; Ear.MaxBayWidth = 270.0;
@@ -333,7 +337,7 @@ bool FHutongBayProportionTest::RunTest(const FString& Parameters)
 			Side.GetColumnHeight() > Side.MinColumnHeight + 10.0);
 	}
 
-	// The proportions are not overridden any more.
+	// Proportions are not overridden.
 	for (const FString& Name : HutongPresets::BuiltInSiheyuanNames())
 	{
 		FHutongSiheyuanParams Preset;
@@ -348,9 +352,9 @@ bool FHutongBayProportionTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("%s builds at the height its bays ask for (%.0f)"), *Name, Wanted),
 			FMath::IsNearlyEqual(Preset.GetEaveHeight(), Wanted, 0.5));
 
-		// What the doorway comes out at, logged.
+		// Doorway result, logged.
 		const double Clear = Preset.GetDoorLeafTopHeight() - Preset.GetFloorHeight()
-			- Preset.DoorThresholdHeight;
+			- Preset.GetLowerSillHeight();
 		UE_LOG(LogTemp, Display, TEXT("%s"), *FString::Printf(
 			TEXT("%s: eave %.0f, doorway %.0f cm clear -> %s"), *Name, Wanted, Clear,
 			Clear >= 176.0 ? TEXT("stand") : TEXT("duck")));
@@ -366,7 +370,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongEaveRafterTest,
 
 bool FHutongEaveRafterTest::RunTest(const FString& Parameters)
 {
-	// An eave shows two courses: round 檐椽 with square 飛椽 on their ends. It drew one.
+	// An eave shows two courses: round 檐椽 tipped with square 飛椽. It once drew one.
 	auto Build = [](bool bFlying)
 	{
 		FHutongSiheyuanParams P;
@@ -389,7 +393,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongMaterialSlotNamingTest,
 
 bool FHutongMaterialSlotNamingTest::RunTest(const FString& Parameters)
 {
-	// Every slot is named, and no two share a name.
+	// Every slot named, no two alike.
 	TSet<FName> Names;
 	for (int32 Slot = 0; Slot < HutongGen::MatSlot_Count; ++Slot)
 	{
@@ -402,7 +406,7 @@ bool FHutongMaterialSlotNamingTest::RunTest(const FString& Parameters)
 		TestFalse(FString::Printf(TEXT("slot %d's name is its own"), Slot), bAlready);
 	}
 
-	// A mesh carries only the slots it wears. The converter packs material IDs into polygon groups densely up to the highest one used.
+	// A mesh carries only the slots it wears: the converter packs material IDs densely into polygon groups up to the highest used.
 	auto Compacted = [&](UE::Geometry::FDynamicMesh3& M, const TCHAR* What)
 	{
 		TArray<int32> Before;
@@ -418,7 +422,7 @@ bool FHutongMaterialSlotNamingTest::RunTest(const FString& Parameters)
 			Used.Num(), Before.Num());
 		TestTrue(FString::Printf(TEXT("%s lists them in slot order"), What), Used == Before);
 
-		// And the IDs now run 0..N-1, which is what makes the section list the slot list.
+		// IDs now run 0..N-1, so the section list is the slot list.
 		int32 Highest = -1;
 		if (const UE::Geometry::FDynamicMeshMaterialAttribute* Mat =
 			M.HasAttributes() ? M.Attributes()->GetMaterialID() : nullptr)
@@ -433,7 +437,7 @@ bool FHutongMaterialSlotNamingTest::RunTest(const FString& Parameters)
 		return Used.Num();
 	};
 
-	// The 甬路: three boxes, two surfaces.
+	// 甬路: three boxes, two surfaces.
 	{
 		FHutongPathParams Path;
 		UE::Geometry::FDynamicMesh3 M;
@@ -443,7 +447,7 @@ bool FHutongMaterialSlotNamingTest::RunTest(const FString& Parameters)
 			Slots > 0 && Slots < HutongGen::MatSlot_Count);
 	}
 
-	// A 正房 wears one of everything, so it is the case where compacting must change nothing.
+	// A 正房 wears every slot, so compacting must change nothing.
 	{
 		FHutongSiheyuanParams P;
 		P.Width = 1040.0; P.Depth = 600.0;
@@ -463,7 +467,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongMaterialSlotTest,
 
 bool FHutongMaterialSlotTest::RunTest(const FString& Parameters)
 {
-	// A slot with nothing tagged into it is an empty section and a swatch that does nothing.
+	// An untagged slot is an empty section and a useless swatch.
 	FHutongSiheyuanParams P;
 	P.Width = 1040.0; P.Depth = 600.0;
 	P.bHasFrontVeranda = true;
@@ -499,35 +503,16 @@ bool FHutongMaterialSlotTest::RunTest(const FString& Parameters)
 	Used(HutongGen::MatSlot_Paper,      TEXT("窗紙"));
 	Used(HutongGen::MatSlot_Plaster,    TEXT("白灰 interior"));
 
-	// 散水 goes round the foot and is tagged into the 下鹼's slot.
-	{
-		FHutongSiheyuanParams NoApron = P;
-		NoApron.Apron.bEnabled = false;
-		UE::Geometry::FDynamicMesh3 Bare;
-		HutongGen::BuildSiheyuan(Bare, NoApron);
-
-		const UE::Geometry::FDynamicMeshMaterialAttribute* BareMat =
-			Bare.HasAttributes() ? Bare.Attributes()->GetMaterialID() : nullptr;
-		int32 BareBase = 0;
-		for (int32 tid = 0; BareMat && tid < Bare.MaxTriangleID(); ++tid)
-		{
-			if (Bare.IsTriangle(tid) && BareMat->GetValue(tid) == HutongGen::MatSlot_BaseCourse) ++BareBase;
-		}
-		TestTrue(FString::Printf(TEXT("散水 adds to the 下鹼 slot (%d vs %d)"),
-				Count[HutongGen::MatSlot_BaseCourse], BareBase),
-			Count[HutongGen::MatSlot_BaseCourse] > BareBase);
-	}
-
-	// And the 下鹼 must not have swallowed the wall above it, nor the leaves the frame.
+	// The 下鹼 must not swallow the wall above, nor the leaves the frame.
 	TestTrue(TEXT("the body is still the largest surface"),
 		Count[HutongGen::MatSlot_Body] > Count[HutongGen::MatSlot_BaseCourse]);
 
-	// 門漆 must be the leaves and nothing else.
+	// 門漆 is the leaves and nothing else.
 	TestTrue(FString::Printf(TEXT("門漆 covers the leaves only (%d vs %d wood)"),
 			Count[HutongGen::MatSlot_DoorPaint], Count[HutongGen::MatSlot_Wood]),
 		Count[HutongGen::MatSlot_DoorPaint] < Count[HutongGen::MatSlot_Wood]);
 
-	// The 殿 is the other type with a door in the middle of a bay loop, and it was tagging its brick 檻牆 as timber and using neither of the window slots.
+	// The 殿 also has a door mid bay loop; it once tagged its brick 檻牆 as timber and used neither window slot.
 	FHutongHallParams H;
 	H.Width = 1400.0; H.Depth = 900.0;
 
@@ -561,14 +546,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongGateSwingTest,
 
 bool FHutongGateSwingTest::RunTest(const FString& Parameters)
 {
-	// A gate opens inward: the leaves add depth on the courtyard side and nothing on the street side.
+	// Gates open inward: leaves add depth courtyard-side only.
 	auto Reach = [](bool bOpen, double& OutStreet, double& OutCourt)
 	{
 		FHutongWallParams P;
 		P.Length = 700.0;
 		P.bHasGate = true;
 		P.bGateLeavesOpen = bOpen;
-		// A wall carries no 散水 now, so nothing outreaches the leaves and this measures the doors.
+		// Walls carry no 散水, so nothing outreaches the leaves; this measures the doors.
 
 		UE::Geometry::FDynamicMesh3 Mesh;
 		HutongGen::BuildWall(Mesh, P);
@@ -591,7 +576,7 @@ bool FHutongGateSwingTest::RunTest(const FString& Parameters)
 	TestTrue(FString::Printf(TEXT("the leaves stand back into the courtyard (%.0f vs %.0f)"),
 		OpenCourt, ShutCourt), OpenCourt > ShutCourt + 10.0);
 
-	// The swung leaf clears the stone it turns on. The pivot stands inboard of the leaf's own edge.
+	// The swung leaf clears its pivot stone; the pivot stands inboard of the leaf edge.
 	{
 		const double DoorW = 130.0, JambT = 10.0, Depth = 34.0;
 		const double Reveal = HutongGen::DoorStoneReveal(JambT, DoorW);
@@ -610,7 +595,7 @@ bool FHutongGateSwingTest::RunTest(const FString& Parameters)
 		UE::Geometry::FDynamicMesh3 Mesh;
 		HutongGen::AppendDoorAssembly(Mesh, D);
 
-		// The stone's reveal reaches to X = Reveal from the left jamb.
+		// Stone reveal reaches X = Reveal from the left jamb.
 		double DeepestIntoStone = -BIG_NUMBER;
 		for (int32 vid : Mesh.VertexIndicesItr())
 		{
@@ -622,6 +607,127 @@ bool FHutongGateSwingTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(
 			TEXT("the swung leaf clears the stone's %.1f cm reveal (worst %.1f cm into it)"),
 			Reveal, DeepestIntoStone), DeepestIntoStone < 0.0);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRuyiDoorHeadTest,
+	"HutongLayout.Doors.RuyiDoorHead",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongRuyiDoorHeadTest::RunTest(const FString& Parameters)
+{
+	// The 如意門's 門頭 is a 朝天欄杆: ledges stepping out to the 蓋板, the 欄板 standing back on it, the
+	// dentils and top course out again under the roof. Read off rays from the lane at mid-span, carved and plain.
+	for (const bool bCarved : { true, false })
+	{
+		FHutongGateHouseParams P;
+		P.Style = EHutongGateStyle::Ruyi;
+		P.bCarvedDoorHead = bCarved;
+		const FHutongGateHouseParams::FSizeRange R = P.GetSizeRange();
+		P.Width = 0.5 * (R.FrontageMin + R.FrontageMax);
+		P.Depth = 0.5 * (R.DepthMin + R.DepthMax);
+		UE::Geometry::FDynamicMesh3 Mesh;
+		HutongGen::BuildGateHouse(Mesh, P);
+		UE::Geometry::FDynamicMeshAABBTree3 Tree(&Mesh);
+
+		TArray<double> Faces;
+		// Short of the roof base: the eave's fascia hangs below it.
+		for (double Z = P.GetDoorHeadHeight() + 2.0; Z < P.GetRoofBaseHeight() - 10.0; Z += 1.0)
+		{
+			const FRay3d Ray(FVector3d(0.5 * P.Width, -500.0, Z), FVector3d(0.0, 1.0, 0.0));
+			double T = 0.0;
+			int32 Tri = -1;
+			if (Tree.FindNearestHitTriangle(Ray, T, Tri)) Faces.Add(Ray.PointAt(T).Y);
+		}
+		const TCHAR* Kind = bCarved ? TEXT("carved") : TEXT("plain");
+		if (!TestTrue(FString::Printf(TEXT("%s: the frieze is hit"), Kind), Faces.Num() > 10)) return false;
+		// Going up: the most proud face so far is the 蓋板 until one stands back from it (the 欄板), then out again.
+		const double Step = 0.3 * P.DoorHeadProjection;
+		int32 Cover = 0, Back = INDEX_NONE, Out = INDEX_NONE;
+		for (int32 i = 1; i < Faces.Num() && Out == INDEX_NONE; ++i)
+		{
+			if (Back == INDEX_NONE)
+			{
+				if (Faces[i] < Faces[Cover]) Cover = i;
+				else if (Faces[i] > Faces[Cover] + Step) Back = i;
+			}
+			else if (Faces[i] < Faces[Back] - Step) Out = i;
+		}
+		TestTrue(FString::Printf(TEXT("%s: the 欄板 stands back on the 蓋板, the dentils out again (cm %d, %d, %d)"), Kind, Cover, Back, Out),
+			Back != INDEX_NONE && Out != INDEX_NONE);
+		const double Reach = FMath::Max(Faces) - FMath::Min(Faces);
+		TestTrue(FString::Printf(TEXT("%s: the courses stay within the head's projection (%.1f cm)"), Kind, Reach),
+			Reach <= P.DoorHeadProjection + 1.5);
+	}
+	FHutongGateHouseParams Carved, Plain;
+	Carved.Style = Plain.Style = EHutongGateStyle::Ruyi;
+	Plain.bCarvedDoorHead = false;
+	UE::Geometry::FDynamicMesh3 A, B;
+	HutongGen::BuildGateHouse(A, Carved);
+	HutongGen::BuildGateHouse(B, Plain);
+	TestTrue(FString::Printf(TEXT("carving adds geometry (%d vs %d tris)"), A.TriangleCount(), B.TriangleCount()),
+		A.TriangleCount() > B.TriangleCount());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongGatePassableTest,
+	"HutongLayout.Doors.GatePassable",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongGatePassableTest::RunTest(const FString& Parameters)
+{
+	// The mesh is its own collision: every gate, leaves ajar, must let a body Min Clear Width wide walk
+	// straight through from the lane to the court. Rays along the passage at the clear width's edges and
+	// centre, from above the 門檻 to shoulder height.
+	struct FCase { EHutongGateStyle Style; bool bNarrowest; };
+	for (const FCase Case : { FCase{ EHutongGateStyle::Guangliang, false }, FCase{ EHutongGateStyle::Jinzhu, false },
+		FCase{ EHutongGateStyle::Manzi, false }, FCase{ EHutongGateStyle::Ruyi, false }, FCase{ EHutongGateStyle::Ruyi, true } })
+	{
+		FHutongGateHouseParams P;
+		P.Style = Case.Style;
+		const FHutongGateHouseParams::FSizeRange R = P.GetSizeRange();
+		P.Width = Case.bNarrowest ? R.FrontageMin : 0.5 * (R.FrontageMin + R.FrontageMax);
+		P.Depth = 0.5 * (R.DepthMin + R.DepthMax);
+		UE::Geometry::FDynamicMesh3 Mesh;
+		HutongGen::BuildGateHouse(Mesh, P);
+		UE::Geometry::FDynamicMeshAABBTree3 Tree(&Mesh);
+
+		const double Floor = P.FloorHeight + FMath::Max(P.ThresholdHeight, 0.0);
+		const double Top = FMath::Min(P.FloorHeight + 150.0, P.GetDoorHeadHeight() - 5.0);
+		const double Half = 0.5 * P.MinClearWidth - 1.0;
+		int32 Blocked = 0;
+		for (const double DX : { -Half, 0.0, Half })
+		{
+			for (double Z = Floor + 10.0; Z <= Top; Z += 20.0)
+			{
+				const FRay3d Ray(FVector3d(0.5 * P.Width + DX, -300.0, Z), FVector3d(0.0, 1.0, 0.0));
+				double T = 0.0; int32 Tid = -1; FVector3d Bary;
+				if (Tree.FindNearestHitTriangle(Ray, T, Tid, Bary) && T < P.Depth + 600.0)
+				{
+					if (Blocked++ == 0)
+					{
+						const FVector3d Hit = Ray.PointAt(T);
+						const int32 Slot = Mesh.HasAttributes() && Mesh.Attributes()->GetMaterialID() ? Mesh.Attributes()->GetMaterialID()->GetValue(Tid) : -1;
+						double LeftLeaf = -BIG_NUMBER, RightLeaf = BIG_NUMBER;
+						for (const int32 T2 : Mesh.TriangleIndicesItr())
+						{
+							if (Mesh.Attributes()->GetMaterialID()->GetValue(T2) != Slot) continue;
+							const UE::Geometry::FIndex3i Tri = Mesh.GetTriangle(T2);
+							for (int32 c = 0; c < 3; ++c)
+							{
+								const FVector3d V = Mesh.GetVertex(Tri[c]);
+								if (V.X < 0.5 * P.Width) LeftLeaf = FMath::Max(LeftLeaf, V.X); else RightLeaf = FMath::Min(RightLeaf, V.X);
+							}
+						}
+						AddWarning(FString::Printf(TEXT("%s: first blocked at x %.1f of %.0f, z %.0f, y %.1f, slot %d; leaves reach %.1f and %.1f"),
+							*UEnum::GetDisplayValueAsText(Case.Style).ToString(), Hit.X, P.Width, Hit.Z, Hit.Y, Slot, LeftLeaf, RightLeaf));
+					}
+				}
+			}
+		}
+		TestEqual(FString::Printf(TEXT("a %s%s lets a %.0f cm body through"), *UEnum::GetDisplayValueAsText(Case.Style).ToString(),
+			Case.bNarrowest ? TEXT(" at its narrowest") : TEXT(""), P.MinClearWidth), Blocked, 0);
 	}
 	return true;
 }
@@ -646,14 +752,14 @@ bool FHutongDrumStoneTest::RunTest(const FString& Parameters)
 			MinY = FMath::Min(MinY, Mesh.GetVertex(vid).Y);
 			MaxY = FMath::Max(MaxY, Mesh.GetVertex(vid).Y);
 		}
-		// Short of the wall's inner face, not flush with it.
+		// Short of the wall's inner face, not flush.
 		TestTrue(FString::Printf(TEXT("the 枕 stops well short of the inner face (%.1f vs %.1f)"),
 			MaxY, BackY), MaxY < BackY - 5.0);
 		TestTrue(FString::Printf(TEXT("and it projects forward of it (%.0f cm)"), FrontY - MinY),
 			FrontY - MinY > 20.0);
 	}
 
-	// A 抱鼓石 is a big disc on a modest base.
+	// 抱鼓石: big disc, modest base.
 	const double W = 18.0, Dp = 36.0, H = 98.0, Frac = 0.62;
 
 	UE::Geometry::FDynamicMesh3 Mesh;
@@ -667,17 +773,17 @@ bool FHutongDrumStoneTest::RunTest(const FString& Parameters)
 		MaxY = FMath::Max(MaxY, V.Y);
 		MaxZ = FMath::Max(MaxZ, V.Z);
 	}
-	// The drum's faces look along the lane, so its diameter shows in Y.
+	// Drum faces look along the lane, so its diameter shows in Y.
 	const double Diameter = MaxY - MinY;
 
 	TestTrue(FString::Printf(TEXT("the drum is most of the stone's height (%.0f of %.0f)"),
 		Diameter, H), Diameter > 0.5 * H);
-	// Which necessarily means it overhangs the base it stands on — that is what a drum does.
+	// So it overhangs its base, as a drum does.
 	TestTrue(FString::Printf(TEXT("it stands proud of its base (%.0f vs %.0f deep)"), Diameter, Dp),
 		Diameter > Dp);
 	TestTrue(TEXT("and does not grow past the stone's top"), MaxZ <= H + 0.01);
 
-	// The gate house grew 門墩 of its own, sharing this code.
+	// The gate house has 門墩 too, sharing this code.
 	{
 		FHutongGateHouseParams G;
 		G.DoorStones.Style = EHutongDoorStone::Drum;
@@ -686,10 +792,10 @@ bool FHutongDrumStoneTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("廣亮大門 may carry a 抱鼓石"),
 			G.GetDoorStones().Style == EHutongDoorStone::Drum);
 		G.Style = EHutongGateStyle::Manzi;
-		TestTrue(TEXT("蠻子門 is held to a block however it is set"),
-			G.GetDoorStones().Style == EHutongDoorStone::Block);
+		TestTrue(TEXT("so may a 蠻子門: every gate takes either form"),
+			G.GetDoorStones().Style == EHutongDoorStone::Drum);
 
-		// And they are built: a gate with stones has more geometry than one without.
+		// Built: a gate with stones has more geometry than one without.
 		auto Count = [](bool bStones)
 		{
 			FHutongGateHouseParams P;
@@ -700,9 +806,67 @@ bool FHutongDrumStoneTest::RunTest(const FString& Parameters)
 			return M.TriangleCount();
 		};
 		TestTrue(TEXT("the gate house builds its 門墩"), Count(true) > Count(false));
+
+		// 反八字影壁 (圖5-1-2): a 廣亮大門's wings splay out in front of the piers; other ranks ignore the flag.
+		auto Bounds = [](EHutongGateStyle Style, bool bWings)
+		{
+			FHutongGateHouseParams P;
+			P.Style = Style;
+			P.Width = 380.0; P.Depth = 450.0;
+			P.bSplayedScreens = bWings;
+			UE::Geometry::FDynamicMesh3 M;
+			HutongGen::BuildGateHouse(M, P);
+			FBox B(ForceInit);
+			for (const FVector3d& V : M.VerticesItr()) B += FVector(V);
+			return B;
+		};
+		const FBox Plain = Bounds(EHutongGateStyle::Guangliang, false);
+		const FBox Wings = Bounds(EHutongGateStyle::Guangliang, true);
+		const double Reach = HutongCanon::Gate::WingLengthShare * 380.0 * FMath::Sin(FMath::DegreesToRadians(HutongCanon::Gate::WingAngleDeg));
+		TestTrue(FString::Printf(TEXT("the wings reach out past each pier (%.0f, %.0f)"), Wings.Min.X, Wings.Max.X - 380.0),
+			Wings.Min.X < -0.9 * Reach && Wings.Max.X > 380.0 + 0.9 * Reach);
+		TestTrue(FString::Printf(TEXT("and forward to the street, past the steps (%.0f vs %.0f)"), Wings.Min.Y, Plain.Min.Y),
+			Wings.Min.Y < -0.9 * Reach && Wings.Min.Y < Plain.Min.Y);
+		TestTrue(TEXT("below the gate's roof"), Wings.Max.Z <= Plain.Max.Z + 0.01);
+		// Every diagonal 方磚 field (the wings' and the 廊心) has a whole brick at its middle: each field is one box,
+		// its authored UVs symmetric about the field's centre.
+		{
+			FHutongGateHouseParams P;
+			P.Style = EHutongGateStyle::Guangliang;
+			P.Width = 380.0; P.Depth = 450.0;
+			P.bSplayedScreens = true;
+			UE::Geometry::FDynamicMesh3 M;
+			HutongGen::BuildGateHouse(M, P);
+			if (!TestTrue(TEXT("the gate has UVs and slots"), M.HasAttributes() && M.Attributes()->PrimaryUV() && M.Attributes()->GetMaterialID())) return false;
+			const UE::Geometry::FDynamicMeshUVOverlay* UV = M.Attributes()->PrimaryUV();
+			const UE::Geometry::FDynamicMeshMaterialAttribute* Mat = M.Attributes()->GetMaterialID();
+			const double Brick = HutongGen::FloorPaverCm / 100.0;
+			int32 Fields = 0;
+			// Each field is one run of Floor-slot triangles with authored UVs; borders and caps lie between.
+			auto IsField = [&](int32 t) { return M.IsTriangle(t) && Mat->GetValue(t) == HutongGen::MatSlot_Floor && UV->IsSetTriangle(t); };
+			for (int32 t = 0; t < M.MaxTriangleID(); )
+			{
+				if (!IsField(t)) { ++t; continue; }
+				FBox2D Box(ForceInit);
+				for (; t < M.MaxTriangleID() && IsField(t); ++t)
+				{
+					const UE::Geometry::FIndex3i E = UV->GetTriangle(t);
+					for (int32 c = 0; c < 3; ++c) Box += FVector2D(UV->GetElement(E[c]));
+				}
+				const FVector2D Mid = Box.GetCenter() / Brick - FVector2D(0.5, 0.5);
+				++Fields;
+				TestTrue(FString::Printf(TEXT("field %d is centred on a brick (%.3f, %.3f bricks off)"), Fields,
+					Mid.X - FMath::RoundToDouble(Mid.X), Mid.Y - FMath::RoundToDouble(Mid.Y)),
+					FMath::Abs(Mid.X - FMath::RoundToDouble(Mid.X)) < 0.01 && FMath::Abs(Mid.Y - FMath::RoundToDouble(Mid.Y)) < 0.01);
+			}
+			TestEqual(TEXT("two wing fields and four 廊心"), Fields, 6);
+		}
+
+		TestTrue(TEXT("a 蠻子門 builds none"),
+			Bounds(EHutongGateStyle::Manzi, true).Equals(Bounds(EHutongGateStyle::Manzi, false)));
 	}
 
-	// 垂花門 too: its doors are 板門 on pivots.
+	// 垂花門 too: 板門 on pivots.
 	{
 		auto Count = [](bool bStones)
 		{
@@ -734,7 +898,7 @@ bool FHutongDoorPegTest::RunTest(const FString& Parameters)
 	D.BottomZ = 0.0;     D.LeafTopZ = 250.0;  D.JambTopZ = 262.0;
 	D.FrameThickness = 12.0;
 	D.PegCount = 4;
-	// Shut and unswung, so the only thing in front of the door plane is a peg.
+	// Shut and unswung: only a peg stands in front of the door plane.
 	D.bLeavesOpen = false;
 	D.bUseLeafAngles = false;
 	D.MinClearHeight = 0.0;
@@ -758,7 +922,7 @@ bool FHutongDoorPegTest::RunTest(const FString& Parameters)
 	}
 
 	TestTrue(TEXT("the pegs are built"), Proud > 0);
-	// Centred on the head: a peg may stand a little proud of the rail's edges, never a whole diameter above it.
+	// Centred on the head: a peg may stand slightly proud of the rail, never a full diameter above.
 	TestTrue(FString::Printf(TEXT("pegs sit on the head, not above it (worst %.1f cm off centre)"),
 		WorstOffset), WorstOffset < D.FrameThickness);
 	TestTrue(FString::Printf(TEXT("pegs stand out from the face (%.1f cm)"), Reach), Reach > 8.0);
@@ -771,46 +935,49 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRidgeTailTest,
 
 bool FHutongRidgeTailTest::RunTest(const FString& Parameters)
 {
-	// A 蠍子尾 rises more than it projects. It was a slab leaning out past the gable.
+	// 圖5-1-7.1, 5-1-5.1: a 蠍子尾 is a blade leaning out at about 50° from a root well inside the ridge, rising
+	// about 2.5 ridge courses, its tip barely past the gable. It was a slab leaning out past the gable, then
+	// a curl hooking straight up from it.
 	FHutongSiheyuanParams P;
 	P.Width = 900.0; P.Depth = 450.0;
 
-	auto Extents = [](const FHutongSiheyuanParams& Params, double& OutTopZ, double& OutMaxX)
-	{
-		UE::Geometry::FDynamicMesh3 Mesh;
-		HutongGen::BuildSiheyuan(Mesh, Params);
-		OutTopZ = -BIG_NUMBER; OutMaxX = -BIG_NUMBER;
-		for (int32 vid : Mesh.VertexIndicesItr())
-		{
-			const FVector3d V = Mesh.GetVertex(vid);
-			OutTopZ = FMath::Max(OutTopZ, V.Z);
-			OutMaxX = FMath::Max(OutMaxX, V.X);
-		}
-	};
-
-	double WithZ, WithX, WithoutZ, WithoutX;
-	Extents(P, WithZ, WithX);
-
+	UE::Geometry::FDynamicMesh3 With, Without;
+	HutongGen::BuildSiheyuan(With, P);
 	FHutongSiheyuanParams Plain = P;
 	Plain.bHasRidgeCourse = false;
-	Extents(Plain, WithoutZ, WithoutX);
+	HutongGen::BuildSiheyuan(Without, Plain);
+	auto Max = [](const UE::Geometry::FDynamicMesh3& M, int32 Axis)
+	{
+		double V = -BIG_NUMBER;
+		for (int32 v : M.VertexIndicesItr()) V = FMath::Max(V, M.GetVertex(v)[Axis]);
+		return V;
+	};
+	UE::Geometry::FDynamicMesh3 NoTail;
+	FHutongSiheyuanParams Untailed = P;
+	Untailed.RidgeEndKick = 0.0;
+	HutongGen::BuildSiheyuan(NoTail, Untailed);
+	const double RidgeTop = Max(NoTail, 2);
+	const double Rise = Max(With, 2) - RidgeTop;
+	const double Past = Max(With, 0) - Max(Without, 0);
+	TestTrue(FString::Printf(TEXT("the tail rises about %.1f ridge courses (%.0f cm)"), HutongCanon::Roof::TailRiseInCourses, Rise),
+		FMath::Abs(Rise - P.RidgeEndKick) < 3.0 && Rise > 2.0 * P.RidgeCourseHeight);
+	TestTrue(FString::Printf(TEXT("its tip barely passes the gable (%.0f cm)"), Past), Past < 15.0);
 
-	const double Rose = WithZ - WithoutZ;
-	const double Projected = WithX - WithoutX;
-	TestTrue(FString::Printf(TEXT("the tail rises (%.0f cm)"), Rose), Rose > 1.0);
-	TestTrue(FString::Printf(TEXT("it rises more than it projects (%.0f up vs %.0f out)"),
-		Rose, Projected), Rose > Projected);
-	// 硬山 means a flush gable: the tail may overhang a little, never half a metre.
-	TestTrue(FString::Printf(TEXT("it overhangs the gable modestly (%.0f cm)"), Projected),
-		Projected < 30.0);
-	UE_LOG(LogTemp, Display, TEXT("%s"), *FString::Printf(
-		TEXT("蠍子尾: rises %.0f cm, overhangs %.0f cm (was 40 up / 43 out, as a slab)"),
-		Rose, Projected));
+	// Halfway up, the blade stands well inside the gable: it leans, it is not a hook off the gable's face.
+	double SumX = 0.0;
+	int32 Count = 0;
+	for (int32 v : With.VertexIndicesItr())
+	{
+		const FVector3d V = With.GetVertex(v);
+		if (V.X > 0.5 * P.Width && V.Z > RidgeTop + 0.4 * Rise && V.Z < RidgeTop + 0.6 * Rise) { SumX += V.X; ++Count; }
+	}
+	const double Inside = Count > 0 ? P.Width - SumX / Count : 0.0;
+	TestTrue(FString::Printf(TEXT("halfway up it stands %.0f cm inside the gable"), Inside), Count > 0 && Inside > 0.25 * Rise);
 	return true;
 }
 
-// 博縫 and 排山勾滴 stand a few centimetres proud of each 山牆 and hug the roof edge from eave to
-// ridge, so the gable reads as a brick face with a rim rather than a slab.
+// 博縫 and 排山勾滴 stand a few cm proud of each 山牆 and hug the roof edge eave to ridge, so the
+// gable reads as brick with a rim, not a slab.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongGableRakeTest,
 	"HutongLayout.Roofs.GableRake",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -827,7 +994,7 @@ bool FHutongGableRakeTest::RunTest(const FString& Parameters)
 	Plain.bHasGableRake = false;
 	HutongGen::BuildSiheyuan(Without, Plain);
 
-	const double Eave = P.GetEaveHeight();
+	const double Eave = P.GetRoofBaseHeight();
 	const double Apex = Eave + P.GetRoofRise();
 	double MinX = BIG_NUMBER, MaxX = -BIG_NUMBER;
 	int32 Proud = 0, OffTheRake = 0;
@@ -836,11 +1003,13 @@ bool FHutongGableRakeTest::RunTest(const FString& Parameters)
 		const FVector3d V = With.GetVertex(vid);
 		MinX = FMath::Min(MinX, V.X);
 		MaxX = FMath::Max(MaxX, V.X);
-		// Past the 下鹼's own 3 cm projection.
+		// Past the 下鹼's 3 cm projection.
 		if (V.X < -3.5 || V.X > P.Width + 3.5)
 		{
 			++Proud;
-			if (V.Z < Eave - 40.0 || V.Z > Apex + 12.0) ++OffTheRake;
+			// Along the gable wall; the 墀頭 盤頭 step out under the rake foot, in front of it.
+			const bool bAlongWall = V.Y > 0.5 && V.Y < P.Depth - 0.5;
+			if (bAlongWall && (V.Z < Eave - 40.0 || V.Z > Apex + 12.0)) ++OffTheRake;
 		}
 	}
 	TestTrue(TEXT("the rake adds triangles"), With.TriangleCount() > Without.TriangleCount());
@@ -855,6 +1024,151 @@ bool FHutongGableRakeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongTileCourseTest,
+	"HutongLayout.Roofs.TileCourses",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongTileCourseTest::RunTest(const FString& Parameters)
+{
+	using namespace HutongGen;
+	constexpr double W = 600.0, D = 500.0, Eave = 300.0;
+
+	// Everything after the courses off, so they are appended last and can be lifted out.
+	auto Build = [&](EHutongRoofTile Tile, bool bRuns, FDynamicMesh3& Out)
+	{
+		Shell::FRoofParams Roof;
+		Roof.Section = Jiajia::MakeSection(EHutongPurlins::Five, 0.5 * D, Roof.FrontOverhang, 0.0);
+		Roof.Tile = Tile;
+		Roof.bTileRuns = bRuns;
+		Roof.RakeDepth = 0.0;
+		Roof.RafterSection = 0.0;
+		Shell::AppendGableRoof(Out, W, D, Eave, Roof);
+	};
+
+	double Crown[2] = {};
+	const EHutongRoofTile Tiles[2] = { EHutongRoofTile::He, EHutongRoofTile::Tong };
+	for (int32 t = 0; t < 2; ++t)
+	{
+		const TCHAR* Name = Tiles[t] == EHutongRoofTile::Tong ? TEXT("筒瓦") : TEXT("合瓦");
+		FDynamicMesh3 With, Without;
+		Build(Tiles[t], true, With);
+		Build(Tiles[t], false, Without);
+		if (!TestTrue(FString::Printf(TEXT("%s: the courses add geometry"), Name),
+			With.TriangleCount() > Without.TriangleCount())) continue;
+
+		FDynamicMesh3 Courses;
+		TMap<int32, int32> Map;
+		auto Vert = [&](int32 V) -> int32
+		{
+			if (const int32* Found = Map.Find(V)) return *Found;
+			return Map.Add(V, Courses.AppendVertex(With.GetVertex(V)));
+		};
+		for (int32 tid = Without.MaxTriangleID(); tid < With.MaxTriangleID(); ++tid)
+		{
+			if (!With.IsTriangle(tid)) continue;
+			const UE::Geometry::FIndex3i Tri = With.GetTriangle(tid);
+			Courses.AppendTriangle(Vert(Tri.A), Vert(Tri.B), Vert(Tri.C));
+		}
+		const FShellReport R = InspectShell(Courses);
+		TestTrue(FString::Printf(TEXT("%s: every course is a closed solid (%d unmatched, %d duplicated, volume %.0f)"),
+			Name, R.Unmatched, R.Duplicated, R.Volume), R.IsSolid());
+
+		// Course standoff from its slope, measured square to it.
+		Shell::FRoofParams Probe;
+		Probe.Section = Jiajia::MakeSection(EHutongPurlins::Five, 0.5 * D, Probe.FrontOverhang, 0.0);
+		const double O = Probe.FrontOverhang;
+		const TArray<FVector2d> Profile = HutongMeshUtils::GableRoofProfile(
+			D + O, Shell::RoofRise(Probe), Probe.Section, Probe.SlopeSegments);
+		double Top = -BIG_NUMBER;
+		for (int32 vid : Courses.VertexIndicesItr())
+		{
+			const FVector3d V = Courses.GetVertex(vid);
+			const FVector2d P(V.Y + O, V.Z - Eave);
+			double Best = BIG_NUMBER, Above = 0.0;
+			for (int32 i = 0; i + 1 < Profile.Num(); ++i)
+			{
+				const FVector2d AB = Profile[i + 1] - Profile[i];
+				const double L = AB.Length();
+				if (L <= UE_SMALL_NUMBER) continue;
+				const FVector2d Dir = AB / L, AP = P - Profile[i];
+				const double Dist = (AP - Dir * FMath::Clamp(AP.Dot(Dir), 0.0, L)).Length();
+				if (Dist < Best) { Best = Dist; Above = (Dir.X * AP.Y - Dir.Y * AP.X) > 0.0 ? Dist : -Dist; }
+			}
+			Top = FMath::Max(Top, Above);
+		}
+		const double Bottom = 0.0;
+		Crown[t] = Top - Bottom;
+		TestTrue(FString::Printf(TEXT("%s: the courses stand proud of the slope (%.1f cm)"), Name, Crown[t]),
+			Crown[t] > 1.5);
+	}
+	TestTrue(FString::Printf(TEXT("a 筒瓦 course stands higher than a 合瓦 one (%.1f against %.1f)"), Crown[1], Crown[0]),
+		Crown[1] > Crown[0]);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongWallCapCoplanarTest,
+	"HutongLayout.Walls.CapFacesDoNotFight",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongWallCapCoplanarTest::RunTest(const FString& Parameters)
+{
+	// Drip course once lay on the top corbel face and z-fought along every wall.
+	for (const EHutongWallRole Role : { EHutongWallRole::Perimeter, EHutongWallRole::Courtyard })
+	{
+		FHutongWallParams P;
+		P.Role = Role;
+		P.bHasWindows = false;
+		FDynamicMesh3 M;
+		UHutongWallBuildingComponent::BuildWallMesh(P, 600.0, P.GetThickness(), false, M, EHutongDetail::Near);
+		const double CapBase = P.GetHeight() - 1.0;
+		TArray<FString> Where;
+		const int32 Fights = HutongMeshInspect::CountSameFacingOverlaps(M, CapBase, &Where);
+		for (const FString& W : Where) UE_LOG(LogTemp, Display, TEXT("cap fight: %s"), *W);
+		TestEqual(FString::Printf(TEXT("%s: no two cap faces share a plane and a facing"),
+			Role == EHutongWallRole::Perimeter ? TEXT("院牆") : TEXT("隔牆")), Fights, 0);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongInnerGateHallAndRollTest,
+	"HutongLayout.Roofs.InnerGateHallAndRoll",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongInnerGateHallAndRollTest::RunTest(const FString& Parameters)
+{
+	// 一殿一卷: 殿 in front with the ridge, 卷 lower behind, meeting eave to eave at the 天溝; neither
+	// dips below the eave there or crosses the line.
+	FHutongInnerGateParams P;
+	P.Style = EHutongInnerGateStyle::OneHallOneRoll;
+	P.Width = 360.0;
+	P.Depth = 420.0;
+	FDynamicMesh3 M;
+	HutongGen::BuildInnerGate(M, P);
+	if (!TestTrue(TEXT("the gate builds"), M.TriangleCount() > 0)) return false;
+
+	const double Eave = P.GetEaveHeight();
+	const double Valley = P.GetValleyY();
+	double FrontTop = 0.0, RearTop = 0.0, LowestAtValley = BIG_NUMBER;
+	for (int32 vid : M.VertexIndicesItr())
+	{
+		const FVector3d V = M.GetVertex(vid);
+		if (V.Z <= Eave + 1.0) continue;
+		if (V.Y < Valley - 1.0) FrontTop = FMath::Max(FrontTop, V.Z); else if (V.Y > Valley + 1.0) RearTop = FMath::Max(RearTop, V.Z);
+	}
+	for (int32 vid : M.VertexIndicesItr())
+	{
+		const FVector3d V = M.GetVertex(vid);
+		if (FMath::Abs(V.Y - Valley) < 0.5 && V.Z > Eave - 20.0) LowestAtValley = FMath::Min(LowestAtValley, V.Z);
+	}
+	TestTrue(FString::Printf(TEXT("the 殿 stands over the 卷 (%.0f against %.0f)"), FrontTop, RearTop), FrontTop > RearTop + 10.0);
+	TestNearlyEqual(TEXT("the 天溝 is at the eave"), LowestAtValley, P.GetRoofBaseHeight(), 1.0);
+	TestTrue(FString::Printf(TEXT("the ridge estimate is the 殿's (%.0f, built %.0f)"), HutongGen::Ridge::InnerGate(P), FrontTop),
+		FrontTop >= HutongGen::Ridge::InnerGate(P) - 1.0 && FrontTop <= HutongGen::Ridge::InnerGate(P) + P.RidgeCourseHeight + P.RidgeEndKick + 1.0);
+	TestTrue(TEXT("the doors stand in the wall line, the 垂蓮柱 ahead of it"), P.GetWallLineY() > 20.0 && P.GetWallLineY() < Valley);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRoofUVTest,
 	"HutongLayout.Roofs.UVs",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -863,7 +1177,7 @@ bool FHutongRoofUVTest::RunTest(const FString& Parameters)
 {
 	using namespace HutongMeshUtils;
 
-	// Whatever the roof authored, the fallback must leave nothing bare.
+	// Whatever the roof authored, the fallback leaves nothing unmapped.
 	auto CheckCovered = [&](FDynamicMesh3& Mesh, const TCHAR* What)
 	{
 		FillUnsetUVsBoxProjected(Mesh, 100.0);
@@ -901,7 +1215,7 @@ bool FHutongRoofUVTest::RunTest(const FString& Parameters)
 		CheckCovered(Mesh, TEXT("殿 (歇山, 筒瓦)"));
 	}
 
-	// The roof's own mapping is in tile rows and not distorted.
+	// The roof's own UVs run in tile rows, undistorted.
 	{
 		FXieshanRoofSpec S;
 		S.Width = 620.0; S.Depth = 420.0; S.Rise = 190.0;
@@ -920,7 +1234,7 @@ bool FHutongRoofUVTest::RunTest(const FString& Parameters)
 			const UE::Geometry::FIndex3i T = Mesh.GetTriangle(tid);
 			const UE::Geometry::FIndex3i E = UV->GetTriangle(tid);
 
-			// One edge is enough: compare its length on the roof with its length in UV space, scaled by the tile size.
+			// One edge suffices: roof length vs UV length times tile size.
 			const double World = (Mesh.GetVertex(T.B) - Mesh.GetVertex(T.A)).Length();
 			const double Uv = (FVector2d(UV->GetElement(E.B)) - FVector2d(UV->GetElement(E.A))).Length()
 				* S.TileRowSpacing;
@@ -942,7 +1256,7 @@ bool FHutongOpeningStackTest::RunTest(const FString& Parameters)
 {
 	// A 正房 at its preset eave, checked by hand.
 	FHutongSiheyuanParams P;
-	// Stated rather than derived: this is a test about the opening stack, and the eave is an input to it.
+	// Stated, not derived: the eave is this opening-stack test's input.
 	P.bDeriveEaveFromBays = false;
 	P.EaveHeight = 365.0;
 
@@ -952,22 +1266,25 @@ bool FHutongOpeningStackTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("額枋 underside is 柱高 less one 柱徑"),
 		FMath::IsNearlyEqual(P.GetArchitraveBottom(), Floor + Col * (10.0 / 11.0), 0.5));
 
-	// The unification: one 中檻 across the bay.
+	// Unified: one 中檻 across the bay.
 	TestTrue(TEXT("window head and door leaf head are the same member"),
 		FMath::IsNearlyEqual(P.GetWindowTopHeight(), P.GetDoorLeafTopHeight(), 0.01));
 	TestTrue(TEXT("the 中檻 sits under the 額枋"),
 		P.GetWindowTopHeight() < P.GetArchitraveBottom());
 
-	// The sill is an absolute, and this is the claim worth testing.
+	// The sill follows the 隔扇 (表十四, p.104): 下檻 and the leaf's lower run, 1.2 of a leaf's width.
 	FHutongSiheyuanParams Small = P;
 	Small.EaveHeight = 316.0;                       // the 耳房 preset, stated as the presets do
-	TestTrue(TEXT("正房 sill is 85 above its floor"),
-		FMath::IsNearlyEqual(P.GetWindowSillHeight() - P.GetFloorHeight(), 85.0, 0.01));
-	TestTrue(TEXT("耳房 sill is the same 85 above its own floor"),
-		FMath::IsNearlyEqual(Small.GetWindowSillHeight() - Small.GetFloorHeight(), 85.0, 0.01));
+	for (const FHutongSiheyuanParams* H : { &P, &Small })
+	{
+		TestNearlyEqual(TEXT("the sill is the 下檻 and the 隔扇's lower run"),
+			H->GetWindowSillHeight() - H->GetFloorHeight(),
+			H->GetLowerSillHeight() + HutongCanon::Joinery::GeshanLowerOfWidth * H->GetGeshanWidth(), 0.01);
+		TestTrue(TEXT("and stands under the 中檻"), H->GetWindowSillHeight() < H->GetWindowTopHeight() - 40.0);
+	}
 
-	// And the small building clears the doorway rule on its own now, without the eave being pushed up for it.
-	const double Clear = Small.GetDoorLeafTopHeight() - Small.GetFloorHeight() - Small.DoorThresholdHeight;
+	// The small building clears the doorway rule without the eave being pushed up.
+	const double Clear = Small.GetDoorLeafTopHeight() - Small.GetFloorHeight() - Small.GetLowerSillHeight();
 	TestTrue(FString::Printf(TEXT("耳房 doorway is %.0f cm clear, unforced"), Clear),
 		Clear >= HutongGen::Passage::MinClearHeight);
 	TestTrue(TEXT("耳房 eave stands on its own"), Small.GetEaveHeight() <= 316.0 + 0.01);
@@ -986,20 +1303,19 @@ bool FHutongUrbanModuleTest::RunTest(const FString& Parameters)
 {
 	using namespace HutongGen::Urban;
 
-	// The 步 × 6, 12, 24 widths and the pitch are the canon's own constants (HutongCanon.h),
-	// restated nowhere; what is tested is what the module does with them.
-	// Classification covers the whole range — every width lands somewhere.
+	// 步 × 6, 12, 24 widths and the pitch are HutongCanon.h constants; this tests their use.
+	// Classification covers the whole range.
 	TestTrue(TEXT("3 m is an alley"), Classify(300.0) == EHutongStreetClass::Alley);
 	TestTrue(TEXT("9.1 m is a 胡同"), Classify(910.0) == EHutongStreetClass::Hutong);
 	TestTrue(TEXT("18 m is a 小街"), Classify(1800.0) == EHutongStreetClass::MinorStreet);
 	TestTrue(TEXT("36 m is a 大街"), Classify(3600.0) == EHutongStreetClass::MajorStreet);
 	TestTrue(TEXT("90 m is off the top"), Classify(9000.0) == EHutongStreetClass::Open);
 
-	// In band vs merely nearest: a 12 m lane is a 胡同 by class and not a good example of one.
+	// In band vs nearest: a 12 m lane classes as 胡同 but is a poor example.
 	TestTrue(TEXT("9.4 m is in band"), IsInBand(940.0));
 	TestFalse(TEXT("12 m is not"), IsInBand(1200.0));
 
-	// Snap-to-band is tight on purpose: it corrects a hand, not a measurement.
+	// Snap-to-band is deliberately tight: it corrects a hand, not a measurement.
 	TestTrue(TEXT("within tolerance snaps"), NearestCanonicalWidth(940.0, 30.0) > 0.0);
 	TestEqual(TEXT("outside tolerance does not"), NearestCanonicalWidth(1200.0, 30.0), 0.0);
 	return true;
@@ -1011,14 +1327,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongGalleryTest,
 
 bool FHutongGalleryTest::RunTest(const FString& Parameters)
 {
-	// The gallery is the one place that touches every generator in the plugin.
+	// The gallery touches every generator.
 	UHutongGalleryToolProperties* Settings = NewObject<UHutongGalleryToolProperties>();
 	const TArray<TPair<FString, int32>> Built = HutongGallery::BuildAll(Settings);
 
 	TestTrue(TEXT("the gallery has pieces in it"), Built.Num() >= 15);
 	for (const TPair<FString, int32>& It : Built)
 	{
-		// Logged as well as asserted.
+		// Logged and asserted.
 		UE_LOG(LogTemp, Display, TEXT("%s"),
 			*FString::Printf(TEXT("gallery: %-44s %6d tris"), *It.Key, It.Value));
 		TestTrue(FString::Printf(TEXT("%s builds geometry"), *It.Key), It.Value > 0);
@@ -1045,13 +1361,13 @@ bool FHutongHippedRoofControlTest::RunTest(const FString& Parameters)
 	Cases.Add({ TEXT("廡殿"), Base });
 
 	{
-		// 捲棚廡殿: the ridge becomes a rounded crown.
+		// 捲棚廡殿: ridge becomes a rounded crown.
 		FHipRoofSpec S = Base;
 		S.Section.ApexRoll = 0.4;
 		Cases.Add({ TEXT("捲棚廡殿"), S });
 	}
 	{
-		// A rolled 攢尖 has no ridge at all to round.
+		// A rolled 攢尖 has no ridge to round.
 		FHipRoofSpec S = Base;
 		S.RidgeLength = 0.0; S.Section.ApexRoll = 0.5;
 		Cases.Add({ TEXT("捲棚攢尖"), S });
@@ -1071,13 +1387,91 @@ bool FHutongHippedRoofControlTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRoundRoofTest,
+	"HutongLayout.Roofs.RoundRoof",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// 圓攢尖 (陸柱圓亭): the roof of revolution is one closed solid with a flat ceiling or a shell, and its
+// sector panels land every course on the slope, the thinned bands on the full set's lines.
+bool FHutongRoundRoofTest::RunTest(const FString& Parameters)
+{
+	using namespace HutongMeshUtils;
+	FRoundRoofSpec Spec;
+	Spec.Radius = 240.0; Spec.Rise = 138.0; Spec.FasciaDrop = 9.0; Spec.EaveOverhang = 77.0; Spec.UndersideRise = 28.0;
+	Spec.Section = HutongGen::Jiajia::MakeSectionWithRatios({ 0.5, 0.75 }, 160.0, 77.0, 0.0);
+	for (const double Cover : { 0.0, 10.0 })
+	{
+		Spec.ShellCover = Cover;
+		FDynamicMesh3 Mesh;
+		UE::Geometry::FIndex2i Under(-1, -1);
+		AppendRoundRoof(Mesh, FVector3d(0.0, 0.0, 300.0), Spec, &Under);
+		const FShellReport R = InspectShell(Mesh);
+		const TCHAR* Name = Cover > 0.0 ? TEXT("shell") : TEXT("ceiling");
+		TestEqual(FString::Printf(TEXT("%s: every edge is matched"), Name), R.Unmatched, 0);
+		TestEqual(FString::Printf(TEXT("%s: consistent winding"), Name), R.Duplicated, 0);
+		TestTrue(FString::Printf(TEXT("%s: positive volume"), Name), R.Volume > 0.0);
+		TestTrue(FString::Printf(TEXT("%s: an underside to tag wood"), Name), Under.B > Under.A && Under.A > 0);
+	}
+
+	TestEqual(TEXT("one panel per sector"), MakeRoundRoofPanels(FVector3d::Zero(), Spec).Num(), Spec.Panels);
+
+	// Every course runs eave to top, narrowing with the circle: as many as the slope's lines, each closed.
+	FDynamicMesh3 Courses;
+	HutongGen::Shell::AppendRoundRoofCourses(Courses, FVector3d(0.0, 0.0, 300.0), Spec, EHutongRoofTile::Tong, 9.0, 30.0);
+	const FShellReport C = InspectShell(Courses);
+	TestEqual(TEXT("courses: every edge is matched"), C.Unmatched, 0);
+	TestTrue(TEXT("courses: positive volume"), C.Volume > 0.0);
+	double TopZ = -1e9;
+	for (const int32 Vid : Courses.VertexIndicesItr()) TopZ = FMath::Max(TopZ, Courses.GetVertex(Vid).Z);
+	TestTrue(TEXT("courses reach the top, under the 寶頂"), TopZ > 300.0 + RoundRoofHeight(Spec, 40.0));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRoundFloorTest,
+	"HutongLayout.Pavilion.RoundFloor",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+// 尺二方磚車輞砍墁: the round 亭's floor is paved in rings whose UVs the generator writes (none collapsed,
+// none left to the box projection), round a stone at the centre.
+bool FHutongRoundFloorTest::RunTest(const FString& Parameters)
+{
+	FHutongPavilionParams P;
+	P.Plan = EHutongPavilionPlan::Round;
+	const double Side = HutongCanon::Pavilion::FigureBayCm * (1.0 + HutongCanon::Pavilion::ColumnPerBay);
+	P.Width = P.Depth = Side;
+	FDynamicMesh3 M;
+	HutongGen::BuildPavilion(M, P);
+	const auto* Mat = M.Attributes()->GetMaterialID();
+	const auto* UV = M.Attributes()->PrimaryUV();
+	int32 Floor = 0, Unset = 0, Collapsed = 0, CentreStone = 0;
+	for (const int32 tid : M.TriangleIndicesItr())
+	{
+		const int32 Slot = Mat->GetValue(tid);
+		const UE::Geometry::FIndex3i T = M.GetTriangle(tid);
+		const FVector3d C = (M.GetVertex(T.A) + M.GetVertex(T.B) + M.GetVertex(T.C)) / 3.0;
+		if (Slot == HutongGen::MatSlot_Stone && FVector2d(C.X - 0.5 * Side, C.Y - 0.5 * Side).Length() < 30.0
+			&& FMath::IsNearlyEqual(C.Z, P.GetFloorHeight(), 0.5)) ++CentreStone;
+		if (Slot != HutongGen::MatSlot_Floor) continue;
+		++Floor;
+		if (!UV->IsSetTriangle(tid)) { ++Unset; continue; }
+		FVector2f A, B, Cc;
+		UV->GetTriElements(tid, A, B, Cc);
+		if (FMath::Abs((B - A) ^ (Cc - A)) < 1e-8f) ++Collapsed;
+	}
+	TestTrue(FString::Printf(TEXT("the floor is paved (%d tris)"), Floor), Floor > 0);
+	TestEqual(TEXT("every floor triangle has the generator's UVs"), Unset, 0);
+	TestEqual(TEXT("no floor UV collapsed"), Collapsed, 0);
+	TestTrue(TEXT("a round stone at the centre"), CentreStone > 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRearHighWindowTest,
 	"HutongLayout.Openings.RearHighWindows",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FHutongRearHighWindowTest::RunTest(const FString& Parameters)
 {
-	// 高窗 in the 封護檐 back wall: the only light a row with its back to the lane gets from that side, and the height is what makes them allowable at all.
+	// 高窗 in the 封護檐 back wall: a lane-backed row's only light from that side; their height is what makes them allowable.
 	const double SizeX = 1300.0;
 	const double SizeY = 360.0;
 	const int32 N = 4;
@@ -1100,18 +1494,18 @@ bool FHutongRearHighWindowTest::RunTest(const FString& Parameters)
 
 	TestTrue(TEXT("the 高窗 change the wall"), Open.TriangleCount() != Blank.TriangleCount());
 
-	const double T = FMath::Clamp(P.WallThickness, 1.0, FMath::Min(SizeX, SizeY) * 0.2);
+	const double T = FMath::Clamp(P.GetRearWallThickness(), 1.0, FMath::Min(SizeX, SizeY) * 0.2);
 	const double Eave = FMath::Max(P.GetEaveHeight(), 10.0);
 	const double Head = Eave - P.RearWindowHeadDrop;
 	const double Sill = Head - P.RearWindowHeight;
 	const double ColR = FMath::Max(0.5 * P.GetColumnDiameter(), 1.0);
 
-	// Above head height, which is the whole point of putting them up there.
+	// Above head height, the point of placing them there.
 	TestTrue(FString::Printf(TEXT("the sill stands above head height (%.0f cm)"), Sill),
 		Sill >= 170.0);
 	TestTrue(TEXT("the head stays under the eave"), Head < Eave - 1.0);
 
-	// One to a bay, and each really is a hole: nothing of the wall — brick or plaster — may stand in the opening.
+	// One per bay, each a true hole: no brick or plaster in the opening.
 	for (int32 i = 0; i < N; ++i)
 	{
 		const double A = P.GetBayBoundary(i, N, SizeX, ColR);
@@ -1125,7 +1519,7 @@ bool FHutongRearHighWindowTest::RunTest(const FString& Parameters)
 			const UE::Geometry::FIndex3i Tri = Open.GetTriangle(tid);
 			const FVector3d C = (Open.GetVertex(Tri.A) + Open.GetVertex(Tri.B)
 				+ Open.GetVertex(Tri.C)) / 3.0;
-			// Only the back wall's own depth, and only well inside the opening.
+			// Back wall depth only, well inside the opening.
 			const int32 Slot = Open.Attributes()->GetMaterialID()->GetValue(tid);
 			if (Slot == HutongGen::MatSlot_Paper || Slot == HutongGen::MatSlot_Lattice) continue;
 			if (C.Y < SizeY - T + 0.5 || C.Y > SizeY - 0.5) continue;
@@ -1135,7 +1529,7 @@ bool FHutongRearHighWindowTest::RunTest(const FString& Parameters)
 		TestEqual(FString::Printf(TEXT("bay %d's 高窗 is open through the wall"), i), Blocking, 0);
 	}
 
-	// Independent of the rear eave. What the roof does at the back and what the wall carries are two questions, and a 正房 whose back gives onto its own 後院 takes an overhanging eave and still wants its light.
+	// Independent of the rear eave: a 正房 backing onto its 後院 has an overhanging eave and still wants the light.
 	UE::Geometry::FDynamicMesh3 Court, CourtBlank;
 	Build(true, EHutongRearEave::Courtyard, Court);
 	Build(false, EHutongRearEave::Courtyard, CourtBlank);
@@ -1157,22 +1551,24 @@ bool FHutongWindowRevealTest::RunTest(const FString& Parameters)
 	const int32 N = 5;
 
 	FHutongSiheyuanParams P;
-	// Every derived question below depends on the footprint, and the tool fills it in at spawn.
+	// Derived values below depend on the footprint and bay count, which the tool fills at spawn (the post's
+	// width is ⅔ of the column, which follows the 明間).
 	P.Width = SizeX;
 	P.Depth = SizeY;
+	P.BayCountOverride = N;
 
 	UE::Geometry::FDynamicMesh3 Mesh;
 	UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(
 		P, EHutongBaySide::MinusY, N, SizeX, SizeY, Mesh);
 
-	const double T = FMath::Clamp(P.WallThickness, 1.0, FMath::Min(SizeX, SizeY) * 0.2);
-	const double PT = FMath::Clamp(P.PostThickness, 1.0, T * 1.5);
+	const double T = FMath::Clamp(P.GetFacadeWallThickness(), 1.0, FMath::Min(SizeX, SizeY) * 0.2);
+	const double PT = FMath::Clamp(P.GetPostThickness(), 1.0, T * 1.5);
 	const double ColR = FMath::Max(0.5 * P.GetColumnDiameter(), 1.0);
 	const double Eave = FMath::Max(P.GetEaveHeight(), 10.0);
 	const double Floor = FMath::Clamp(P.GetFloorHeight(), 0.0, Eave * 0.5);
 	const double Head = FMath::Clamp(P.GetDoorTopHeight(), Floor + 10.0, Eave - 10.0);
 
-	// The post reaches the wall's inner face; the column only ever reaches its own radius past the facade plane.
+	// The post reaches the wall's inner face; the column only its radius past the facade plane.
 	TestTrue(TEXT("the column cannot fill the wall's depth by itself"), ColR < T);
 
 	for (int32 i = 1; i < N; ++i)
@@ -1198,13 +1594,278 @@ bool FHutongWindowRevealTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongHouseDoorwayTest,
+	"HutongLayout.Openings.HouseDoorway",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongHouseDoorwayTest::RunTest(const FString& Parameters)
+{
+	// 圖5-4-5 / 5-4-6: the 明間 is four 隔扇 with a 簾架 before the middle two. With the leaves open a walker
+	// passes the 風門's 門口 into the room; the fixed outer 隔扇 close the rest of the bay.
+	using namespace HutongCanon::House;
+	for (const TPair<const TCHAR*, FHouse>& Case : { TPair<const TCHAR*, FHouse>(TEXT("正房"), MainHall),
+		TPair<const TCHAR*, FHouse>(TEXT("廂房"), SideHouse), TPair<const TCHAR*, FHouse>(TEXT("倒座房"), FrontRow),
+		TPair<const TCHAR*, FHouse>(TEXT("耳房"), EarRoom) })
+	{
+		FHutongSiheyuanParams P = HutongPresets::MakeHouse(Case.Value);
+		const double SizeX = Case.Value.FrontageCm;
+		P.Width = SizeX;
+		const double SizeY = P.GetCanonicalDepth();
+		P.Depth = SizeY;
+		const int32 N = HutongGen::ComputeBayCount(SizeX, P.MinBayWidth, P.MaxBayWidth);
+		UE::Geometry::FDynamicMesh3 Mesh;
+		UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(P, EHutongBaySide::MinusY, N, SizeX, SizeY, Mesh);
+		UE::Geometry::FDynamicMeshAABBTree3 Tree(&Mesh);
+
+		const double T = FMath::Clamp(P.GetFacadeWallThickness(), 1.0, FMath::Min(SizeX, SizeY) * 0.2);
+		double FY = 0.0, RY = 0.0;
+		P.GetBuiltVerandaDepths(SizeY, T, FY, RY);
+		const double ColR = P.GetColumnRadius();
+		const int32 DoorIdx = P.GetDoorBayIndex(N);
+		// The door bay's clear opening: post faces, or a gable wall's inner face in an end bay.
+		const double PT = FMath::Clamp(P.GetPostThickness(), 1.0, T * 1.5);
+		const double TG = FMath::Clamp(P.GetGableWallThickness(), 1.0, FMath::Min(SizeX, SizeY) * 0.2);
+		const double B0 = (DoorIdx == 0) ? TG : P.GetBayBoundary(DoorIdx, N, SizeX, ColR) + 0.5 * PT;
+		const double B1 = (DoorIdx == N - 1) ? SizeX - TG : P.GetBayBoundary(DoorIdx + 1, N, SizeX, ColR) - 0.5 * PT;
+		const double Mid = 0.5 * (B0 + B1);
+		const double Floor = P.GetFloorHeight();
+
+		auto Blocked = [&](double X, double Z, double Reach)
+		{
+			const FRay3d Ray(FVector3d(X, -300.0, Z), FVector3d(0.0, 1.0, 0.0));
+			double Hit = 0.0; int32 Tri = -1;
+			return Tree.FindNearestHitTriangle(Ray, Hit, Tri) && Hit < 300.0 + Reach;
+		};
+		// A walker's width through the 門口, from over the 啞吧檻 (stepped over, like the 下檻) to a crouch's height.
+		const double Half = HutongCanon::Openings::WalkerRadiusCm - 1.0;
+		const double StepOver = Floor + P.GetLowerSillHeight() + HutongCanon::Joinery::CurtainDumbSill * (P.GetDoorLeafTopHeight() - Floor) + 1.0;
+		int32 Stopped = 0;
+		for (const double DX : { -Half, 0.0, Half })
+		{
+			for (double Z = StepOver; Z <= Floor + HutongGen::Passage::MinClearHeight; Z += 10.0)
+			{
+				Stopped += Blocked(Mid + DX, Z, FY + T + 40.0) ? 1 : 0;
+			}
+		}
+		TestEqual(FString::Printf(TEXT("%s: a walker passes the 風門 into the room"), Case.Key), Stopped, 0);
+		UE_LOG(LogTemp, Display, TEXT("%s"), *FString::Printf(TEXT("%s: 隔扇 %.0f wide, sill %.0f above the floor, 中檻 %.0f"),
+			Case.Key, P.GetGeshanWidth(), P.GetWindowSillHeight() - Floor, P.GetWindowTopHeight() - Floor));
+		// The outer 隔扇 stand shut in the door plane.
+		const double LeafW = (B1 - B0) / HutongCanon::Joinery::GeshanPerBay;
+		TestTrue(FString::Printf(TEXT("%s: the fixed 隔扇 close the bay's sides"), Case.Key),
+			Blocked(B0 + 0.6 * LeafW, Floor + 60.0, FY + T) && Blocked(B1 - 0.6 * LeafW, Floor + 60.0, FY + T));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongSillWallAndCorniceTest,
+	"HutongLayout.Detailing.SillWallAndCornice",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongSillWallAndCorniceTest::RunTest(const FString& Parameters)
+{
+	auto Build = [](FHutongSiheyuanParams P, UE::Geometry::FDynamicMesh3& M)
+	{
+		const double SX = P.SuggestedFrontage, SY = P.GetSuggestedDepth();
+		P.Width = SX; P.Depth = SY;
+		UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(P, EHutongBaySide::MinusY, 0, SX, SY, M);
+	};
+	auto SlotTris = [](const UE::Geometry::FDynamicMesh3& M, int32 Slot)
+	{
+		int32 N = 0;
+		const UE::Geometry::FDynamicMeshMaterialAttribute* Mat = M.Attributes() ? M.Attributes()->GetMaterialID() : nullptr;
+		for (int32 t : M.TriangleIndicesItr()) N += (Mat && Mat->GetValue(t) == Slot);
+		return N;
+	};
+
+	// p.90 / 圖5-3-10.1: a 海棠池子 lays one diagonal 方磚 field on each window bay's 檻牆.
+	{
+		const FHutongSiheyuanParams Plain = HutongPresets::MakeHouse(HutongCanon::House::SideHouse);
+		FHutongSiheyuanParams Pool = Plain;
+		Pool.SillWallFinish = EHutongSillWall::Pool;
+		UE::Geometry::FDynamicMesh3 A, B;
+		Build(Plain, A);
+		Build(Pool, B);
+		const int32 Bays = HutongGen::ComputeBayCount(Plain.SuggestedFrontage, Plain.MinBayWidth, Plain.MaxBayWidth);
+		TestEqual(TEXT("one 墻心 box per window bay"),
+			SlotTris(B, HutongGen::MatSlot_Floor) - SlotTris(A, HutongGen::MatSlot_Floor), 12 * (Bays - 1));
+	}
+
+	// 圖5-3-9: each 封護檐 cornice builds, and the drip course sits on its top course.
+	{
+		const FHutongSiheyuanParams Row = HutongPresets::MakeHouse(HutongCanon::House::FrontRow);
+		auto Reach = [&](EHutongSealedCornice Form, int32& OutTris)
+		{
+			FHutongSiheyuanParams P = Row;
+			P.RearCornice = Form;
+			UE::Geometry::FDynamicMesh3 M;
+			Build(P, M);
+			OutTris = M.TriangleCount();
+			double MaxY = -BIG_NUMBER;
+			for (int32 v : M.VertexIndicesItr()) MaxY = FMath::Max(MaxY, M.GetVertex(v).Y);
+			return MaxY;
+		};
+		int32 BaseTris = 0;
+		const double Base = Reach(EHutongSealedCornice::IceTray, BaseTris);
+		for (const TPair<EHutongSealedCornice, double>& Form : {
+			TPair<EHutongSealedCornice, double>(EHutongSealedCornice::Rounded, 13.0),
+			TPair<EHutongSealedCornice, double>(EHutongSealedCornice::Drawer, 13.0),
+			TPair<EHutongSealedCornice, double>(EHutongSealedCornice::SevenCourse, 17.0) })
+		{
+			int32 Tris = 0;
+			const double Y = Reach(Form.Key, Tris);
+			TestEqual(FString::Printf(TEXT("cornice %d: the drip course moves with the top course"), int32(Form.Key)),
+				Y - Base, Form.Value - 14.0, 0.5);
+			TestTrue(FString::Printf(TEXT("cornice %d builds its courses (%d tris)"), int32(Form.Key), Tris), Tris != BaseTris);
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongGoldColumnHeightTest,
+	"HutongLayout.Proportions.GoldColumnHeight",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongGoldColumnHeightTest::RunTest(const FString& Parameters)
+{
+	// 圖5-3-1/5-3-2: behind a 前廊 the 金柱 rise past the 檐柱 by what the roof climbs over the 廊, ceilinged
+	// house or 徹上明造 alike; the 橫陂 fill that height (p.104).
+	for (const bool bExposed : { false, true })
+	{
+		FHutongSiheyuanParams P = HutongPresets::MakeHouse(HutongCanon::House::SideHouse);
+		P.bExposedFrame = bExposed;
+		const double SX = P.SuggestedFrontage, SY = P.GetSuggestedDepth();
+		P.Width = SX; P.Depth = SY;
+		UE::Geometry::FDynamicMesh3 M;
+		UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(P, EHutongBaySide::MinusY, 0, SX, SY, M);
+
+		const double T = FMath::Clamp(P.GetFacadeWallThickness(), 1.0, FMath::Min(SX, SY) * 0.2);
+		double FY = 0.0, RY = 0.0;
+		P.GetBuiltVerandaDepths(SY, T, FY, RY);
+		const int32 N = HutongGen::ComputeBayCount(SX, P.MinBayWidth, P.MaxBayWidth);
+		const double ColR = P.GetColumnRadius();
+		const double B = P.GetBayBoundary(1, N, SX, ColR);
+		// Highest point of the 金柱 at the first interior boundary: vertices on its circle.
+		double Top = -BIG_NUMBER;
+		for (int32 v : M.VertexIndicesItr())
+		{
+			const FVector3d V = M.GetVertex(v);
+			const double R = FVector2d(V.X - B, V.Y - FY).Length();
+			if (R > 0.6 * ColR && R < ColR + 1.5) Top = FMath::Max(Top, V.Z);
+		}
+		const double Climb = 0.5 * FY;   // the 廊's first 步架 at 五舉, near enough
+		TestTrue(FString::Printf(TEXT("%s: 金柱 top %.0f stands over the 檐柱's %.0f by about the 廊's climb"),
+			bExposed ? TEXT("徹上明造") : TEXT("ceilinged"), Top, P.GetEaveHeight()),
+			Top > P.GetEaveHeight() + 0.6 * Climb);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongReviewFixesTest,
+	"HutongLayout.Detailing.ReviewFixes",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongReviewFixesTest::RunTest(const FString& Parameters)
+{
+	// A roof run open at its high end (carried on over the 耳房過道) with a rear eave that shows rafters: the rear
+	// 墀頭 closes the low corner, and none stands at the open end, inside the roof carried on.
+	{
+		FHutongSiheyuanParams P = HutongPresets::MakeHouse(HutongCanon::House::SideHouseSmall);
+		P.RearEave = EHutongRearEave::Courtyard;
+		P.Width = 600.0;
+		P.Depth = P.GetSuggestedDepth();
+		UE::Geometry::FDynamicMesh3 M;
+		HutongGen::AppendHouseRoofRun(M, P, 0.0, 600.0, /*bOpenLow*/ false, /*bOpenHigh*/ true, 0.0);
+		int32 Low = 0, High = 0;
+		for (int32 v : M.VertexIndicesItr())
+		{
+			const FVector3d V = M.GetVertex(v);
+			// Only a pier reaches the ground behind the rear wall.
+			if (V.Y > P.Depth + 1.0 && V.Z < 50.0) { Low += V.X < 100.0; High += V.X > 500.0; }
+		}
+		TestTrue(FString::Printf(TEXT("the rear 墀頭 closes the low corner (%d vertices)"), Low), Low > 0);
+		TestEqual(TEXT("and none stands at the open end"), High, 0);
+	}
+
+	// A pavilion's eave derives from its bay, so from the component's footprint.
+	{
+		UHutongPavilionBuildingComponent* C = NewObject<UHutongPavilionBuildingComponent>();
+		C->Width = C->Depth = 500.0;
+		FHutongPavilionParams Sized = C->Params;
+		Sized.Width = Sized.Depth = 500.0;
+		TestNearlyEqual(TEXT("the pavilion reports the eave of the size it stands at"), C->GetEaveHeight(), Sized.GetEaveHeight(), 0.01);
+		TestTrue(TEXT("which is not the params' default size's"), FMath::Abs(C->GetEaveHeight() - C->Params.GetEaveHeight()) > 1.0);
+	}
+
+	// A house held on a raised walk floor keeps its doorway: the headroom is bought above the held floor.
+	{
+		FHutongSiheyuanParams P = HutongPresets::MakeHouse(HutongCanon::House::SideHouse);
+		P.Width = P.SuggestedFrontage;
+		P.bDeriveEaveFromBays = false;
+		P.EaveHeight = 150.0;                 // asked far too low
+		P.FloorHeightHeldAt = 90.0;
+		const double Clear = P.GetMiddleRailHeight() - P.GetFloorHeight() - P.GetLowerSillHeight();
+		TestTrue(FString::Printf(TEXT("the doorway under the 中檻 clears a crouch on the held floor (%.0f cm)"), Clear),
+			Clear >= HutongGen::Passage::MinClearHeight - 0.5);
+	}
+
+	// A 徹上明造 house dragged off its 步架: the 金柱 stand on the frame's line, where its beams land.
+	{
+		FHutongSiheyuanParams P = HutongPresets::MakeHouse(HutongCanon::House::SideHouse);
+		P.bExposedFrame = true;
+		const double SX = P.SuggestedFrontage, SY = 1.2 * P.GetSuggestedDepth();
+		P.Width = SX; P.Depth = SY;
+		UE::Geometry::FDynamicMesh3 M;
+		UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(P, EHutongBaySide::MinusY, 0, SX, SY, M);
+		const HutongGen::FrameLayout::FLayout L = HutongGen::FrameLayout::Make(P);
+		const int32 N = HutongGen::ComputeBayCount(SX, P.MinBayWidth, P.MaxBayWidth);
+		const double ColR = P.GetColumnRadius();
+		const double B = P.GetBayBoundary(1, N, SX, ColR);
+		auto RingAt = [&](double Y)
+		{
+			int32 Hits = 0;
+			for (int32 v : M.VertexIndicesItr())
+			{
+				const FVector3d V = M.GetVertex(v);
+				const double R = FVector2d(V.X - B, V.Y - Y).Length();
+				Hits += (V.Z < 50.0 && R > 0.6 * ColR && R < ColR + 1.5);
+			}
+			return Hits;
+		};
+		TestTrue(TEXT("the frame has its 前廊"), L.bFrontVeranda);
+		TestTrue(TEXT("a 金柱 stands on the frame's 廊 line"), RingAt(L.Y[L.Front]) > 0);
+		TestEqual(TEXT("and none on the preset's 步架"), RingAt(P.GetVerandaDepth()), 0);
+
+		// One source: the plan, the tool preview and the compound read the same line the mesh stands on.
+		const double T = FMath::Clamp(P.GetFacadeWallThickness(), 1.0, FMath::Min(SX, SY) * 0.2);
+		double FY = 0.0, RY = 0.0;
+		P.GetBuiltVerandaDepths(SY, T, FY, RY);
+		TestNearlyEqual(TEXT("GetBuiltVerandaDepths gives the frame's line"), FY, L.Y[L.Front], 0.01);
+
+		// A shallow 前後廊 house: each 廊 a whole step or none, the two never more than the room holds.
+		FHutongSiheyuanParams Shallow = HutongPresets::MakeHouse(HutongCanon::House::MainHall);
+		Shallow.bExposedFrame = true;
+		Shallow.Width = Shallow.SuggestedFrontage;
+		const double SD = 300.0;
+		Shallow.Depth = SD;
+		double SF = 0.0, SR = 0.0;
+		Shallow.GetBuiltVerandaDepths(SD, T, SF, SR);
+		const double Step = SD / (HutongGen::Jiajia::PurlinCount(Shallow.Purlins) - 1);
+		const double Room = SD - 2.0 * T - 100.0;
+		TestTrue(FString::Printf(TEXT("shallow: front %.0f and rear %.0f are whole steps (%.0f) or none"), SF, SR, Step),
+			(SF == 0.0 || FMath::IsNearlyEqual(SF, Step, 0.01)) && (SR == 0.0 || FMath::IsNearlyEqual(SR, Step, 0.01)));
+		TestTrue(FString::Printf(TEXT("shallow: together within the room (%.0f of %.0f)"), SF + SR, Room), SF + SR <= Room + 0.01);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongWallGardenDoorwayTest,
 	"HutongLayout.Walls.GardenDoorway",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FHutongWallGardenDoorwayTest::RunTest(const FString& Parameters)
 {
-	// 月亮門 and its relatives are the 什錦窗's trick carried to the ground.
+	// 月亮門 and relatives: the 什錦窗 idea carried to the ground.
 	auto Build = [](EHutongWallDoorway Shape, EHutongWallRole Role, UE::Geometry::FDynamicMesh3& M)
 	{
 		FHutongWallParams P;
@@ -1233,18 +1894,18 @@ bool FHutongWallGardenDoorwayTest::RunTest(const FString& Parameters)
 
 		TestTrue(Name + TEXT(" builds geometry"), M.TriangleCount() > Blank.TriangleCount());
 
-		// A 月亮門 is a circle, so it takes its width from its height whatever the width field says.
+		// A 月亮門 is a circle: width comes from height, whatever the width field says.
 		if (Shape == EHutongWallDoorway::Moon)
 		{
 			TestEqual(TEXT("a 月亮門 is as wide as its outline is tall"),
 				P.GetDoorwayWidth(), P.GetDoorwaySpan());
 		}
 
-		// The wall grows to carry it, exactly as it grows for a 牆垣式門 too short to walk through.
+		// The wall grows to carry it, as for a too-short 牆垣式門.
 		TestTrue(Name + TEXT(" leaves the wall tall enough to hold it"),
 			P.GetHeight() >= P.GetDoorwayHeight() + P.DoorwaySurroundWidth + 10.0 - 0.01);
 
-		// Nothing stands inside the outline between the sill and the head.
+		// Nothing inside the outline between sill and head.
 		const double Cx = P.DoorwayPosition * P.Length;
 		const double HalfW = 0.5 * P.GetDoorwayWidth();
 		const double Top = P.GetDoorwayHeight();
@@ -1261,7 +1922,7 @@ bool FHutongWallGardenDoorwayTest::RunTest(const FString& Parameters)
 		}
 		TestEqual(Name + TEXT(" leaves the opening clear of masonry"), Intruding, 0);
 
-		// And a 院牆 refuses it while the role derives.
+		// A 院牆 refuses it while the role derives.
 		UE::Geometry::FDynamicMesh3 Lane;
 		Build(Shape, EHutongWallRole::Perimeter, Lane);
 		UE::Geometry::FDynamicMesh3 LaneBlank;
@@ -1270,10 +1931,8 @@ bool FHutongWallGardenDoorwayTest::RunTest(const FString& Parameters)
 			Lane.TriangleCount(), LaneBlank.TriangleCount());
 	}
 
-	// A flush 下鹼 is a course with no projection, not an absent course. The band beside the opening
-	// used to be emitted only when it stood proud, so setting the projection to zero — which the
-	// panel offers and calls flush — cut a full-depth hole through the wall either side of the
-	// doorway, from the sill up to the course's own height.
+	// A flush 下鹼 is a zero-projection course, not a missing one. The band beside the opening was once
+	// emitted only when proud, so zero projection cut a full-depth hole either side of the doorway.
 	{
 		auto WallAt = [](double Projection, UE::Geometry::FDynamicMesh3& M)
 		{
@@ -1283,8 +1942,7 @@ bool FHutongWallGardenDoorwayTest::RunTest(const FString& Parameters)
 			P.Length = 900.0;
 			P.DoorwayPosition = 0.5;
 			P.BaseCourseProjection = Projection;
-			// No surround: its own rows lap over the reveal, and they would answer the probe below
-			// for masonry that is not there.
+			// No surround: its rows lap over the reveal and would answer the probe for absent masonry.
 			P.DoorwaySurroundWidth = 0.0;
 			HutongGen::BuildWall(M, P);
 			return P;
@@ -1294,8 +1952,8 @@ bool FHutongWallGardenDoorwayTest::RunTest(const FString& Parameters)
 		const FHutongWallParams P = WallAt(0.0, Flush);
 		WallAt(8.0, Proud);
 
-		// The reveal: inside the opening's own bounding span, in the band the course occupies.
-		// Only the doorway's rows put masonry there — the wall's own runs stop at the opening.
+		// Reveal: inside the opening's span, in the course's band. Only doorway rows put masonry there; wall
+		// runs stop at the opening.
 		const double Sill = FMath::Clamp(P.DoorwaySillHeight, 0.0, 40.0);
 		const double BaseTop = FMath::Clamp(
 			FMath::Clamp(P.GetBaseCourseHeight(), 0.0, P.GetHeight() * 0.6), Sill, P.GetDoorwayHeight());
@@ -1319,7 +1977,7 @@ bool FHutongWallGardenDoorwayTest::RunTest(const FString& Parameters)
 			RevealVerts(Flush) > 0);
 	}
 
-	// 牆垣式垂花門: the dressing is the ornament of a 垂花門 with none of its frame, and the whole reason it is a separate thing from the 牆垣式門 is that it does not touch the roof line.
+	// 牆垣式垂花門: 垂花門 ornament without its frame; unlike the 牆垣式門 it leaves the roof line untouched.
 	{
 		auto TopAndTris = [](bool bDress, int32& OutTris)
 		{
@@ -1351,7 +2009,7 @@ bool FHutongWallGardenDoorwayTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the 垂花 dressing does not raise the wall's top line"),
 			DressTop, PlainTop, 0.01);
 
-		// And it hangs below the cap rather than reaching into it.
+		// It hangs below the cap, never into it.
 		auto ProudAboveBody = [](bool bDress)
 		{
 			FHutongWallParams P;
@@ -1388,7 +2046,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongWallRoleTest,
 
 bool FHutongWallRoleTest::RunTest(const FString& Parameters)
 {
-	// A 院牆 keeps the lane out and a 隔牆 divides one household's own courts, and the whole point of the distinction is that the second is the lower of the two.
+	// 院牆 keeps the lane out, 隔牆 divides one household's courts; the 隔牆 must be the lower.
 	auto TopOf = [](EHutongWallRole Role, bool bDerive, double& OutThickness)
 	{
 		FHutongWallParams P;
@@ -1418,16 +2076,16 @@ bool FHutongWallRoleTest::RunTest(const FString& Parameters)
 	TestTrue(FString::Printf(TEXT("院牆 is the thicker (%.0f vs %.0f cm)"), PerimT, CourtT),
 		PerimT > CourtT);
 
-	// The claim the whole role rests on: the inner gate rises clear of the wall it stands in.
+	// The role's core claim: the inner gate rises clear of its wall.
 	const double GateEave = FHutongInnerGateParams().GetEaveHeight();
 	TestTrue(FString::Printf(TEXT("垂花門 clears its 隔牆 (eave %.0f over wall top %.0f)"),
 			GateEave, CourtTop),
 		GateEave > CourtTop);
 
-	// And a 院牆 is still private: above eye height by a clear margin, which 240 cm was not.
+	// A 院牆 stays private: clearly above eye height (240 cm was not).
 	TestTrue(FString::Printf(TEXT("院牆 is not seen over (%.0f cm)"), PerimTop), PerimTop > 300.0);
 
-	// 什錦窗 belong to a wall inside the household.
+	// 什錦窗 belong to walls inside the household.
 	auto LatticeTris = [](EHutongWallRole Role, double RunLength, double BaseCourse = -1.0)
 	{
 		FHutongWallParams P;
@@ -1450,16 +2108,16 @@ bool FHutongWallRoleTest::RunTest(const FString& Parameters)
 
 	TestTrue(TEXT("隔牆 carries 什錦窗"), LatticeTris(EHutongWallRole::Courtyard, 1400.0) > 0);
 	TestEqual(TEXT("院牆 is blank"), LatticeTris(EHutongWallRole::Perimeter, 1400.0), 0);
-	// The count follows the run, so a longer wall gains windows rather than wider gaps.
+	// Count follows the run: a longer wall gains windows, not wider gaps.
 	TestTrue(TEXT("a longer 隔牆 carries more of them"),
 		LatticeTris(EHutongWallRole::Courtyard, 2800.0)
 			> LatticeTris(EHutongWallRole::Courtyard, 1400.0));
 
-	// The opening has to fit in the field of brick between the 下鹼 and the cap, and it silently does not get built when it cannot.
+	// The opening must fit between 下鹼 and cap, and is silently skipped when it cannot.
 	TestTrue(TEXT("隔牆 with a third-height 下鹼 still carries them"),
 		LatticeTris(EHutongWallRole::Courtyard, 1400.0, 80.0) > 0);
 
-	// Derivation off puts both roles back on the same authored numbers.
+	// Derivation off: both roles use the same authored numbers.
 	double OffP = 0.0, OffC = 0.0;
 	const double OffPerim = TopOf(EHutongWallRole::Perimeter, false, OffP);
 	const double OffCourt = TopOf(EHutongWallRole::Courtyard, false, OffC);
@@ -1474,14 +2132,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCompoundCorridorTest,
 
 bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 {
-	// Pure arithmetic over the plot, so this needs no world and no mesh.
+	// Pure plot arithmetic: no world, no mesh.
 	auto Corridors = [](EHutongCompoundPlan Plan, double W, double D)
 	{
 		HutongGen::FCompoundInput In;
 		In.Plan = Plan;
 		In.Width = W;
 		In.Depth = D;
-		// Asked for outright: the plan's own default is 前廊 on the 廂房.
+		// Asked for explicitly: the plan's default is 前廊 on the 廂房.
 		In.CourtWalk = EHutongCourtWalk::Corridor;
 
 		TArray<FHutongCompoundSlot> Slots = HutongGen::LayOutCompound(In);
@@ -1489,7 +2147,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 			{ return S.Piece == EHutongCompoundPiece::Corridor; });
 	};
 
-	// A 抄手遊廊 is not a small compound's. A 一進四合院 has an open yard you cross in the rain; the covered walk belongs to a household with a proper inner court, and it needs the same 二進 plan the 垂花門 does.
+	// No 抄手遊廊 in a 一進四合院 (open yard); it needs a proper inner court, the same 二進 plan as the 垂花門.
 	const TArray<FHutongCompoundSlot> One = Corridors(EHutongCompoundPlan::OneCourtyard, 3200.0, 5200.0);
 	TestEqual(TEXT("一進 carries no 遊廊"), One.Num(), 0);
 
@@ -1501,12 +2159,12 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 	for (const FHutongCompoundSlot& S : Two) if (S.bLengthAlongY) ++AlongY;
 	TestEqual(TEXT("two of the five run down the court"), AlongY, 2);
 
-	// Every run benches toward the court, so which are flipped depends on which side of the ring they are on.
+	// Every run benches toward the court, so flips depend on the ring side.
 	int32 Flipped = 0;
 	for (const FHutongCompoundSlot& S : Two) if (S.bFlipOpenSide) ++Flipped;
 	TestTrue(TEXT("the ring is not uniformly oriented"), Flipped > 0 && Flipped < Two.Num());
 
-	// The four sides abut rather than overlap at the corners, so no two runs share plan area.
+	// Sides abut at the corners, never share plan area.
 	for (int32 i = 0; i < Two.Num(); ++i)
 	{
 		for (int32 j = i + 1; j < Two.Num(); ++j)
@@ -1519,7 +2177,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// The 正房's frontage is left clear.
+	// The 正房 frontage stays clear.
 	{
 		const TArray<FHutongCompoundSlot> All =
 			HutongGen::LayOutCompound([]{ HutongGen::FCompoundInput I;
@@ -1534,7 +2192,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 		for (const FHutongCompoundSlot& S : All)
 		{
 			if (S.Piece != EHutongCompoundPiece::Corridor) continue;
-			// The north band is whatever reaches the hall's own front line; the returns down at the 垂花門 pass the hall's X range and are nowhere near it.
+			// North band = whatever reaches the hall's front line; the returns at the 垂花門 pass the hall's X range far from it.
 			if (S.Min.Y + S.Size.Y < Hall->Min.Y - 0.01) continue;
 			++North;
 			const bool bClearOfHall = S.Min.X + S.Size.X <= Hall->Min.X + 0.01
@@ -1543,7 +2201,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 		}
 		TestEqual(TEXT("a link in front of each 耳房"), North, 2);
 
-		// And the 甬路 reaches the steps it is aimed at.
+		// The 甬路 reaches the steps it aims at.
 		const TArray<FHutongCompoundSlot> Spine = All.FilterByPredicate(
 			[](const FHutongCompoundSlot& S)
 				{ return S.Piece == EHutongCompoundPiece::Path && S.Size.Y > S.Size.X; });
@@ -1552,7 +2210,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 			Spine[0].Min.Y + Spine[0].Size.Y >= Hall->Min.Y - 1.0);
 	}
 
-	// And the ring still leaves a courtyard.
+	// The ring still leaves a courtyard.
 	{
 		HutongGen::FCompoundInput Tight;
 		Tight.Plan = EHutongCompoundPlan::TwoCourtyards;
@@ -1565,7 +2223,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 		const TArray<FHutongCompoundSlot> Ring = HutongGen::LayOutCompound(Tight)
 			.FilterByPredicate([](const FHutongCompoundSlot& S)
 				{ return S.Piece == EHutongCompoundPiece::Corridor; });
-		// At the minimum the hall's 耳房 are as narrow as they go.
+		// At minimum the hall's 耳房 are narrowest.
 		if (!TestEqual(TEXT("the minimum plot seats the ring's four sides"), Ring.Num(), 4)) return false;
 
 		TArray<FHutongCompoundSlot> Sides = Ring.FilterByPredicate(
@@ -1582,7 +2240,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 			ClearD >= Tight.MinCourtyardDepth - 1.0);
 	}
 
-	// 正房三間兩耳: the hall's own frontage in the middle with a shallower 耳房 at each flank.
+	// 正房三間兩耳: hall frontage centred, a shallower 耳房 each flank.
 	{
 		HutongGen::FCompoundInput Back;
 		Back.Plan = EHutongCompoundPlan::TwoCourtyards;
@@ -1597,7 +2255,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 
 		if (!TestNotNull(TEXT("there is a 正房"), (void*)Hall)) return false;
 
-		// The hall's own two are the ones with their backs on the plot's north edge; the other four are the 廂耳房 filling the inner court's corners.
+		// The hall's two back onto the plot's north edge; the other four are 廂耳房 in the inner court's corners.
 		const double Back0 = Back.Depth;
 		TArray<FHutongCompoundSlot> HallEars, WingEars;
 		for (const FHutongCompoundSlot& E : Ears)
@@ -1614,7 +2272,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the hall is centred"),
 			FMath::IsNearlyEqual(Hall->Min.X + 0.5 * Hall->Size.X, 0.5 * Back.Width, 0.01));
 
-		// 廂耳房 close the inner court's south corners, one to a wing, hard against the cross wall.
+		// 廂耳房 close the inner court's south corners, one per wing, against the cross wall.
 		const TArray<FHutongCompoundSlot> Wings = Slots.FilterByPredicate(
 			[](const FHutongCompoundSlot& S) { return S.Piece == EHutongCompoundPiece::SideHouse; });
 		if (!TestEqual(TEXT("two 廂房"), Wings.Num(), 2)) return false;
@@ -1625,7 +2283,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 			TestTrue(TEXT("a 廂耳房 is shallower than its 廂房"), E.Size.X < Wings[0].Size.X - 1.0);
 		}
 
-		// The 廂房 does not run the court's whole length.
+		// The 廂房 does not span the court's length.
 		for (const FHutongCompoundSlot& Wing : Wings)
 		{
 			const bool bEarBefore = WingEars.ContainsByPredicate([&](const FHutongCompoundSlot& E)
@@ -1636,11 +2294,11 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 				bEarBefore && !bEarAfter);
 		}
 
-		// 小天井: the pocket between the 耳房's front and the north end of the 廂房 range, closed off from the court by a 隔牆 so it reads as a light well.
+		// 小天井: pocket between 耳房 front and 廂房 north end, closed from the court by a 隔牆 as a light well.
 		if (WingEars.Num() > 0)
 		{
 			const double EarFront = HallEars[0].Min.Y;
-			// The well starts at the 廂房's own north gable now that no room stands up there.
+			// The well starts at the 廂房 north gable.
 			double WingNorth = 0.0;
 			for (const FHutongCompoundSlot& Wing : Wings)
 			{
@@ -1661,7 +2319,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 					TestTrue(TEXT("the well closes on the 耳房's front"),
 						FMath::IsNearlyEqual(Well->Min.Y + Well->Size.Y, EarFront, 0.5));
 					TestTrue(TEXT("the well can be got into"), Well->WallGateAt >= 0.0);
-					// On the 廂房's own inner face.
+					// On the 廂房 inner face.
 					const bool bOnWing = Wings.ContainsByPredicate(
 						[&](const FHutongCompoundSlot& Wing)
 						{
@@ -1674,7 +2332,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// 十字甬路: a spine to the hall's steps and an arm across to each 廂房.
+	// 十字甬路: spine to the hall steps, an arm to each 廂房.
 	HutongGen::FCompoundInput Paths;
 	Paths.Plan = EHutongCompoundPlan::TwoCourtyards;
 	Paths.Width = 3200.0;
@@ -1684,7 +2342,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 			{ return S.Piece == EHutongCompoundPiece::Path; });
 	if (!TestEqual(TEXT("甬路 is a cross, not a single run"), P.Num(), 3)) return false;
 
-	// The arms abut the spine rather than crossing it.
+	// Arms abut the spine, never cross it.
 	int32 Spines = 0;
 	for (const FHutongCompoundSlot& S : P) if (S.Size.Y > S.Size.X) ++Spines;
 	TestEqual(TEXT("one spine and two arms"), Spines, 1);
@@ -1735,7 +2393,7 @@ bool FHutongCompoundEntryTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("and it stands square in front of it"),
 		Off <= 0.5 * (Screen->Size.X - Gate->Size.X) + 1.0);
 
-	// The compartment: a 隔牆 up each side, standing on the street row's inner face.
+	// Compartment: a 隔牆 each side, on the street row's inner face.
 	const double RowFace = FMath::Max(Row->Size.Y, Gate->Size.Y);
 	TArray<const FHutongCompoundSlot*> OnRow;
 	for (const FHutongCompoundSlot& S : Slots)
@@ -1761,13 +2419,13 @@ bool FHutongCompoundEntryTest::RunTest(const FString& Parameters)
 	for (const FHutongCompoundSlot* C : Cheeks)
 	{
 		if (C->WallGateAt >= 0.0) ++Doors;
-		// They run the full depth of the 外院 to the wall the screen is on.
+		// They run the 外院's full depth to the screen's wall.
 		TestTrue(TEXT("a cheek reaches the wall the screen backs onto"),
 			C->Min.Y + C->Size.Y >= Screen->Min.Y + Screen->Size.Y - 15.0);
 	}
 	TestEqual(TEXT("both cheeks carry a doorway"), Doors, 2);
 
-	// And the 外院's far end is partitioned off as a service yard, with its own doorway.
+	// The 外院's far end is a service yard with its own doorway.
 	if (!TestEqual(TEXT("the 外院 is divided once"), Partitions.Num(), 1)) return false;
 	TestTrue(TEXT("the partition carries a doorway"), Partitions[0]->WallGateAt >= 0.0);
 	TestTrue(TEXT("the partition stands beyond the gate court"),
@@ -1776,7 +2434,7 @@ bool FHutongCompoundEntryTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the partition runs from the street row inward"),
 		FMath::IsNearlyEqual(Partitions[0]->Min.Y, RowFace, 0.5)
 			&& Partitions[0]->Size.Y > 150.0);
-	// That every slot sits inside the plot is HutongLayout.Compound.Enclosure's, at three plot sizes.
+	// Slots inside the plot: see HutongLayout.Compound.Enclosure (three plot sizes).
 	return true;
 }
 
@@ -1786,7 +2444,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCompoundScreenBackingTest,
 
 bool FHutongCompoundScreenBackingTest::RunTest(const FString& Parameters)
 {
-	// 座山影壁: the screen's back is the cross wall the 垂花門 stands in.
+	// 座山影壁: the screen's back is the 垂花門's cross wall.
 	HutongGen::FCompoundInput In;
 	In.Plan = EHutongCompoundPlan::TwoCourtyards;
 	In.Width = 3200.0;
@@ -1800,7 +2458,7 @@ bool FHutongCompoundScreenBackingTest::RunTest(const FString& Parameters)
 	if (!TestNotNull(TEXT("there is a 影壁"), (void*)Screen)) return false;
 	if (!TestNotNull(TEXT("there is a 垂花門"), (void*)Inner)) return false;
 
-	// The cross wall: the 隔牆 runs across the plot, one either side of the 垂花門.
+	// Cross wall: a 隔牆 across the plot either side of the 垂花門.
 	TArray<const FHutongCompoundSlot*> Cross;
 	for (const FHutongCompoundSlot& S : Slots)
 	{
@@ -1817,7 +2475,7 @@ bool FHutongCompoundScreenBackingTest::RunTest(const FString& Parameters)
 			FMath::IsNearlyEqual(C->Min.Y, CrossFace, 0.5));
 	}
 
-	// The footprint has to reach that face and go past it.
+	// The footprint reaches past that face.
 	const double Back = Screen->Min.Y + Screen->Size.Y;
 	const double Over = Back - CrossFace;
 	TestTrue(FString::Printf(
@@ -1856,7 +2514,7 @@ bool FHutongCourtyardFurnishingTest::RunTest(const FString& Parameters)
 		}
 	};
 
-	// 花池: a kerb retaining earth.
+	// 花池: kerb retaining earth.
 	{
 		UE::Geometry::FDynamicMesh3 Mesh;
 		FHutongFlowerBedParams P;
@@ -1868,21 +2526,21 @@ bool FHutongCourtyardFurnishingTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("花池 retains earth"), Counts[HutongGen::MatSlot_Earth] > 0);
 		TestTrue(TEXT("花池 has a kerb"), Counts[HutongGen::MatSlot_BaseCourse] > 0);
 
-		// The soil sits below the kerb's top, or the two share a plane across the whole bed.
+		// Soil below the kerb top, else the two share a plane across the bed.
 		double TopKerb = -BIG_NUMBER;
 		for (int32 vid : Mesh.VertexIndicesItr()) TopKerb = FMath::Max(TopKerb, Mesh.GetVertex(vid).Z);
 		TestTrue(TEXT("the kerb stands above the soil"),
 			TopKerb >= P.KerbHeight - 0.01);
 	}
 
-	// 魚缸: a solid of revolution, so the check that matters is that the sweep closed.
+	// 魚缸: a solid of revolution, so the check is that the sweep closed.
 	{
 		UE::Geometry::FDynamicMesh3 Mesh;
 		FHutongWaterJarParams P;
 		UHutongWaterJarBuildingComponent::BuildWaterJarMesh(P, Mesh);
 		if (!TestTrue(TEXT("魚缸 builds"), Mesh.TriangleCount() > 0)) return false;
 
-		// It stands within its own declared footprint.
+		// Within its declared footprint.
 		const double Span = P.GetFootprint();
 		for (int32 vid : Mesh.VertexIndicesItr())
 		{
@@ -1900,14 +2558,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCompoundSlotAxisTest,
 
 bool FHutongCompoundSlotAxisTest::RunTest(const FString& Parameters)
 {
-	// A line-like slot states its own run direction, and it has to match its shape.
+	// A line-like slot states its run direction, matching its shape.
 	for (EHutongCompoundPlan Plan :
 		{ EHutongCompoundPlan::OneCourtyard, EHutongCompoundPlan::TwoCourtyards,
 		  EHutongCompoundPlan::ThreeCourtyards })
 	{
 		HutongGen::FCompoundInput In;
 		In.Plan = Plan;
-		// Sized off the plan's own minimum.
+		// Sized off the plan's minimum.
 		double MinW, MinD;
 		In.GetMinimumPlot(MinW, MinD);
 		In.Width = MinW + 400.0;
@@ -1925,7 +2583,7 @@ bool FHutongCompoundSlotAxisTest::RunTest(const FString& Parameters)
 				|| S.Piece == EHutongCompoundPiece::ScreenWall;
 			if (!bLineLike) continue;
 
-			// A run is by construction longer than it is thick; anything else means the slot came out square enough that "whichever is longer" was never a safe way to ask.
+			// A run is longer than thick by construction; otherwise the slot came out too square for "whichever is longer" to be safe.
 			TestTrue(FString::Printf(
 					TEXT("piece %d at (%.0f,%.0f) size (%.0f,%.0f) runs the way it says"),
 					int32(S.Piece), S.Min.X, S.Min.Y, S.Size.X, S.Size.Y),
@@ -1941,7 +2599,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCompoundRearCourtTest,
 
 bool FHutongCompoundRearCourtTest::RunTest(const FString& Parameters)
 {
-	// 三進: a 後院 behind the 正房 closed at the back by the 後罩房, reached by a 過道 at the plot edge past the 耳房 on the gate's own side.
+	// 三進: a 後院 behind the 正房, closed by the 後罩房, reached by a plot-edge 過道 past the gate-side 耳房.
 	HutongGen::FCompoundInput In;
 	In.Plan = EHutongCompoundPlan::ThreeCourtyards;
 	double MinW, MinD;
@@ -1952,7 +2610,7 @@ bool FHutongCompoundRearCourtTest::RunTest(const FString& Parameters)
 	const TArray<FHutongCompoundSlot> Slots = HutongGen::LayOutCompound(In);
 	if (!TestTrue(TEXT("the 三進 plan lays out"), Slots.Num() > 0)) return true;
 
-	// The 後罩房 closes the back: full width, its own back on the plot's north edge.
+	// 後罩房 closes the back: full width, back on the plot's north edge.
 	int32 RearRows = 0;
 	double RearFront = 0.0;
 	for (const FHutongCompoundSlot& S : Slots)
@@ -1968,7 +2626,7 @@ bool FHutongCompoundRearCourtTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("exactly one 後罩房"), RearRows, 1);
 
-	// The hall row's own north face, and the court between it and the 後罩房.
+	// Hall row north face and the court to the 後罩房.
 	double HallNorth = 0.0;
 	for (const FHutongCompoundSlot& S : Slots)
 	{
@@ -1980,8 +2638,8 @@ bool FHutongCompoundRearCourtTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("there is a 後院 between the hall row and the 後罩房"),
 		RearFront - HallNorth > 150.0);
 
-	// Both 耳房 run out to their boundary; the way through to the 後院 is cut through the one on the
-	// gate's side, which is that type's whole job (四合院: the hall keeps the axis).
+	// Both 耳房 run to the boundary; the way to the 後院 cuts through the gate-side one, that type's job
+	// (四合院: the hall keeps the axis).
 	int32 Ears = 0, Passages = 0;
 	double PassageAt = -1.0;
 	for (const FHutongCompoundSlot& S : Slots)
@@ -1999,18 +2657,18 @@ bool FHutongCompoundRearCourtTest::RunTest(const FString& Parameters)
 		{
 			++Passages;
 			PassageAt = bLow ? 0.0 : In.Width;
-			// Wide enough to be a room and a way through: the layout refuses the ears otherwise.
+			// Wide enough for room and passage; the layout refuses the ears otherwise.
 			TestTrue(TEXT("the 耳房過道 seats its room beside the way"),
 				S.Size.X >= In.MinEarRoomFrontage + In.PassageWidth - 1.0);
 		}
 	}
 	TestEqual(TEXT("an 耳房 on each flank"), Ears, 2);
 	TestEqual(TEXT("exactly one of them carries the 過道"), Passages, 1);
-	// East is local -X, so the gate's side is the low-X end when the gate is at the east.
+	// East is local -X: gate at east means gate side is the low-X end.
 	TestTrue(TEXT("the 過道 is on the gate's own side"),
 		In.bGateAtEastEnd ? (PassageAt == 0.0) : (PassageAt == In.Width));
 
-	// The hall keeps the plot's axis, whichever flank the way through is on.
+	// The hall keeps the plot axis on either flank.
 	for (const FHutongCompoundSlot& S : Slots)
 	{
 		if (S.Piece != EHutongCompoundPiece::MainHall) continue;
@@ -2018,13 +2676,13 @@ bool FHutongCompoundRearCourtTest::RunTest(const FString& Parameters)
 			S.Min.X + 0.5 * S.Size.X, 0.5 * In.Width, 1.0);
 	}
 
-	// Nothing stands in a strip beside the ear room any more: the 耳房過道 builds its own roof and walls.
+	// No strip beside the ear room: the 耳房過道 builds its own roof and walls.
 	for (const FHutongCompoundSlot& S : Slots)
 	{
 		TestTrue(TEXT("no separate 過道 roof"), S.Piece != EHutongCompoundPiece::Passage);
 	}
 
-	// And no other plan grows one: the 後罩房 belongs to the 三進 alone.
+	// No other plan has one: the 後罩房 is 三進 only.
 	for (EHutongCompoundPlan Plan :
 		{ EHutongCompoundPlan::OneCourtyard, EHutongCompoundPlan::TwoCourtyards })
 	{
@@ -2049,7 +2707,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCompoundWallJunctionsTest,
 
 bool FHutongCompoundWallJunctionsTest::RunTest(const FString& Parameters)
 {
-	// An internal wall meeting the perimeter must stop inside it, never on the plot boundary.
+	// An internal wall meeting the perimeter stops inside it, never on the plot boundary.
 	for (EHutongCompoundPlan Plan :
 		{ EHutongCompoundPlan::OneCourtyard, EHutongCompoundPlan::TwoCourtyards,
 		  EHutongCompoundPlan::ThreeCourtyards })
@@ -2062,7 +2720,7 @@ bool FHutongCompoundWallJunctionsTest::RunTest(const FString& Parameters)
 		In.Depth = MinD + 400.0;
 		const double T = In.WallThickness;
 
-		// An end either stops at or before the perimeter's inner face.
+		// An end stops at or before the perimeter's inner face.
 		auto EndIsSound = [&](double End, double Extent)
 		{
 			const bool bNearLow  = End < T - 0.01;
@@ -2084,7 +2742,7 @@ bool FHutongCompoundWallJunctionsTest::RunTest(const FString& Parameters)
 				TEXT("隔牆 at (%.1f,%.1f) size (%.1f,%.1f)"),
 				S.Min.X, S.Min.Y, S.Size.X, S.Size.Y);
 
-			// Only the ends matter: a run's thickness never reaches the boundary on its own.
+			// Ends only: a run's thickness never reaches the boundary alone.
 			if (S.bLengthAlongY)
 			{
 				TestTrue(Where + TEXT(" starts clear of the plot's south edge"),
@@ -2108,9 +2766,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCorridorFootprintTest,
 	"HutongLayout.Compound.CorridorFootprint",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-// A slot is reserved from GetFootprintDepth and the mesh is laid in it, so a platform deeper than
-// that figure is a run standing in the building it was laid against — and asymmetrically, since a
-// flipped run yaws about half the reported depth.
+// Slots reserve GetFootprintDepth, so a deeper platform intrudes into its neighbour, asymmetrically,
+// since a flipped run yaws about half the reported depth.
 bool FHutongCorridorFootprintTest::RunTest(const FString& Parameters)
 {
 	for (const bool bClosed : { false, true })
@@ -2126,8 +2783,7 @@ bool FHutongCorridorFootprintTest::RunTest(const FString& Parameters)
 			UHutongCorridorBuildingComponent::BuildCorridorMesh(
 				P, P.Length, /*bAlongY*/ false, /*bFlip*/ false, M);
 
-			// The 臺基 and everything standing on it, not the roof: an eave oversails its own
-			// footprint here as it does everywhere, and that is what a footprint excludes.
+			// 臺基 and everything on it, not the roof: eaves oversail the footprint by design.
 			const double Floor = FMath::Clamp(P.FloorHeight, 0.0, P.GetEaveHeight() * 0.3);
 			double MinY = BIG_NUMBER, MaxY = -BIG_NUMBER;
 			for (int32 vid : M.VertexIndicesItr())
@@ -2149,12 +2805,12 @@ bool FHutongCorridorFootprintTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// And the round trip holds: a footprint converted to a walk and back is the footprint.
+	// Round trip: footprint to walk and back is the footprint.
 	{
 		FHutongCorridorParams P;
 		P.bClosedSide = true;
 		P.bBuildBackWall = true;
-		// Inside the walk's own band, where the conversion is not clamping.
+		// Inside the walk's band, where the conversion does not clamp.
 		const double Footprint = 200.0;
 		P.Width = P.WalkWidthFromFootprint(Footprint);
 		TestEqual(TEXT("footprint → walk → footprint"), P.GetFootprintDepth(), Footprint, 0.01);
@@ -2169,7 +2825,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCompoundBenchGapTest,
 
 bool FHutongCompoundBenchGapTest::RunTest(const FString& Parameters)
 {
-	// The 甬路 arrives at a 廂房's door and the walk is what it arrives at. With the 坐凳楣子 unbroken the paving ends against a seat and the building cannot be entered at all.
+	// The 甬路 meets a 廂房 door; with the 坐凳楣子 unbroken the paving ends at a seat and the building cannot be entered.
 	HutongGen::FCompoundInput In;
 	In.Plan = EHutongCompoundPlan::TwoCourtyards;
 	In.Width = 3200.0;
@@ -2177,7 +2833,7 @@ bool FHutongCompoundBenchGapTest::RunTest(const FString& Parameters)
 	In.CourtWalk = EHutongCourtWalk::Corridor;
 	const TArray<FHutongCompoundSlot> Slots = HutongGen::LayOutCompound(In);
 
-	// The two runs down the court, which are the ones a 甬路 arm meets.
+	// The two runs down the court, where 甬路 arms meet.
 	TArray<const FHutongCompoundSlot*> Sides;
 	for (const FHutongCompoundSlot& S : Slots)
 	{
@@ -2185,7 +2841,7 @@ bool FHutongCompoundBenchGapTest::RunTest(const FString& Parameters)
 	}
 	if (!TestEqual(TEXT("two 遊廊 run down the court"), Sides.Num(), 2)) return false;
 
-	// The arms: 甬路 runs wider than they are deep. The spine runs the other way.
+	// Arms: 甬路 runs wider than deep; the spine the other way.
 	TArray<const FHutongCompoundSlot*> Arms;
 	for (const FHutongCompoundSlot& S : Slots)
 	{
@@ -2207,7 +2863,7 @@ bool FHutongCompoundBenchGapTest::RunTest(const FString& Parameters)
 		{
 			continue;
 		}
-		// The fraction is stated in footprint terms on both runs.
+		// The fraction is in footprint terms on both runs.
 		const double GapY = S->Min.Y + S->CorridorBenchGapAt * S->Size.Y;
 		TestTrue(FString::Printf(
 				TEXT("the break is where the 甬路 arrives (%.0f vs arm at %.0f)"), GapY, ArmY),
@@ -2217,8 +2873,8 @@ bool FHutongCompoundBenchGapTest::RunTest(const FString& Parameters)
 }
 
 
-// A wall's plotted thickness is a fact about its footprint: taken when the footprint is narrower
-// than the role asks, dropped when it is not, so a narrowed run can be widened again.
+// Plotted wall thickness comes from the footprint: taken when narrower than the role asks, dropped
+// otherwise, so a narrowed run can widen again.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongWallPlottedThicknessTest,
 	"HutongLayout.Walls.PlottedThickness",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -2250,9 +2906,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongChitouCoversColumnTest,
 
 bool FHutongChitouCoversColumnTest::RunTest(const FString& Parameters)
 {
-	// The corner 檐柱 stands on the wall plane, so its foot reaches a radius forward of it; the
-	// 墀頭 wrapping it must reach further or the column shows through the pier's face as a wedge.
-	// Probed inside the column's own footprint, between the pier's face and the column's centre.
+	// The corner 檐柱 stands on the wall plane, foot a radius forward; the wrapping 墀頭 must reach
+	// further or the column shows through as a wedge. Probed between pier face and column centre.
 	auto Probe = [&](const TCHAR* Label, const UE::Geometry::FDynamicMesh3& M,
 		double W, double ColR, double Proj, double Floor)
 	{
@@ -2281,7 +2936,7 @@ bool FHutongChitouCoversColumnTest::RunTest(const FString& Parameters)
 		P.ChitouProjection = 2.0;
 		UE::Geometry::FDynamicMesh3 M;
 		HutongGen::BuildGateHouse(M, P);
-		Probe(TEXT("gate"), M, P.Width, ColR, P.GetChitouProjection(), P.FloorHeight);
+		Probe(TEXT("gate"), M, P.Width, ColR, HutongGen::Shell::ChitouBodyProjection(P.GetChitouProjection(), P.GetRoofOverhang()), P.FloorHeight);
 	}
 	{
 		FHutongSiheyuanParams P;
@@ -2292,7 +2947,7 @@ bool FHutongChitouCoversColumnTest::RunTest(const FString& Parameters)
 			P.GetChitouProjection() >= ColR + HutongCanon::Wall::ChitouColumnClearanceCm - 0.01);
 		UE::Geometry::FDynamicMesh3 M;
 		HutongGen::BuildSiheyuan(M, P);
-		Probe(TEXT("house"), M, P.Width, ColR, P.GetChitouProjection(), P.GetFloorHeight());
+		Probe(TEXT("house"), M, P.Width, ColR, HutongGen::Shell::ChitouBodyProjection(P.GetChitouProjection(), P.GetRoofOverhang()), P.GetFloorHeight());
 	}
 	{
 		FHutongShopfrontParams P;
@@ -2302,7 +2957,7 @@ bool FHutongChitouCoversColumnTest::RunTest(const FString& Parameters)
 			P.GetChitouProjectionFor(P.Width, P.Depth) >= ColR + HutongCanon::Wall::ChitouColumnClearanceCm - 0.01);
 		UE::Geometry::FDynamicMesh3 M;
 		HutongGen::BuildShopfront(M, P);
-		Probe(TEXT("shop"), M, P.Width, ColR, P.GetChitouProjectionFor(P.Width, P.Depth), P.FloorHeight);
+		Probe(TEXT("shop"), M, P.Width, ColR, HutongGen::Shell::ChitouBodyProjection(P.GetChitouProjectionFor(P.Width, P.Depth), P.RoofOverhang), P.FloorHeight);
 	}
 	return true;
 }
@@ -2313,9 +2968,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongEaveUndersideTest,
 
 bool FHutongEaveUndersideTest::RunTest(const FString& Parameters)
 {
-	// Through the component's own build, which is where the retag runs: the top of the roof stays
-	// tile and the soffit under the front eave is wood. Pinned on where the faces are, not on
-	// which way this mesh's normals point, since that is exactly what went wrong once.
+	// Through the component build: roof top stays tile; the soffit behind the front eave course is wood,
+	// tagged by the roof itself, and no tile faces down there. Tested by face position and direction.
 	UHutongSiheyuanBuildingComponent* B = NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
 	B->DetailLevel = EHutongDetail::Near;
 	B->bBuildLODChain = false;
@@ -2327,27 +2981,53 @@ bool FHutongEaveUndersideTest::RunTest(const FString& Parameters)
 	const UE::Geometry::FDynamicMeshMaterialAttribute* MatIDs = M.Attributes()->GetMaterialID();
 	if (!TestNotNull(TEXT("materials are tagged"), MatIDs)) return false;
 
-	const double Eave = B->Params.GetEaveHeight();
-	int32 TopTri = -1;
-	double TopZ = -1e9;
-	int32 SoffitWood = 0, SoffitTile = 0;
+	// What a ray straight up from the ground first meets, between the eave course and the wall: timber
+	// (soffit, 椽), never tile. Buried faces never answer.
+	const double CourseW = B->Params.EaveFasciaWidth;
+	double EdgeY = 0.0, TopZ = -1e9;
 	for (int32 tid : M.TriangleIndicesItr())
 	{
-		const int32 Slot = MatIDs->GetValue(tid);
-		if (Slot != HutongGen::MatSlot_Roof && Slot != HutongGen::MatSlot_Wood) continue;
+		if (MatIDs->GetValue(tid) != HutongGen::MatSlot_Roof) continue;
 		const FVector3d C = M.GetTriCentroid(tid);
-		if (Slot == HutongGen::MatSlot_Roof && C.Z > TopZ) { TopZ = C.Z; TopTri = tid; }
-		// Under the front eave: outside the footprint's front edge, below the eave line, and
-		// looking down — which in this mesh's winding is a normal pointing up. The tops of the
-		// drip tiles hang below the eave line too and are rightly still tile.
-		const FVector3d N = M.GetTriNormal(tid);
-		if (C.Y < -20.0 && C.Z < Eave - 5.0 && C.Z > 0.5 * Eave && N.Z > 0.3)
+		TopZ = FMath::Max(TopZ, C.Z);
+		EdgeY = FMath::Min(EdgeY, C.Y);
+	}
+	auto FirstHitUp = [&](const FVector3d& From) -> int32
+	{
+		int32 Best = -1;
+		double BestZ = 1e9;
+		for (int32 tid : M.TriangleIndicesItr())
 		{
-			if (Slot == HutongGen::MatSlot_Wood) ++SoffitWood; else ++SoffitTile;
+			FVector3d A, Bv, C;
+			M.GetTriVertices(tid, A, Bv, C);
+			const FVector2d P(From.X, From.Y);
+			const double D = (Bv.X - A.X) * (C.Y - A.Y) - (Bv.Y - A.Y) * (C.X - A.X);
+			if (FMath::Abs(D) < 1e-9) continue;
+			const double U = ((P.X - A.X) * (C.Y - A.Y) - (P.Y - A.Y) * (C.X - A.X)) / D;
+			const double V = ((Bv.X - A.X) * (P.Y - A.Y) - (Bv.Y - A.Y) * (P.X - A.X)) / D;
+			if (U < 0.0 || V < 0.0 || U + V > 1.0) continue;
+			const double Z = A.Z + U * (Bv.Z - A.Z) + V * (C.Z - A.Z);
+			if (Z > From.Z && Z < BestZ) { BestZ = Z; Best = tid; }
+		}
+		return Best;
+	};
+	int32 Timber = 0, Tile = 0;
+	for (int32 i = 0; i < 12; ++i)
+	{
+		for (const double F : { 0.25, 0.5, 0.75 })
+		{
+			const double X = 150.0 + i * 61.0;
+			const double Y = FMath::Lerp(EdgeY + CourseW + 3.0, -3.0, F);
+			const int32 Hit = FirstHitUp(FVector3d(X, Y, 100.0));
+			if (Hit < 0) continue;
+			const int32 Slot = MatIDs->GetValue(Hit);
+			if (Slot == HutongGen::MatSlot_Wood || Slot == HutongGen::MatSlot_Paint) ++Timber;
+			if (Slot == HutongGen::MatSlot_Roof) ++Tile;
 		}
 	}
-	TestTrue(TEXT("the ridge is still tile"), TopTri >= 0);
-	TestTrue(FString::Printf(TEXT("the soffit under the front eave is wood (%d wood, %d tile)"), SoffitWood, SoffitTile), SoffitWood > 0 && SoffitTile == 0);
+	TestTrue(TEXT("the ridge is still tile"), TopZ > B->Params.GetEaveHeight());
+	TestTrue(FString::Printf(TEXT("under the front eave, timber shows from below (%d timber, %d tile)"), Timber, Tile),
+		Timber > 0 && Tile == 0);
 	return true;
 }
 
@@ -2357,9 +3037,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRolledXieshanCrownTest,
 
 bool FHutongRolledXieshanCrownTest::RunTest(const FString& Parameters)
 {
-	// A 捲棚歇山 has no ridge: its crown is a fillet below the sharp fold, and nothing on the roof
-	// stands up to where the fold was — the rakes ride over the crown, a course above it, and
-	// that is still under the sharp roof's ridge course.
+	// 捲棚歇山 has no ridge: the crown is a fillet below the sharp fold, and nothing reaches the fold;
+	// rakes ride a course over the crown, still under the sharp roof's ridge course.
 	auto Build = [](double Roll, UE::Geometry::FDynamicMesh3& M)
 	{
 		FHutongHallParams P;
@@ -2382,8 +3061,7 @@ bool FHutongRolledXieshanCrownTest::RunTest(const FString& Parameters)
 	const double SharpTop = MaxZ(Sharp), RolledTop = MaxZ(Rolled);
 	TestTrue(FString::Printf(TEXT("the roll lowers the top (%.1f sharp, %.1f rolled)"), SharpTop, RolledTop), RolledTop < SharpTop - 5.0);
 
-	// The highest vertices of the rolled roof lie along the crown across the whole ridge line —
-	// not at two points at the ends, which is what a 山花 or a rake standing above the roll looks like.
+	// Rolled roof's top vertices run along the whole crown, not two end points (a 山花 or rake above the roll).
 	double MinX = 1e9, MaxX = -1e9;
 	for (int32 vid : Rolled.VertexIndicesItr())
 	{
@@ -2391,7 +3069,7 @@ bool FHutongRolledXieshanCrownTest::RunTest(const FString& Parameters)
 		if (V.Z > RolledTop - 2.0) { MinX = FMath::Min(MinX, V.X); MaxX = FMath::Max(MaxX, V.X); }
 	}
 	TestTrue(FString::Printf(TEXT("the crown runs along the ridge line (%.0f to %.0f of 1000)"), MinX, MaxX), MaxX - MinX > 300.0);
-	// Rolled and sharp are closed the same way; solidity is the shell's own test's business.
+	// Rolled and sharp close the same way; solidity is the shell test's job.
 	return true;
 }
 
@@ -2401,10 +3079,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongBaseCourseLineTest,
 
 bool FHutongBaseCourseLineTest::RunTest(const FString& Parameters)
 {
-	// Every kind with a 下鹼 tops it out at the one canon line above the ground by default,
-	// whatever its own floor or plinth is, so pieces placed one at a time along a frontage read
-	// as one band; a courtyard wall keeps its own lower third. And the line can be set from a
-	// neighbour's and read back.
+	// Every kind with a 下鹼 tops it at one canon height above ground by default, whatever its plinth,
+	// so pieces along a frontage form one band; a courtyard wall keeps its lower third. The line can be
+	// set from a neighbour and read back.
 	using namespace HutongCanon;
 	TArray<UClass*> Classes;
 	GetDerivedClasses(UHutongBuildingComponent::StaticClass(), Classes, /*bRecursive*/ true);
@@ -2431,7 +3108,7 @@ bool FHutongBaseCourseLineTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// 七檁前後廊 as 四合院建築及其構造 p.84 gives it: four column rows, the figures in the source's ranges, the ridge over the plan's middle.
+// 七檁前後廊 per 四合院建築及其構造 p.84: four column rows, figures in the source's ranges, ridge over mid-plan.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongMainHallFrameTest,
 	"HutongLayout.Proportions.MainHallFrame",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -2457,7 +3134,7 @@ bool FHutongMainHallFrameTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a 前廊 and a 後廊, one 步架 each"),
 		FMath::IsNearlyEqual(Front, P.StepRun, 0.01) && FMath::IsNearlyEqual(Rear, P.StepRun, 0.01));
 
-	// Where the ridge course stands along the depth: the mean Y of everything within a centimetre of the top.
+	// Ridge course position in depth: mean Y of everything within 1 cm of the top.
 	auto RidgeY = [](const FHutongSiheyuanParams& Q)
 	{
 		FDynamicMesh3 M;
@@ -2478,7 +3155,7 @@ bool FHutongMainHallFrameTest::RunTest(const FString& Parameters)
 	TestTrue(FString::Printf(TEXT("前後廊 ridge at %.0f, over the middle of %.0f"), Centred, P.Depth),
 		FMath::Abs(Centred - 0.5 * P.Depth) < 5.0);
 
-	// 前廊後無廊 on its 鑽金柱 frame: ridge still over the middle, no 撅尾巴.
+	// 前廊後無廊 on a 鑽金柱 frame: ridge still mid-plan, no 撅尾巴.
 	FHutongSiheyuanParams Small = HutongPresets::MakeHouse(HutongCanon::House::MainHallSmall);
 	Small.Width = Small.SuggestedFrontage;
 	Small.Depth = Small.GetSuggestedDepth();
@@ -2493,7 +3170,7 @@ bool FHutongMainHallFrameTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// 構架: 圖5-3-1's four column rows and stacked beams for 七檁前後廊, 圖5-3-2's 鑽金柱 frame for the small court.
+// 構架: 圖5-3-1's four column rows and stacked beams for 七檁前後廊; 圖5-3-2's 鑽金柱 frame for the small court.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFrameTest,
 	"HutongLayout.Frame.MainHall",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -2510,7 +3187,7 @@ bool FHutongFrameTest::RunTest(const FString& Parameters)
 
 	FHutongFrameParams Big = Placed(HutongCanon::House::MainHall);
 	TestFalse(TEXT("no roof until it is asked for"), Big.bHasRafters);
-	// The rest of this is about the frame under one, so the roof goes on.
+	// The rest tests the frame under a roof, so the roof goes on.
 	Big.bHasRafters = true;
 	const HutongGen::FrameLayout::FLayout L = HutongGen::FrameLayout::Make(Big.House);
 	TestEqual(TEXT("七檁"), L.Num(), 7);
@@ -2534,8 +3211,8 @@ bool FHutongFrameTest::RunTest(const FString& Parameters)
 	};
 	const FDynamicMesh3 Whole = Build(Big);
 	const HutongMeshInspect::FShellReport R = HutongMeshInspect::InspectShell(Whole);
-	// Not IsSolid: edges are matched by position, and the 階條 stacked on the platform's body share
-	// theirs with it, which reads as duplicated. Every edge still has its partner.
+	// Not IsSolid: edges match by position and the 階條 share theirs with the platform body, reading as
+	// duplicates. Every edge still has its partner.
 	TestTrue(FString::Printf(TEXT("every member closed and wound outward (%d unmatched)"), R.Unmatched),
 		R.Triangles > 0 && R.Unmatched == 0 && R.Volume > 0.0);
 	const UE::Geometry::FAxisAlignedBox3d B = Whole.GetBounds();
@@ -2549,8 +3226,8 @@ bool FHutongFrameTest::RunTest(const FString& Parameters)
 	Bare.bHasRafters = false;
 	const FDynamicMesh3 Skeleton = Build(Bare);
 
-	// 檐枋, 墊板, 檁 and the 金 and 脊 sets above them all pass the gable frame's column by the one
-	// reach, so with the platform and the rafters off nothing along X reaches past that line.
+	// 檐枋, 墊板, 檁 and the 金/脊 sets pass the gable column by one reach, so with platform and rafters
+	// off nothing reaches past that line in X.
 	const double EndColumn = Big.House.GetBayBoundary(0, Big.House.GetBayCount(),
 		Big.House.Width, Big.House.GetColumnRadius());
 	const double RunEnd = EndColumn - HutongCanon::Frame::RunProjection * L.D;
@@ -2572,7 +3249,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRidgeSlotTest,
 	"HutongLayout.Appearance.RidgeSlot",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-// The 正脊 wears its own slot, so it is coursed rather than tiled in 壟 like the slopes under it.
+// The 正脊 has its own slot: coursed, not tiled in 壟 like the slopes.
 bool FHutongRidgeSlotTest::RunTest(const FString& Parameters)
 {
 	auto RidgeTris = [](const UE::Geometry::FDynamicMesh3& M)

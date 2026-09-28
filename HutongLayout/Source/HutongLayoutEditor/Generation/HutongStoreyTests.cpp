@@ -10,8 +10,7 @@ using UE::Geometry::FDynamicMesh3;
 
 namespace
 {
-	// What is built in the band of heights the storey line occupies, and how far in front of the
-	// facade it reaches. A 樓 is told from a tall shop by exactly this.
+	// Geometry in the storey line's height band and its reach past the facade: what tells a 樓 from a tall shop.
 	double FurthestForwardBetween(const FDynamicMesh3& Mesh, double Z0, double Z1)
 	{
 		double Front = 0.0;
@@ -32,9 +31,8 @@ namespace
 	}
 }
 
-// 樓 is two storeys with a line between them, and the line is the type: a tiled skirt (腰檐) with a
-// railed gallery over it. Without them the same footprint and the same eave build a tall shop,
-// which is a different building.
+// 樓 = two storeys split by a 腰檐 skirt with a railed gallery above; without it the same footprint
+// and eave build a tall shop.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongStoreyTest, "HutongLayout.Storey.StoreyLine",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -47,12 +45,12 @@ bool FHutongStoreyTest::RunTest(const FString& Parameters)
 	const double StoreyLine = P.GetStoreyLineHeight();
 	const double Eave = P.GetEaveHeight();
 
-	// The eave is both storeys and the platform, and each storey is its own field.
+	// Eave spans platform and both storeys; each storey is its own field.
 	TestEqual(TEXT("the eave is the two storeys and the platform"),
 		Eave, P.FloorHeight + P.LowerStoreyHeight + P.UpperStoreyHeight, 0.01);
 	TestTrue(TEXT("a 樓 stands taller than the street around it"), Eave > 550.0);
 
-	// The shop below is a way in, not a picture of one: the mesh is its own collision.
+	// The shop is enterable: the mesh is its own collision.
 	TestTrue(TEXT("the shopfront's head clears a crouched body"),
 		P.GetOpeningTopHeight() - P.FloorHeight >= HutongGen::Passage::MinClearHeight - 0.01);
 
@@ -60,7 +58,7 @@ bool FHutongStoreyTest::RunTest(const FString& Parameters)
 	HutongGen::BuildStorey(Full, P);
 	if (!TestTrue(TEXT("the 樓 builds"), Full.TriangleCount() > 0)) return false;
 
-	// The storey line's own band: from under the skirt to the top of the railing.
+	// Storey-line band: skirt underside to railing top.
 	const double BandLow = StoreyLine - P.SkirtDrop - 1.0;
 	const double BandHigh = StoreyLine + P.DeckThickness + P.RailHeight + 1.0;
 	const double Reach = FurthestForwardBetween(Full, BandLow, BandHigh);
@@ -69,7 +67,7 @@ bool FHutongStoreyTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("and no further out than the skirt they sit on"),
 		Reach >= -P.SkirtProjection - P.RailSection - 6.0);
 
-	// Turn the storey line off and the same building loses exactly that.
+	// Storey line off removes exactly that.
 	FHutongStoreyParams Plain = P;
 	Plain.bHasSkirtRoof = false;
 	Plain.bHasGallery = false;
@@ -79,14 +77,14 @@ bool FHutongStoreyTest::RunTest(const FString& Parameters)
 
 	TestTrue(TEXT("the storey line is most of what the type costs"),
 		Full.TriangleCount() > Tall.TriangleCount());
-	// Nothing but the columns, which straddle the facade plane as they do on every type here.
+	// Only the columns, which straddle the facade plane as on every type.
 	const double ColR = P.GetColumnRadiusFor(P.Width, P.Depth);
 	TestTrue(TEXT("without it nothing but the columns reaches past the facade"),
 		FurthestForwardBetween(Tall, BandLow, BandHigh) > -(ColR + 2.0));
 	TestEqual(TEXT("and the building is the same height either way"),
 		HighestVertex(Tall), HighestVertex(Full), 0.5);
 
-	// The upper storey is what the height keys move, so the massing has to follow it.
+	// Height keys move the upper storey; massing must follow.
 	FHutongStoreyParams Taller = P;
 	Taller.UpperStoreyHeight = P.UpperStoreyHeight + 100.0;
 	FDynamicMesh3 TallerMesh;
@@ -94,8 +92,7 @@ bool FHutongStoreyTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("raising the upper storey raises the ridge"),
 		HighestVertex(TallerMesh) > HighestVertex(Full) + 90.0);
 
-	// 塊 is the type's own silhouette: a block that stops at one storey is the wrong building
-	// however cheap it is.
+	// 塊 keeps the type's silhouette: a one-storey block is the wrong building.
 	FDynamicMesh3 Block;
 	UHutongStoreyBuildingComponent::BuildStoreyMesh(P, EHutongBaySide::MinusY, 0,
 		P.Width, P.Depth, Block, EHutongDetail::Massing);

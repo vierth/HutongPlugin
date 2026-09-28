@@ -65,7 +65,7 @@ void UPlaceLabelDefaultHUDWidget::RebuildLines()
 
 	for (const FPlaceLabelEntry& Entry : Chain)
 	{
-		// The region the player is actually in reads large and opaque; each step outward is smaller and fainter.
+		// Innermost region large and opaque; each step outward smaller and fainter.
 		const bool bLeaf = Entry.Depth == 0;
 
 		FLinearColor Color = Entry.Type ? Entry.Type->AccentColor : FLinearColor::White;
@@ -81,7 +81,7 @@ void UPlaceLabelDefaultHUDWidget::RebuildLines()
 		TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox);
 		bool bRowHasContent = false;
 
-		// Every field is shown exactly as it was typed.
+		// Fields shown as typed.
 		auto AddPart = [&](const FText& Text, int32 FontSize, const FLinearColor& PartColor)
 		{
 			if (Text.IsEmpty())
@@ -92,7 +92,7 @@ void UPlaceLabelDefaultHUDWidget::RebuildLines()
 			// The default Slate font is a composite whose fallback face covers CJK.
 			Row->AddSlot()
 				.AutoWidth()
-				// Bottom, not centre: the parts are different sizes, and sitting them on a common baseline is what keeps the row from looking like it is falling apart.
+				// Bottom, not centre: mixed sizes need a common baseline.
 				.VAlign(VAlign_Bottom)
 				.Padding(bRowHasContent ? 10.0f : 0.0f, 0.0f, 0.0f, 0.0f)
 				[

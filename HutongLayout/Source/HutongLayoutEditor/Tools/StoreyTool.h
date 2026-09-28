@@ -44,7 +44,7 @@ protected:
 	virtual bool OnRectCommitted(const FVector& HitWorld) override;
 	virtual void OnPlacementHover(const FVector& HitWorld) override;
 
-	// Bay count, stepped with [ and ] during placement like the siheyuan's.
+	// Bay count, stepped with [ and ] like the siheyuan.
 	virtual void AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse) override;
 	int32 ComputeBayCountForSide() const;
 

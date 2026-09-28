@@ -22,10 +22,10 @@ public:
 	virtual FText GetToolPaletteDisplayName(FName PaletteName) const override;
 	virtual void BuildToolPalette(FName PaletteName, FToolBarBuilder& ToolbarBuilder) override;
 
-	// Switching tabs closes a tool that is not on the tab switched to — see the note on the definition.
+	// Switching tabs closes a tool not on the new tab; see the definition.
 	virtual void OnToolPaletteChanged(FName PaletteName) override;
 
-	// The active tool's panel, or — on the Scene tab — the mode's own actions on what is placed.
+	// The active tool's panel or, on the Scene tab, the mode's actions on placed buildings.
 	virtual TSharedPtr<SWidget> GetInlineContent() const override;
 
 private:
@@ -45,19 +45,18 @@ private:
 	EVisibility GetStageVisibility(int32 Index) const;
 	TSharedRef<SWidget> MakeStageRow() const;
 
-	// The lay-out-only checkbox and its Generate button, at the top of the panel where a setting that stops buildings being built can be seen.
+	// Layout-only checkbox and its Generate button, at the top so a setting that stops building is seen.
 	TSharedRef<SWidget> MakePlanRow() const;
 	ECheckBoxState GetPlanOnlyState() const;
 	void OnPlanOnlyChanged(ECheckBoxState State);
 
-	// Whether laid-out buildings draw at all. Beside Layout Only because it is the same subject —
-	// the plans — and it belongs on the tool panel rather than only on the Scene tab: the plans are
-	// hidden while working over them, which is while a tool is in hand.
+	// Plan visibility, beside Layout Only and on the tool panel: plans are hidden while working
+	// over them, which is while a tool is in hand.
 	ECheckBoxState GetShowPlansState() const;
 	void OnShowPlansChanged(ECheckBoxState State);
 	FReply OnGenerateClicked();
 
-	// Collapses the whole help block while no tool is active — see the note on the definition.
+	// Collapses the help block while no tool is active; see the definition.
 	EVisibility GetHelpVisibility() const;
 
 	// The Scene tab carries no tool, so the two halves of the panel swap on it.
@@ -65,14 +64,19 @@ private:
 	EVisibility GetToolPanelVisibility() const;
 	EVisibility GetScenePanelVisibility() const;
 
-	// What the cursor is resting on, polled like the prompt.
+	// What the cursor rests on, polled like the prompt; own box, hidden during a placement.
 	FText GetHoverText() const;
+	FText GetHoverHeaderText() const;
 	EVisibility GetHoverVisibility() const;
 
-	// The building component of whatever is selected, shown in the panel rather than by reaching
-	// into the level editor's own selection: the Details panel puts a placed piece's parameters a
-	// click down the component tree, and selecting that component from here restarted the active
-	// tool mid-click and took the plan handles with it.
+	// Simple / advanced: one switch over the tool's panel, read by the details views' filter.
+	bool IsPropertyVisible(const struct FPropertyAndParent& PropertyAndParent) const;
+	ECheckBoxState GetShowAdvancedState() const;
+	void OnShowAdvancedChanged(ECheckBoxState State);
+	FText GetAdvancedHintText() const;
+
+	// Selected building's component, shown here rather than via the level editor's selection:
+	// selecting the component from here restarted the active tool mid-click and dropped the plan handles.
 	void OnSelectionChanged(UObject* Object);
 	void RefreshSelectedBuilding();
 	FText GetSelectedBuildingText() const;

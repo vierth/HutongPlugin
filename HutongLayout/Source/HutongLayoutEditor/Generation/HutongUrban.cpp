@@ -75,7 +75,6 @@ namespace HutongGen
 			const EHutongStreetClass C = Classify(WidthCm);
 			const double Nominal = NominalWidth(C);
 
-			// The band note is the useful half.
 			FString Note;
 			if (Nominal <= 0.0)
 			{

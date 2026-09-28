@@ -59,7 +59,7 @@ namespace
 		int32 Vertex = 0;
 	};
 
-	// Pass 1, corner to corner: every vertex within tolerance of a vertex belonging to a different polygon joins one cluster, and the cluster collapses to its centroid.
+	// Pass 1, corner to corner: vertices within tolerance across polygons cluster and collapse to the centroid.
 	void WeldCorners(TArray<TArray<FVector2D>>& Polygons, TArray<bool>& Changed, double Tol,
 		FWeldReport& OutReport)
 	{
@@ -78,7 +78,7 @@ namespace
 			return;
 		}
 
-		// Cells the size of the tolerance, so every candidate partner is in the 3x3 neighbourhood.
+		// Tolerance-sized cells: every partner lies in the 3x3 neighbourhood.
 		const double CellSize = FMath::Max(Tol, UE_KINDA_SMALL_NUMBER);
 		TMap<FIntPoint, TArray<int32>> Grid;
 		for (int32 i = 0; i < Positions.Num(); ++i)
@@ -134,7 +134,7 @@ namespace
 				continue;
 			}
 
-			// A cluster confined to one polygon is two corners of the same outline sitting on top of each other.
+			// Confined to one polygon: two corners of one outline coincide.
 			TMap<int32, int32> CornersPerPolygon;
 			for (int32 Index : Members)
 			{
@@ -145,11 +145,8 @@ namespace
 				continue;
 			}
 
-			// A polygon contributing more than one corner has those corners collapsed onto each
-			// other as well as onto its neighbour's, and the cleanup pass will only take a polygon
-			// down to three. So a cluster that would leave one below three is refused whole: a
-			// triangle with two corners in it comes out with zero area, stops containing the player
-			// and stops triangulating, and the weld reported success.
+			// Refuse a cluster that would take a polygon below three corners: zero area, no
+			// containment, no fill.
 			bool bWouldDegenerate = false;
 			for (const TPair<int32, int32>& Pair : CornersPerPolygon)
 			{
@@ -204,7 +201,7 @@ namespace
 		FVector2D Point = FVector2D::ZeroVector;
 	};
 
-	// Pass 2, T-junctions: a corner landing in the middle of a neighbour's edge is projected exactly onto that edge, and the neighbour gains a corner there.
+	// Pass 2, T-junctions: a corner near a neighbour's edge snaps onto it; the neighbour gains a corner.
 	void WeldTJunctions(TArray<TArray<FVector2D>>& Polygons, TArray<bool>& Changed, double Tol,
 		FWeldReport& OutReport)
 	{
@@ -241,7 +238,7 @@ namespace
 						continue;
 					}
 
-					// Or from an insertion queued earlier this pass, which is not in the polygon yet.
+					// Or an insertion queued this pass, not yet in the polygon.
 					bool bQueued = false;
 					for (const FPendingInsert& Queued : Inserts[s])
 					{
@@ -266,7 +263,7 @@ namespace
 					}
 					const double Param = FVector2D::DotProduct(P - A, Edge) / LengthSq;
 
-					// The endpoints are corners, and a corner that wanted one of those should have found it in pass 1.
+					// Endpoints are corners: pass 1's job.
 					if (Param <= UE_KINDA_SMALL_NUMBER || Param >= 1.0 - UE_KINDA_SMALL_NUMBER)
 					{
 						continue;
@@ -291,7 +288,7 @@ namespace
 				continue;
 			}
 
-			// Descending, so an insertion never shifts the index of one still to be applied.
+			// Descending, so insertions do not shift pending indices.
 			Inserts[s].Sort([](const FPendingInsert& A, const FPendingInsert& B)
 			{
 				return A.EdgeIndex != B.EdgeIndex ? A.EdgeIndex > B.EdgeIndex : A.Param > B.Param;
@@ -306,7 +303,7 @@ namespace
 		}
 	}
 
-	// Pass 3, cleanup: a weld can pull two corners of one outline onto the same point, leaving a zero-length edge every downstream predicate then has to survive.
+	// Pass 3, cleanup: removes zero-length edges a weld can leave.
 	void RemoveDuplicateCorners(TArray<TArray<FVector2D>>& Polygons, TArray<bool>& Changed,
 		FWeldReport& OutReport)
 	{
@@ -439,7 +436,7 @@ void FindPolygonSeams(const TArray<TArray<FVector2D>>& Polygons, double Toleranc
 				Seam.WorstOffsetCm = FMath::Max(Seam.WorstOffsetCm, Mark.DistanceCm);
 			}
 
-			// Gap or overlap: the same fault and the same weld fixes both, but they read entirely differently to an author working out what they did.
+			// Gap vs overlap: same fix, but reported apart for the author.
 			for (const FSeamMark& Mark : Marks)
 			{
 				const FVector2D Between = (Mark.From + Mark.To) * 0.5;

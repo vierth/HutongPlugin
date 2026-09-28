@@ -33,7 +33,7 @@ TSharedRef<SDockTab> FPlaceLabelsEditorModule::SpawnPanelTab(const FSpawnTabArgs
 	return SNew(SDockTab)
 		.TabRole(ETabRole::NomadTab)
 		[
-			// The panel sizes itself to its content and the tab can be docked anywhere, including somewhere shorter than the content; without a scroll box the problems list would simply be unreachable.
+			// Scroll box: a tab docked shorter than the panel would hide the problems list.
 			SNew(SScrollBox)
 			+ SScrollBox::Slot()
 			[
@@ -44,12 +44,12 @@ TSharedRef<SDockTab> FPlaceLabelsEditorModule::SpawnPanelTab(const FSpawnTabArgs
 
 void FPlaceLabelsEditorModule::StartupModule()
 {
-	// Style first: FPlaceLabelsCommands resolves its icons out of the style set at registration time.
+	// Style first: FPlaceLabelsCommands resolves icons from it at registration.
 	FPlaceLabelsStyle::Register();
 	FPlaceLabelsCommands::Register();
 	FPlaceLabelsVisualizerCommands::Register();
 
-	// GUnrealEd exists by PostEngineInit, which is the loading phase this module declares.
+	// GUnrealEd exists by PostEngineInit, this module's loading phase.
 	if (GUnrealEd)
 	{
 		RegionComponentClassName = UPlaceRegionComponent::StaticClass()->GetFName();

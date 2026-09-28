@@ -16,7 +16,7 @@ void UHutongMeasureToolProperties::ApplyScaleToSelected()
 	USelection* Selected = GEditor->GetSelectedActors();
 	if (!Selected) return;
 
-	// Scaled about the measurement's own first point, not about the actor's pivot.
+	// Scaled about the measurement's first point, not the actor pivot.
 	const FScopedTransaction Transaction(
 		LOCTEXT("CalibrateMap", "Calibrate Hutong Map Scale"));
 
@@ -43,7 +43,7 @@ UInteractiveTool* UHutongMeasureToolBuilder::BuildTool(const FToolBuilderState& 
 void UHutongMeasureTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongMeasureToolProperties>(this);
-	// Not persisted: a measurement belongs to the thing that was measured, and a stale reading restored into the panel next session would be a number with nothing behind it.
+	// Not persisted: a reading restored next session would have nothing behind it.
 	RegisterSettings(Settings, /*bPersist*/ false);
 }
 
@@ -60,7 +60,7 @@ void UHutongMeasureTool::OnPlacementHover(const FVector& HitWorld)
 
 bool UHutongMeasureTool::OnRectCommitted(const FVector& HitWorld)
 {
-	// False, so the reading freezes.
+	// Returning false freezes the reading.
 	RefreshReading();
 	return false;
 }
@@ -119,7 +119,7 @@ FText UHutongMeasureTool::GetStagePromptText() const
 
 void UHutongMeasureTool::Render(IToolsContextRenderAPI* RenderAPI)
 {
-	// Deliberately not Super: the base draws the drag rectangle and its corner posts, and this tool measures a line.
+	// Not Super: the base draws a drag rectangle; this tool measures a line.
 	if (!bIsDragging || RenderAPI == nullptr) return;
 	FPrimitiveDrawInterface* PDI = RenderAPI->GetPrimitiveDrawInterface();
 	if (!PDI) return;
@@ -127,14 +127,14 @@ void UHutongMeasureTool::Render(IToolsContextRenderAPI* RenderAPI)
 	const FLinearColor Line(1.0f, 0.85f, 0.2f);
 	DrawPreviewLine(PDI, StartWorld, CurrentWorld, Line, 3.0f);
 
-	// End ticks across the span, so the two ends are visible against a busy map texture.
+	// End ticks across the span, visible against a busy map texture.
 	const FVector Along = (CurrentWorld - StartWorld).GetSafeNormal();
 	const FVector Across = FVector::CrossProduct(Along, FVector::UpVector).GetSafeNormal();
 	const double Tick = FMath::Max(0.03 * FVector::Dist2D(StartWorld, CurrentWorld), 25.0);
 	DrawPreviewLine(PDI, StartWorld - Across * Tick, StartWorld + Across * Tick, Line, 3.0f);
 	DrawPreviewLine(PDI, CurrentWorld - Across * Tick, CurrentWorld + Across * Tick, Line, 3.0f);
 
-	// The module, drawn on the span.
+	// Module ticks along the span.
 	const double Dist = FVector::Dist2D(StartWorld, CurrentWorld);
 	const int32 Paces = FMath::Clamp(FMath::FloorToInt32(Dist / HutongGen::Urban::BuCm), 0, 120);
 	const FLinearColor Pace(0.4f, 0.8f, 1.0f, 0.9f);
@@ -151,9 +151,9 @@ TArray<FText> UHutongMeasureTool::GetToolHelpLines() const
 	Lines.Add(LOCTEXT("HelpDrag",
 		"Click, move, click to measure a span. Nothing is ever placed by this tool."));
 	Lines.Add(LOCTEXT("HelpRead",
-		"The reading gives metres, paces (步, the Yuan pace the grid is set in), and what the span would be if it were a street width — a lane (胡同) is 6 paces, a minor street (小街) 12, an avenue (大街) 24."));
+		"Reads metres and paces (步): a lane (胡同) is 6 paces, a minor street (小街) 12, an avenue (大街) 24."));
 	Lines.Add(LOCTEXT("HelpCalibrate",
-		"To calibrate a map image: measure a span whose true length you know, type that into Known Real Distance, select the map actor and press Apply Scale To Selected."));
+		"To scale a map: measure a known span, enter Known Real Distance, select the map, press Apply Scale To Selected."));
 	Lines.Add(LOCTEXT("HelpEsc", "Esc clears the measurement."));
 	return Lines;
 }

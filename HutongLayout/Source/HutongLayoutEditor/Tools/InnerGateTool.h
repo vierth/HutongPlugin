@@ -17,7 +17,7 @@ public:
 	FHutongInnerGateParams Params;
 
 #if WITH_EDITOR
-	// Pull the eave into the band when it or the constraint changes.
+	// Clamps the eave into the band when it or the constraint changes.
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 };
