@@ -73,7 +73,8 @@ public:
 	double Radius = 55.0;
 
 	// Off by default: a yaw jumping under the cursor reads as the building turning itself.
-	// Gates both the anchor adopting the snapped bearing and hold-R pulling onto a neighbour's line.
+	// Gates hold-R pulling onto a neighbour's line and the lane snap's bearing; an anchor snapped onto
+	// a building takes that building's rotation regardless (the click, not the hover).
 	UPROPERTY(EditAnywhere, Category="Snapping", meta=(HutongAdvanced, DisplayName="Adopt Neighbour Angle", EditCondition="bEnabled", ToolTip="Rotates the placement onto a neighbour's line when snapped."))
 	bool bAdoptAngle = false;
 
@@ -145,9 +146,9 @@ public:
 	// Hold R to enter mouse-driven rotation around StartWorld (Z axis).
 	void BeginRotateMode();
 	void EndRotateMode();
-	// Hold G on the click that ends a segment: that segment carries the run's opening.
-	void SetOpeningKeyHeld(bool bHeld) { bOpeningKeyHeld = bHeld; }
-	bool bOpeningKeyHeld = false;
+	// G toggles the mark on the segment being drawn: that segment carries the run's opening.
+	void ToggleOpeningMark() { bOpeningMarked = !bOpeningMarked; }
+	bool bOpeningMarked = false;
 	bool IsPlacingActive() const { return bIsDragging; }
 
 	// True when GetHoverSummaryText describes the cursor's building, not the fallback selection.
@@ -184,8 +185,10 @@ public:
 	// The one always-visible line of keys; help lines sit behind a collapsed header.
 	virtual FText GetKeyHintText() const;
 
-	// [ and ] with nothing being placed.
+	// [ and ] with nothing being placed: facade a step round (the building's FacadeTurnStep each).
 	bool TurnSelectedFacing(int32 Delta);
+	// F with nothing being placed: facade to the other side, bays and door with it.
+	bool FlipSelectedFacing();
 
 	// Named clicks of a placement, and the one awaited.
 	virtual TArray<FText> GetStageNames() const;
@@ -292,6 +295,9 @@ protected:
 	// The single selected building of any kind; the second only if laid out, not built.
 	class UHutongBuildingComponent* GetSelectedBuilding() const;
 	class UHutongBuildingComponent* GetSelectedPlanBuilding() const;
+	// Every selected building with a facade to NextSide, in one transaction; false if none has one.
+	bool SetSelectedFacing(const FText& Title,
+		TFunctionRef<EHutongBaySide(const class UHutongBuildingComponent&, EHutongBaySide)> NextSide);
 	FVector PlanOpeningWorld(const class UHutongBuildingComponent* Building, int32 Index, double& OutWidth) const;
 	// Corners 0..3 include skew offsets; 4..7 are the edge midpoints between them.
 	static FVector PlanHandleLocal(const FVector2D Corners[4], int32 Handle);
@@ -308,6 +314,20 @@ protected:
 	static bool PlanHandleEnabled(const FVector2D& Size, int32 Handle);
 	// Whether a ground point inside a footprint is a grab (select / move).
 	bool IsPlanGrabPoint(const FVector2D& Size, double EdgeDistance, const FVector& Ground) const;
+	// Whether a press here starts a placement though a footprint is under it: a tool drawing from
+	// outlines (the wall), within snap reach of any outline, unless on a handle it still honours.
+	bool PressStartsPlacement(const FVector& Ground, const class UHutongBuildingComponent* Selected, int32 SelectedHit) const;
+	// Under Shift, the building a press toggles in the selection (laid out or built), unless the
+	// press is on a handle Shift drives; null otherwise.
+	// Whether a point lies on that building's footprint outline (within 2 cm), not on a face's line past it.
+	static bool IsOnOutline(const FVector& Point, const class UHutongBuildingComponent* Building);
+	class UHutongBuildingComponent* ShiftToggleTarget(const FInputDeviceRay& Ray, const FVector& Ground, int32 SelectedHit) const;
+	virtual bool StartsOnFootprintEdges() const { return false; }
+	// True for a tool whose ends snap onto neighbours' corners and faces and nothing else (the wall
+	// run): no lane width, so it moves freely off a building.
+	virtual bool PointSnapsOnly() const { return false; }
+	// False for a tool that only edits what is placed (heights): clicks select, nothing is anchored.
+	virtual bool HasPlacement() const { return true; }
 	FVector PlanRotateHandleWorld(const class UHutongBuildingComponent* Building, FVector& OutEdgeMid) const;
 	// Handle, ring or inside hit by a ground point; INDEX_NONE for none.
 	int32 HitTestPlan(const class UHutongBuildingComponent* Building, const FVector& Ground) const;
@@ -322,6 +342,8 @@ protected:
 
 	// Hover trace off the editor's cursor, once a frame from Render.
 	void UpdateHoverInspectionFromViewport();
+	// Selected built buildings' footprints, white under their type colour, as a selected plan draws.
+	void DrawSelectedFootprints(FPrimitiveDrawInterface* PDI) const;
 	void DrawHoverInspection(FPrimitiveDrawInterface* PDI) const;
 	void DrawHoverInspectionHUD(FCanvas* Canvas, IToolsContextRenderAPI* RenderAPI) const;
 

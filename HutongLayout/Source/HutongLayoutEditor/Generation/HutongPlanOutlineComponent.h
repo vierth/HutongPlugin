@@ -11,6 +11,9 @@
 // tabs: houses warm, gates hot, enclosure cool, garden green.
 namespace HutongPlanColours
 {
+	// Selection, drawn under the type colour's outline: white is no type's hue.
+	inline const FLinearColor Selected(1.00f, 1.00f, 1.00f, 1.0f);
+
 	// Buildings.
 	inline const FLinearColor House(1.00f, 0.85f, 0.20f, 1.0f);      // 正房 and its family
 	inline const FLinearColor Shopfront(1.00f, 0.70f, 0.30f, 1.0f);  // 鋪面房

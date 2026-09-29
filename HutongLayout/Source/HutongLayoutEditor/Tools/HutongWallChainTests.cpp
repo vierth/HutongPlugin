@@ -123,6 +123,7 @@ bool FHutongWallChainSideTest::RunTest(const FString& Parameters)
 {
 	using namespace HutongWallChain;
 	const double T = 37.0;
+	// SideAlongFace, as a placed run's vertex drag uses it (drawing takes the corner rule, CornerEnd).
 	// House front along +X, inside toward +Y. A run continuing it along +X puts its outer face on the
 	// house face: body toward +Y, drawn line at y = 0. Reversed, body still toward +Y, now the y = T face.
 	double DrawnY = -1.0;
@@ -233,6 +234,74 @@ bool FHutongWallRunVertexTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the face is read back off the corners"), ReadBack.bSet && LineDistance(Face.Point, ReadBack.Point, ReadBack.Dir) < 1.0e-3);
 
 	World->DestroyWorld(false);
+	return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongWallChainCornerTest,
+	"HutongLayout.Walls.CornerEnds",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongWallChainCornerTest::RunTest(const FString& Parameters)
+{
+	// Two houses on a street, the run across the gap from a front corner of one to a front corner of
+	// the other, a little off the line: at each end the run's outside corner is the house's corner and
+	// its short face lies along the house's gable.
+	using namespace HutongWallChain;
+	const double T = 37.0;
+	// House A: x in [-600, 0], y in [0, 400], front on y = 0; the run leaves its corner (0, 0).
+	// House B: x in [700, 1300], y in [-100, 300], set 1 m forward; the run arrives at its corner (700, -100).
+	const FVector2D A(0.0, 0.0), B(700.0, -100.0);
+	const FVector2D InA = (FVector2D(-300.0, 200.0)).GetSafeNormal(), InB = (FVector2D(300.0, 200.0)).GetSafeNormal();
+
+	double DrawnY = 0.0, EndY = 0.0;
+	FEndFace Start, End;
+	CornerEnd(B - A, true, 180.0, 90.0, InA, A, T, DrawnY, Start);
+	CornerEnd(B - A, false, 0.0, 90.0, InB, B, T, EndY, End);
+	TestEqual(TEXT("both ends agree on the side"), DrawnY, EndY);
+	TestTrue(TEXT("the start rests on house A's gable (x = 0), not its front"), FMath::Abs(Start.Dir.X) < 1.0e-9);
+	TestEqual(TEXT("the body stands behind the street face"), DrawnY, 0.0);
+
+	TArray<FSegment> Segments;
+	if (!TestTrue(TEXT("the run builds"), Build({ A, B }, T, DrawnY, Start, End, Segments) && Segments.Num() == 1)) return false;
+	FVector2D C[4];
+	Corners(Segments[0], T, C);
+	auto Nearest = [&](const FVector2D& P) { double D = TNumericLimits<double>::Max(); for (const FVector2D& Q : C) D = FMath::Min(D, FVector2D::Distance(P, Q)); return D; };
+	TestTrue(FString::Printf(TEXT("the outside corner is house A's corner (%.4f cm off)"), Nearest(A)), Nearest(A) < 1.0e-6);
+	TestTrue(FString::Printf(TEXT("the outside corner is house B's corner (%.4f cm off)"), Nearest(B)), Nearest(B) < 1.0e-6);
+	// The other corner at each end lies on the house's face, inside its edge.
+	int32 OnA = 0, OnB = 0;
+	for (const FVector2D& Q : C)
+	{
+		if (FMath::Abs(Q.X) < 1.0e-6 && Q.Y > 1.0 && Q.Y < 400.0) ++OnA;
+		if (FMath::Abs(Q.X - 700.0) < 1.0e-6 && Q.Y > -99.0 && Q.Y < 300.0) ++OnB;
+	}
+	TestEqual(TEXT("the start's short face lies along house A"), OnA, 1);
+	TestEqual(TEXT("the end's short face lies along house B"), OnB, 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongWallChainFaceEndTest,
+	"HutongLayout.Walls.FaceEnd",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongWallChainFaceEndTest::RunTest(const FString& Parameters)
+{
+	// An end snapped mid-face, at a slant: the short face lies on the face's line, the line centred.
+	using namespace HutongWallChain;
+	const double T = 37.0;
+	const FVector2D A(0.0, 0.0), B(600.0, 300.0);
+	FEndFace End;
+	End.bSet = true;
+	End.Point = B;
+	End.Dir = FVector2D(1.0, 0.0);
+	TArray<FSegment> Segments;
+	if (!TestTrue(TEXT("the run builds"), Build({ A, B }, T, 0.5 * T, FEndFace(), End, Segments) && Segments.Num() == 1)) return false;
+	FVector2D C[4];
+	Corners(Segments[0], T, C);
+	int32 OnFace = 0;
+	for (const FVector2D& Q : C) if (FMath::Abs(Q.Y - 300.0) < 1.0e-6) ++OnFace;
+	TestEqual(TEXT("both end corners lie on the face"), OnFace, 2);
 	return true;
 }
 

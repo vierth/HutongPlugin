@@ -160,6 +160,16 @@ void FHutongLayoutCommands::RegisterCommands()
 		"Measure a span, and calibrate a map image against it.\n"
 		"Click, move, click. Reads out metres, paces (步), and what the span would be as a street width. Places nothing.",
 		EUserInterfaceActionType::ToggleButton, FInputChord(EModifierKey::Shift | EModifierKey::Alt, EKeys::Four));
+
+	UI_COMMAND(BeginHeightsTool, "Heights",
+		"Set the eaves of several placed buildings at once.\n"
+		"Click, Shift+click or box the buildings of a court; the panel lists each with its eave and a suggestion ranked on the Main Hall (正房). Apply sets them all. Places nothing.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	UI_COMMAND(BeginCourtsTool, "Courts",
+		"Group placed buildings into courtyard units (院落) and file them in the Outliner.\n"
+		"Select a court's buildings, keep or change the name suggested from the map tile, Assign. Places nothing.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
 }
 
 #undef LOCTEXT_NAMESPACE

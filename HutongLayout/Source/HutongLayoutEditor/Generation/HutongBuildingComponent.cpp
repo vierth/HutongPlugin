@@ -21,14 +21,34 @@ int32 UHutongBuildingComponent::BuildLODs(TArray<FDynamicMesh3>& OutLODs) const
 	// The seam every rebuild shares: generator builds the rectangle, then the corner offsets warp
 	// the mesh, before normals and box UVs.
 	const bool bSkew = HasFootprintSkew();
+	const FHutongFootprintSkew Skew = GetFootprintSkew();
 	return HutongGen::Detail::BuildPlacementLODs(bPlanOnly, Footprint.X, Footprint.Y,
 		DetailLevel, bBuildLODChain,
-		[this, Footprint, bSkew](FDynamicMesh3& Mesh, EHutongDetail Level)
+		[this, Footprint, bSkew, &Skew](FDynamicMesh3& Mesh, EHutongDetail Level)
 		{
 			BuildMesh(Mesh, Level);
-			if (bSkew) HutongMeshUtils::WarpFootprint(Mesh, Footprint.X, Footprint.Y, FootprintSkew);
+			if (bSkew) HutongMeshUtils::WarpFootprint(Mesh, Footprint.X, Footprint.Y, Skew);
 		},
 		OutLODs);
+}
+
+FHutongFootprintSkew UHutongBuildingComponent::WithEndBays(FHutongFootprintSkew Skew) const
+{
+	Skew.EndBayReach[0] = Skew.EndBayReach[1] = 0.0;
+	EHutongBaySide Side;
+	const FVector2D Size = GetFootprintSize();
+	const bool bRunX = HutongFootprint::RunAlongX(Size);
+	if (Skew.Mode != EHutongSkewMode::Ends || !GetFacade(Side) || ArePlanBaysAlongX() != bRunX) return Skew;
+	FHutongPlanBays Bays;
+	GetPlanBays(Bays);
+	// One bay has no inner column to stop at.
+	if (Bays.Boundaries.Num() < 3) return Skew;
+	Bays.Boundaries.Sort();
+	const double L = bRunX ? Size.X : Size.Y;
+	// Seam on the end-side face of the first inner column, so the column stands as built.
+	Skew.EndBayReach[0] = Bays.Boundaries[1] - Bays.ColumnRadius;
+	Skew.EndBayReach[1] = L - Bays.Boundaries[Bays.Boundaries.Num() - 2] - Bays.ColumnRadius;
+	return Skew;
 }
 
 void UHutongBuildingComponent::OnComponentCreated()
@@ -158,7 +178,7 @@ void UHutongBuildingComponent::ApplyPlanOutline()
 	for (const FHutongPlanOpening& O : Openings) Marks.Add(FVector2D(O.Centre, O.Width));
 	FHutongPlanBays Bays;
 	GetPlanBays(Bays);
-	Outline->SetPlan(GetFootprintSize(), FootprintSkew, bHasFacade, Side, Marks, IsRunAlongY(),
+	Outline->SetPlan(GetFootprintSize(), GetFootprintSkew(), bHasFacade, Side, Marks, IsRunAlongY(),
 		Bays, ArePlanBaysAlongX(), GetPlanColour());
 }
 
@@ -187,7 +207,7 @@ void UHutongBuildingComponent::PostEditChangeProperty(FPropertyChangedEvent& Pro
 	// A corner past the opposite edge folds the quad and would invert the warp; the panel shows the
 	// rectangle built instead.
 	{
-		if (HasFootprintSkew() && !HutongFootprint::IsSkewValid(GetFootprintSize(), FootprintSkew))
+		if (HasFootprintSkew() && !HutongFootprint::IsSkewValid(GetFootprintSize(), GetFootprintSkew()))
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Hutong: corner offsets on %s fold the footprint; cleared."),
 				*GetPathName());
@@ -771,4 +791,40 @@ void UHutongFrameBuildingComponent::BuildFrameMesh(const FHutongFrameParams& InP
 void UHutongFrameBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDetail Level) const
 {
 	BuildFrameMesh(Params, BaySide, BayCountOverride, FootprintX, FootprintY, OutMesh, Level);
+}
+
+EHutongCourtRole UHutongSiheyuanBuildingComponent::InferCourtRole() const
+{
+	// The preset names the type; a compound's pieces carry none, but their labels do.
+	static const TPair<const TCHAR*, EHutongCourtRole> ByPreset[] = {
+		{ TEXT("Main Hall"), EHutongCourtRole::MainHall }, { TEXT("Side House"), EHutongCourtRole::SideHouse },
+		{ TEXT("Ear Room"), EHutongCourtRole::EarRoom }, { TEXT("Front Row"), EHutongCourtRole::FrontRow },
+		{ TEXT("Rear Row"), EHutongCourtRole::RearRow } };
+	for (const TPair<const TCHAR*, EHutongCourtRole>& It : ByPreset)
+	{
+		if (Preset.StartsWith(It.Key)) return It.Value;
+	}
+	static const TPair<const TCHAR*, EHutongCourtRole> ByLabel[] = {
+		{ TEXT("Hutong_Zhengfang"), EHutongCourtRole::MainHall }, { TEXT("Hutong_Xiangfang"), EHutongCourtRole::SideHouse },
+		{ TEXT("Hutong_Erfang"), EHutongCourtRole::EarRoom }, { TEXT("Hutong_Daozuofang"), EHutongCourtRole::FrontRow },
+		{ TEXT("Hutong_Houzhaofang"), EHutongCourtRole::RearRow } };
+	const FString Label = GetOwner() ? GetOwner()->GetActorNameOrLabel() : FString();
+	for (const TPair<const TCHAR*, EHutongCourtRole>& It : ByLabel)
+	{
+		if (Label.StartsWith(It.Key)) return It.Value;
+	}
+	return EHutongCourtRole::Other;
+}
+
+double UHutongGateHouseBuildingComponent::EaveForRidge(double TargetRidge, const FString& PresetName) const
+{
+	FHutongGateHouseParams P = Params;
+	if (!PresetName.IsEmpty() && PresetName != Preset)
+	{
+		if (UHutongPresetLibrary* Library = UHutongPresetLibrary::Get())
+		{
+			Library->LoadPreset(GetPresetKey(), PresetName, FHutongGateHouseParams::StaticStruct(), &P);
+		}
+	}
+	return HutongGen::GateRow::EaveForRidge(P, HutongGen::BaySide::IsAlongX(BaySide) ? FootprintY : FootprintX, TargetRidge);
 }

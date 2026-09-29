@@ -387,7 +387,7 @@ bool FHutongCompoundPlotSizeTest::RunTest(const FString& Parameters)
 	const HutongGen::FCompoundInput In = Measure(EHutongCompoundPlan::ThreeCourtyards);
 
 	// The reference figure.
-	TestTrue(FString::Printf(TEXT("a 三進 stands 50–60 m deep (%.1f m)"), In.Depth * 0.01),
+	TestTrue(FString::Printf(TEXT("a 三進 stands 47–62 m deep (%.1f m)"), In.Depth * 0.01),
 		In.Depth >= 4700.0 && In.Depth <= 6200.0);
 
 	const TArray<FHutongCompoundSlot> Slots = HutongGen::LayOutCompound(In);
@@ -742,7 +742,7 @@ bool FHutongCompoundGateInRowTest::RunTest(const FString& Parameters)
 	// Only the gate's eave comes forward of the street face, and a 如意門's is modest; measured as built
 	// (lifted clear of the row, so taller than the panel's). Fig 2-9.1's 大門 has mid-depth doors: the
 	// 大型 court's is a 廣亮大門.
-	TestEqual(TEXT("the large court's gate is a 廣亮大門"), int32(S->GateHouse.Style), int32(EHutongGateStyle::Guangliang));
+	TestEqual(TEXT("the default court's gate is a 廣亮大門"), int32(S->GateHouse.Style), int32(EHutongGateStyle::Guangliang));
 	FHutongGateHouseParams Built = S->GateHouse;
 	Built.Style = EHutongGateStyle::Ruyi;
 	FHutongSiheyuanParams Row = S->FrontRow;
@@ -772,17 +772,24 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCompoundEarRoomTest,
 
 bool FHutongCompoundEarRoomTest::RunTest(const FString& Parameters)
 {
-	UHutongCompoundToolProperties* S = NewObject<UHutongCompoundToolProperties>();
-	if (!TestNotNull(TEXT("the compound has settings"), S)) return false;
+	// Built through the tool, so the eaves read are the ones it builds with (the hall's ears held at
+	// the hall's eave less EarRoomBelowHallCm), not a cap the test applied itself.
+	UHutongCompoundTool* Tool = NewObject<UHutongCompoundTool>();
+	Tool->Settings = NewObject<UHutongCompoundToolProperties>(Tool);
+	UHutongCompoundToolProperties* S = Tool->Settings;
 
 	// Every plan, since only 三進 drives a 過道 past an ear room.
 	for (const EHutongCompoundPlan Plan : { EHutongCompoundPlan::OneCourtyard,
 		EHutongCompoundPlan::TwoCourtyards, EHutongCompoundPlan::ThreeCourtyards })
 	{
 		S->Plan = Plan;
-		double W, D;
-		UHutongCompoundTool::MakeInputWithHall(S, S->MainHall, 1.0, 1.0).GetSuggestedPlot(W, D);
-		const TArray<FHutongCompoundSlot> Slots = HutongGen::LayOutCompound(UHutongCompoundTool::MakeInputFrom(S, W, D));
+		double W = 0.0, D = 0.0;
+		UHutongCompoundTool::GetStampedPlot(S, W, D);
+		TArray<HutongCompound::FBuiltSlot> Built;
+		Tool->BuildCompound(W, D, EHutongDetail::Massing, Built);
+		TArray<FHutongCompoundSlot> Slots;
+		for (const HutongCompound::FBuiltSlot& B : Built) Slots.Add(B.Slot);
+		Tool->ResolveHallEave(Slots, W, D);
 
 		// The hall and its two in-line ear rooms.
 		double HallX0 = 0.0, HallX1 = 0.0, HallNorth = -1.0, HallEave = 0.0;
@@ -792,15 +799,11 @@ bool FHutongCompoundEarRoomTest::RunTest(const FString& Parameters)
 			HallX0 = Slot.Min.X; HallX1 = Slot.Min.X + Slot.Size.X;
 			// Ears back onto the hall's north line, whatever their depth.
 			HallNorth = Slot.Min.Y + Slot.Size.Y;
-			FHutongSiheyuanParams P = HutongCompound::CourtRow(
-				UHutongCompoundTool::MainHallFor(S, W, D), Plan, Slot.Facing);
-			P.Width = Slot.Size.X; P.Depth = Slot.Size.Y;
-			HallEave = P.GetEaveHeight();
+			HallEave = Tool->MakeSlotParams(Slot).House.GetEaveHeight();
 		}
 		if (!TestTrue(TEXT("the plan has a hall"), HallEave > 0.0)) return false;
 
-		TArray<double> EarWidths;
-		double TallestEar = 0.0;
+		TArray<double> EarWidths, EarEaves;
 		for (const FHutongCompoundSlot& Slot : Slots)
 		{
 			if (Slot.Piece != EHutongCompoundPiece::EarRoom
@@ -810,24 +813,22 @@ bool FHutongCompoundEarRoomTest::RunTest(const FString& Parameters)
 			if (Slot.Min.X + Slot.Size.X <= HallX0 + 1.0 || Slot.Min.X >= HallX1 - 1.0)
 			{
 				EarWidths.Add(Slot.Size.X);
-				FHutongSiheyuanParams P = HutongCompound::CourtRow(S->EarRoom, Plan, Slot.Facing);
-				P.Width = Slot.Size.X; P.Depth = Slot.Size.Y;
-				P = HutongCompound::Subordinate(P, HallEave - HutongCanon::Compound::EarRoomBelowHallCm);
-				TallestEar = FMath::Max(TallestEar, P.GetEaveHeight());
+				const HutongCompound::FSlotParams P = Tool->MakeSlotParams(Slot);
+				EarEaves.Add(Slot.Piece == EHutongCompoundPiece::EarPassage ? P.EarPassage.RoomParams().GetEaveHeight() : P.House.GetEaveHeight());
 			}
 		}
 		if (!TestEqual(TEXT("an ear room each flank"), EarWidths.Num(), 2)) return false;
 		TestNearlyEqual(TEXT("the two are the same width"), EarWidths[0], EarWidths[1], 1.0);
 		TestNearlyEqual(TEXT("and the hall stands on the plot's centre line"),
 			0.5 * (HallX0 + HallX1), 0.5 * W, 1.0);
-		TestTrue(FString::Printf(TEXT("the ear's eave %.0f stands under the hall's %.0f"), TallestEar, HallEave),
-			TallestEar <= HallEave - HutongCanon::Compound::EarRoomBelowHallCm + 0.01);
-
+		for (const double Eave : EarEaves)
+		{
+			TestNearlyEqual(*FString::Printf(TEXT("an ear's eave %.0f stands its step under the hall's %.0f"), Eave, HallEave),
+				Eave, HallEave - HutongCanon::Compound::EarRoomBelowHallCm, 1.0);
+		}
 	}
 	return true;
 }
-
-#endif // WITH_DEV_AUTOMATION_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCompoundLinkedVerandasTest,
 	"HutongLayout.Compound.LinkedVerandas",
@@ -960,8 +961,6 @@ bool FHutongCompoundLinkedVerandasTest::RunTest(const FString& Parameters)
 	}
 	return true;
 }
-
-#if WITH_DEV_AUTOMATION_TESTS
 
 // Default = Fig 2-9.1 標准的三進院落: three-bay 廂房 with a one-bay 廂耳房 south and 小天井 north,
 // 前廊 正房, court walked round under cover, and the hall's two 耳房 one height, the 過道 one roofed

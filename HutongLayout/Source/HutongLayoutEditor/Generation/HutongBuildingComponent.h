@@ -101,6 +101,62 @@ public:
 
 	bool HasFootprintSkew() const { return !FootprintSkew.IsZero(); }
 
+	// Courtyard unit this building belongs to, for setting heights together; empty = none. A wall may
+	// stand between two courts and list both, separated by ';' (CanShareCourts); anything else has one.
+	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Court (院落)", ToolTip="Name of the courtyard unit this building belongs to; a wall may list several, separated by ;."))
+	FString Court;
+
+	virtual bool CanShareCourts() const { return false; }
+	TArray<FString> GetCourts() const
+	{
+		TArray<FString> Out;
+		Court.ParseIntoArray(Out, TEXT(";"));
+		for (FString& Name : Out) Name.TrimStartAndEndInline();
+		Out.RemoveAll([](const FString& Name) { return Name.IsEmpty(); });
+		return Out;
+	}
+	bool IsInCourt(const FString& Name) const { return GetCourts().Contains(Name); }
+	// Takes the building out of one court (a wall keeps any other).
+	void RemoveCourt(const FString& Name)
+	{
+		TArray<FString> Courts = GetCourts();
+		Courts.Remove(Name);
+		Court = FString::Join(Courts, TEXT("; "));
+	}
+	// Puts the building in a court: a wall adds it to those it stands between, anything else moves
+	// to it. Empty clears every court.
+	void AssignCourt(const FString& Name)
+	{
+		TArray<FString> Courts = CanShareCourts() ? GetCourts() : TArray<FString>();
+		if (Name.IsEmpty()) Courts.Reset();
+		else Courts.AddUnique(Name);
+		Court = FString::Join(Courts, TEXT("; "));
+	}
+
+	// Rank in its court; Auto reads it from the type and preset.
+	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Court Role", ToolTip="What this building is in its courtyard; Auto reads it from the type and preset."))
+	EHutongCourtRole CourtRole = EHutongCourtRole::Auto;
+
+	EHutongCourtRole GetCourtRole() const { return CourtRole != EHutongCourtRole::Auto ? CourtRole : InferCourtRole(); }
+	virtual EHutongCourtRole InferCourtRole() const { return EHutongCourtRole::Other; }
+
+	// The height the heights tool edits: the eave (檐柱 top) of a roofed type, the body top of a wall.
+	// Set overrides whatever derived it; false where the type's height is not one number (亭, the
+	// 大式 殿, 牌坊). The caller rebuilds; GetEditHeight answers what is built, the doorway floor included.
+	virtual double GetEditHeight() const { return GetEaveHeight(); }
+	virtual bool SetEditHeight(double Cm) { return false; }
+	virtual bool CanSetEditHeight() const { return false; }
+
+	// A gate's eave whose ridge stands at TargetRidge, under the named preset (empty = its own
+	// parameters); negative for every other type.
+	virtual double EaveForRidge(double TargetRidge, const FString& PresetName) const { return -1.0; }
+
+	// The offsets as the warp, outline and handles read them: under Ends on a building with bays
+	// along its run, each end zone is its end bay, so a slid corner moves that bay alone.
+	FHutongFootprintSkew GetFootprintSkew() const { return WithEndBays(FootprintSkew); }
+	// Any candidate offsets (a drag's) with this building's end bays.
+	FHutongFootprintSkew WithEndBays(FHutongFootprintSkew Skew) const;
+
 	// 下鹼 top above ground, negative if none. Setter lets a snapped placement match its neighbour.
 	virtual double GetBaseCourseTop() const { return -1.0; }
 	virtual void SetBaseCourseTop(double TopAboveGround) {}
@@ -202,6 +258,16 @@ class UHutongWallBuildingComponent : public UHutongBuildingComponent
 	GENERATED_BODY()
 
 public:
+	// A wall may stand between two courts.
+	virtual bool CanShareCourts() const override { return true; }
+	// The heights tool edits the body top; the cap rises over it.
+	virtual double GetEditHeight() const override { return Params.GetHeight(); }
+	virtual bool CanSetEditHeight() const override { return true; }
+	virtual bool SetEditHeight(double Cm) override { Params.bDeriveFromRole = false; Params.Height = Cm; return true; }
+	virtual EHutongCourtRole InferCourtRole() const override
+	{
+		return Params.Role == EHutongWallRole::Courtyard ? EHutongCourtRole::CourtWall : EHutongCourtRole::LaneWall;
+	}
 	// Role labels the run, as nothing else distinguishes 院牆 from 隔牆.
 	virtual FText GetTypeLabel() const override
 	{
@@ -337,6 +403,9 @@ public:
 
 	// Footprint first: eave derives from bay width, and Params.Width is the struct default until filled.
 	virtual double GetEaveHeight() const override { return ParamsForFootprint().GetEaveHeight(); }
+	virtual bool CanSetEditHeight() const override { return true; }
+	virtual bool SetEditHeight(double Cm) override { Params.bDeriveEaveFromBays = false; Params.EaveHeight = Cm; return true; }
+	virtual EHutongCourtRole InferCourtRole() const override;
 	virtual double GetRidgeHeight() const override
 	{
 		const FHutongSiheyuanParams P = ParamsForFootprint();
@@ -432,6 +501,10 @@ public:
 	virtual double GetBaseCourseTop() const override { return FMath::Max(Params.FloorHeight, 0.0) + Params.GetBaseCourseHeight(); }
 	virtual void SetBaseCourseTop(double TopAboveGround) override { Params.BaseCourseHeight = FMath::Max(TopAboveGround - FMath::Max(Params.FloorHeight, 0.0), 25.0); }
 	virtual double GetEaveHeight() const override { return Params.GetEaveHeight(); }
+	virtual double EaveForRidge(double TargetRidge, const FString& PresetName) const override;
+	virtual bool CanSetEditHeight() const override { return true; }
+	virtual bool SetEditHeight(double Cm) override { Params.EaveHeight = Cm; return true; }
+	virtual EHutongCourtRole InferCourtRole() const override { return EHutongCourtRole::Gate; }
 	virtual double GetRidgeHeight() const override
 	{
 		return HutongGen::Ridge::Gate(Params,
@@ -543,6 +616,8 @@ public:
 	virtual double GetBaseCourseTop() const override { return FMath::Max(Params.PlinthHeight, 0.0) + Params.GetBaseCourseHeight(); }
 	virtual void SetBaseCourseTop(double TopAboveGround) override { Params.BaseCourseHeight = FMath::Max(TopAboveGround - FMath::Max(Params.PlinthHeight, 0.0), 25.0); }
 	virtual double GetEaveHeight() const override { return Params.GetEaveHeight(); }
+	virtual bool CanSetEditHeight() const override { return true; }
+	virtual bool SetEditHeight(double Cm) override { Params.Height = Cm; return true; }
 	virtual double GetRidgeHeight() const override { return HutongGen::Ridge::ScreenWall(Params); }
 
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="60", ClampMin="20", Units="cm", ToolTip="Length of the screen wall, in cm."))
@@ -587,6 +662,9 @@ public:
 	UPROPERTY(EditAnywhere, Category="Corridor", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the corridor generator."))
 	FHutongCorridorParams Params;
 	virtual double GetEaveHeight() const override { return Params.GetEaveHeight(); }
+	virtual bool CanSetEditHeight() const override { return true; }
+	virtual bool SetEditHeight(double Cm) override { Params.EaveHeight = Cm; return true; }
+	virtual EHutongCourtRole InferCourtRole() const override { return EHutongCourtRole::Corridor; }
 	virtual double GetRidgeHeight() const override { return HutongGen::Ridge::Corridor(Params); }
 
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="100", ClampMin="40", Units="cm", ToolTip="Length of the corridor run, in cm."))
@@ -660,6 +738,9 @@ public:
 	UPROPERTY(EditAnywhere, Category="Inner Gate", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the inner gate generator."))
 	FHutongInnerGateParams Params;
 	virtual double GetEaveHeight() const override { return Params.GetEaveHeight(); }
+	virtual bool CanSetEditHeight() const override { return true; }
+	virtual bool SetEditHeight(double Cm) override { Params.EaveHeight = Cm; return true; }
+	virtual EHutongCourtRole InferCourtRole() const override { return EHutongCourtRole::InnerGate; }
 	virtual double GetRidgeHeight() const override { return HutongGen::Ridge::InnerGate(Params); }
 
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="150", ClampMin="60", Units="cm", ToolTip="Frontage of the gate, in cm."))
@@ -719,6 +800,8 @@ public:
 	virtual double GetBaseCourseTop() const override { return FMath::Max(Params.FloorHeight, 0.0) + Params.GetBaseCourseHeight(); }
 	virtual void SetBaseCourseTop(double TopAboveGround) override { Params.BaseCourseHeight = FMath::Max(TopAboveGround - FMath::Max(Params.FloorHeight, 0.0), 25.0); }
 	virtual double GetEaveHeight() const override { return Params.GetEaveHeight(); }
+	virtual bool CanSetEditHeight() const override { return true; }
+	virtual bool SetEditHeight(double Cm) override { Params.EaveHeight = Cm; return true; }
 	virtual double GetRidgeHeight() const override { return HutongGen::Ridge::Shop(Params); }
 
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="200", ClampMin="80", Units="cm", ToolTip="Extent of the footprint along the actor's local X, in cm."))
@@ -786,6 +869,8 @@ public:
 	virtual double GetBaseCourseTop() const override { return FMath::Max(Params.FloorHeight, 0.0) + Params.GetBaseCourseHeight(); }
 	virtual void SetBaseCourseTop(double TopAboveGround) override { Params.BaseCourseHeight = FMath::Max(TopAboveGround - FMath::Max(Params.FloorHeight, 0.0), 25.0); }
 	virtual double GetEaveHeight() const override { return Params.GetEaveHeight(); }
+	virtual bool CanSetEditHeight() const override { return true; }
+	virtual bool SetEditHeight(double Cm) override { Params.UpperStoreyHeight = Cm - Params.GetStoreyLineHeight(); return true; }
 	virtual double GetRidgeHeight() const override { return HutongGen::Ridge::Storey(Params); }
 
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="200", ClampMin="80", Units="cm", ToolTip="Extent of the footprint along the actor's local X, in cm."))
@@ -854,6 +939,9 @@ public:
 	virtual void SetBaseCourseTop(double TopAboveGround) override { Params.Room.BaseCourseHeight = FMath::Max(TopAboveGround - Params.Room.GetFloorHeight(), 25.0); }
 
 	virtual double GetEaveHeight() const override { return ParamsForFootprint().GetEaveHeight(); }
+	virtual bool CanSetEditHeight() const override { return true; }
+	virtual bool SetEditHeight(double Cm) override { Params.Room.bDeriveEaveFromBays = false; Params.Room.EaveHeight = Cm; return true; }
+	virtual EHutongCourtRole InferCourtRole() const override { return EHutongCourtRole::EarRoom; }
 	virtual double GetRidgeHeight() const override
 	{
 		const FHutongEarPassageParams P = ParamsForFootprint();
@@ -1190,6 +1278,8 @@ public:
 	}
 
 	virtual double GetEaveHeight() const override { return HouseForFootprint().GetEaveHeight(); }
+	virtual bool CanSetEditHeight() const override { return true; }
+	virtual bool SetEditHeight(double Cm) override { Params.House.bDeriveEaveFromBays = false; Params.House.EaveHeight = Cm; return true; }
 	virtual double GetRidgeHeight() const override
 	{
 		const HutongGen::FrameLayout::FLayout L = HutongGen::FrameLayout::Make(HouseForFootprint());
@@ -1260,6 +1350,8 @@ public:
 		return P;
 	}
 	virtual double GetEaveHeight() const override { return SizedParams().GetEaveHeight(); }
+	virtual bool CanSetEditHeight() const override { return !Params.IsGrand(); }
+	virtual bool SetEditHeight(double Cm) override { if (Params.IsGrand()) return false; Params.EaveHeight = Cm; return true; }
 	virtual double GetRidgeHeight() const override
 	{
 		const FHutongHallParams P = SizedParams();

@@ -240,8 +240,9 @@ bool FHutongFootprintHouseGableTest::RunTest(const FString& Parameters)
 	if (!TestTrue(TEXT("the skewed house builds"), Skewed.Num() == 1 && Skewed[0].VertexCount() >= Plain[0].VertexCount())) return false;
 
 	// Plane x == GableX maps to the line between its mapped ends.
-	const FVector2D L0 = HutongFootprint::Map(Footprint, B->FootprintSkew, GableX, 0.0);
-	const FVector2D L1 = HutongFootprint::Map(Footprint, B->FootprintSkew, GableX, Footprint.Y);
+	const FHutongFootprintSkew Built = B->GetFootprintSkew();
+	const FVector2D L0 = HutongFootprint::Map(Footprint, Built, GableX, 0.0);
+	const FVector2D L1 = HutongFootprint::Map(Footprint, Built, GableX, Footprint.Y);
 	double Worst = 0.0;
 	for (int32 vid : Wall)
 	{
@@ -250,6 +251,23 @@ bool FHutongFootprintHouseGableTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(FString::Printf(TEXT("the gable wall lies on the skewed line (worst %.4f cm)"), Worst), Worst < 1.0e-3);
 	TestTrue(TEXT("the skewed end is off the rectangle"), FMath::Abs(L0.X - L1.X) > 50.0);
+
+	// Only the end bay moves: the zone stops at the end-side face of the last inner column, and
+	// every vertex short of it is where the plain house had it.
+	FHutongPlanBays Bays;
+	B->GetPlanBays(Bays);
+	Bays.Boundaries.Sort();
+	const double Seam = Bays.Boundaries[Bays.Boundaries.Num() - 2] + Bays.ColumnRadius;
+	TestTrue(FString::Printf(TEXT("the end zone is the end bay (%.1f cm, bay %.1f cm)"),
+		HutongFootprint::EndZone(Footprint, Built, false), Footprint.X - Seam),
+		FMath::IsNearlyEqual(HutongFootprint::EndZone(Footprint, Built, false), Footprint.X - Seam, 1.0e-6));
+	int32 Moved = 0;
+	for (int32 vid : Plain[0].VertexIndicesItr())
+	{
+		const FVector3d P = Plain[0].GetVertex(vid);
+		if (P.X < Seam - 1.0e-3 && !Skewed[0].GetVertex(vid).Equals(P, 1.0e-6)) ++Moved;
+	}
+	TestEqual(TEXT("nothing short of the end bay moves"), Moved, 0);
 	return true;
 }
 
@@ -616,7 +634,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFootprintExchangeTest,
 
 bool FHutongFootprintExchangeTest::RunTest(const FString& Parameters)
 {
-	// Corners travel in the blob, the layout-only fields, and the ghost's record.
+	// Corners travel in the blob and the ghost's record.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
@@ -640,18 +658,40 @@ bool FHutongFootprintExchangeTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the offsets are restored"), Target->FootprintSkew == EndWallSkew());
 	}
 
-	// Layout-only record: the base class's Footprint category travels; the ghost's corners follow.
+	// The courtyard unit travels with the placement (a wall may list two courts).
+	Skewed->Court = TEXT("3M6_Courtyard_1; 3M6_Courtyard_2");
+	Skewed->CourtRole = EHutongCourtRole::MainHall;
 	{
 		HutongExchange::FSceneFile File;
 		HutongExchange::FResult Result;
 		TArray<UHutongBuildingComponent*> Both = { Skewed, Plain };
-		TestTrue(TEXT("the set gathers"), HutongExchange::Gather(Both, World, File, Result, /*bLayoutOnly*/ true));
+		HutongExchange::Gather(Both, World, File, Result);
+		const FString Path = FPaths::Combine(FPaths::AutomationTransientDir(), TEXT("HutongCourt.hutong.json"));
+		TestTrue(TEXT("the file writes"), HutongExchange::Write(File, Path, Result));
+		UWorld* Other = UWorld::CreateWorld(EWorldType::Editor, false);
+		HutongExchange::FResult ImportResult;
+		HutongExchange::ImportAtRecordedTransforms(Other, Path, HutongExchange::EMode::Additive, NAME_None, ImportResult);
+		int32 InCourt = 0;
+		for (UHutongBuildingComponent* C : HutongDetailOps::CollectLoaded(Other))
+		{
+			if (C->Court == Skewed->Court && C->CourtRole == EHutongCourtRole::MainHall) ++InCourt;
+		}
+		TestEqual(TEXT("the court and role come back"), InCourt, 1);
+		Other->DestroyWorld(false);
+		IFileManager::Get().Delete(*Path);
+	}
+
+	// The record: the skew travels; the ghost's corners follow.
+	{
+		HutongExchange::FSceneFile File;
+		HutongExchange::FResult Result;
+		TArray<UHutongBuildingComponent*> Both = { Skewed, Plain };
+		TestTrue(TEXT("the set gathers"), HutongExchange::Gather(Both, World, File, Result));
 		const HutongExchange::FRecord* Rec = File.Records.FindByPredicate(
 			[&](const HutongExchange::FRecord& R) { return R.Id == Skewed->BuildingId; });
 		if (TestNotNull(TEXT("the skewed record is in the set"), Rec))
 		{
 			TestTrue(TEXT("the record carries the skew"), Rec->Skew == EndWallSkew());
-			TestTrue(TEXT("the layout fields carry it"), Rec->FootprintFields.IsValid() && Rec->FootprintFields->HasField(TEXT("footprintSkew")));
 			FVector2D Corners[4];
 			HutongExchange::FootprintCornersInSetFrame(*Rec, Corners);
 			FVector2D Local[4];
@@ -675,7 +715,7 @@ bool FHutongFootprintExchangeTest::RunTest(const FString& Parameters)
 			if (C->FootprintSkew == EndWallSkew()) ++Restored;
 		}
 		TestEqual(TEXT("both buildings import"), Total, 2);
-		TestEqual(TEXT("the layout import restores the skewed building"), Restored, 1);
+		TestEqual(TEXT("the import restores the skewed building"), Restored, 1);
 		Other->DestroyWorld(false);
 		IFileManager::Get().Delete(*Path);
 	}
@@ -713,6 +753,27 @@ bool FHutongFootprintConvertTest::RunTest(const FString& Parameters)
 	}
 
 	World->DestroyWorld(false);
+	return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFootprintBoxPickTest,
+	"HutongLayout.Footprint.BoxPick",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongFootprintBoxPickTest::RunTest(const FString& Parameters)
+{
+	// A footprint turned 30°, 1000 × 500, about the origin.
+	FVector2D C[4];
+	const FVector2D Local[4] = { FVector2D(-500, -250), FVector2D(500, -250), FVector2D(500, 250), FVector2D(-500, 250) };
+	for (int32 i = 0; i < 4; ++i) C[i] = Local[i].GetRotated(30.0);
+	using HutongFootprint::QuadOverlapsBox;
+	TestTrue(TEXT("a narrow box straight across it, holding no corner, picks it"), QuadOverlapsBox(C, FVector2D(-10.0, -2000.0), FVector2D(10.0, 2000.0)));
+	TestTrue(TEXT("a box inside it picks it"), QuadOverlapsBox(C, FVector2D(-20.0, -20.0), FVector2D(20.0, 20.0)));
+	TestTrue(TEXT("a box round it picks it"), QuadOverlapsBox(C, FVector2D(-2000.0, -2000.0), FVector2D(2000.0, 2000.0)));
+	TestFalse(TEXT("a box clear of it does not"), QuadOverlapsBox(C, FVector2D(700.0, -1000.0), FVector2D(800.0, -600.0)));
+	// Inside the turned footprint's bounds but off its edge: only the quad's own axes separate it.
+	TestFalse(TEXT("a box in the corner of its bounds, off the footprint, does not"), QuadOverlapsBox(C, FVector2D(-560.0, 350.0), FVector2D(-520.0, 400.0)));
 	return true;
 }
 

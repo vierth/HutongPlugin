@@ -18,6 +18,8 @@
 #include "ShaderCompiler.h"
 #include "UObject/Package.h"
 
+#if WITH_DEV_AUTOMATION_TESTS
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongStarterMaterialNamingTest,
 	"HutongLayout.Appearance.StarterMaterials",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -195,3 +197,5 @@ bool FHutongGablePedimentSlotTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("no tile on the gable plane above the eave"), Tile, 0);
 	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

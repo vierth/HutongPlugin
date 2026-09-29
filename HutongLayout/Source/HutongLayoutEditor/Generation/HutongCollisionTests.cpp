@@ -14,8 +14,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCollisionGalleryTest,
 bool FHutongCollisionGalleryTest::RunTest(const FString& Parameters)
 {
 	UHutongGalleryToolProperties* S = NewObject<UHutongGalleryToolProperties>();
+	int32 Passages = 0, Solids = 0;
 	HutongGallery::ForEachBuilt(S, EHutongDetail::Far,
-		[this](const FString& Label, const FVector2D& Footprint, const UE::Geometry::FDynamicMesh3& Mesh)
+		[this, &Passages, &Solids](const FString& Label, const FVector2D& Footprint, const UE::Geometry::FDynamicMesh3& Mesh)
 		{
 			FKAggregateGeom Geom;
 			UE::Geometry::FSimpleShapeSet3d Shapes;
@@ -33,9 +34,21 @@ bool FHutongCollisionGalleryTest::RunTest(const FString& Parameters)
 			const bool bPassage = Label.Contains(TEXT("Doorway")) || Label.Contains(TEXT("Moon Gate"))
 				|| Label.Contains(TEXT("Corridor")) || Label.Contains(TEXT("Pavilion")) || Label.Contains(TEXT("Inner Gate ("))
 				|| Label.Contains(TEXT("Wall Gate")) || Label.Contains(TEXT("Memorial Arch"));
-			if (bPassage) TestEqual(FString::Printf(TEXT("%s: the way through is open"), *Label), Blocked, 0);
-			if (Label == TEXT("Wall (牆)") || Label.StartsWith(TEXT("Screen Wall"))) TestEqual(FString::Printf(TEXT("%s: the wall is solid"), *Label), Blocked, 3);
+			if (bPassage)
+			{
+				++Passages;
+				TestEqual(FString::Printf(TEXT("%s: the way through is open"), *Label), Blocked, 0);
+			}
+			if (Label == TEXT("Wall (牆)") || Label.StartsWith(TEXT("Screen Wall")))
+			{
+				++Solids;
+				TestEqual(FString::Printf(TEXT("%s: the wall is solid"), *Label), Blocked, 3);
+			}
 		});
+	UE_LOG(LogTemp, Display, TEXT("collision: %d ways through, %d solid walls"), Passages, Solids);
+	// The cases are picked by gallery label: a renamed label must not drop them silently.
+	TestTrue(FString::Printf(TEXT("the gallery still offers ways through (%d)"), Passages), Passages >= 22);
+	TestTrue(FString::Printf(TEXT("and solid walls (%d)"), Solids), Solids >= 2);
 	return true;
 }
 

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Generation/HutongCanon.h"
 #include "Generation/CompoundLayout.h"
+#include "Generation/HutongMetadata.h"
 
 struct FHutongSiheyuanParams;
 struct FHutongFrameParams;
@@ -38,4 +39,12 @@ namespace HutongPresets
 
 	// Street row default: the front row, lining the lane.
 	const FString& DefaultStreetRowHouseName();
+
+	// A role's eave over its 正房's, off the house table as built at each preset's suggested
+	// frontage (正房 前廊後無廊, 廂房, 耳房, 倒座房, 後罩房); DERIVED, so the table's ranking and the
+	// heights tool never disagree. Negative for roles without one (gates, corridors, other).
+	double EaveRatio(EHutongCourtRole Role);
+
+	// A role's suggested eave, from a reference building's role and eave; negative if either has no ratio.
+	double SuggestEave(EHutongCourtRole Role, EHutongCourtRole ReferenceRole, double ReferenceEave);
 }

@@ -95,6 +95,8 @@ bool FHutongConfidenceTest::RunTest(const FString& Parameters)
 	FString Text;
 	if (TestTrue(TEXT("the file is on disk"), FFileHelper::LoadFileToString(Text, *Path)))
 	{
+		// The buildings, not the defaults at the top of the file, which hold every field.
+		Text.RightChopInline(FMath::Max(Text.Find(TEXT("\"buildings\"")), 0));
 		TestTrue(TEXT("the confidence travels"), Text.Contains(TEXT("Inferred")));
 		TestTrue(TEXT("and so does the note"), Text.Contains(TEXT("sheet 12")));
 		// A default confidence is not a decision, so nothing is written.

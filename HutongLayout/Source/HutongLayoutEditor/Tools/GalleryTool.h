@@ -118,9 +118,6 @@ namespace HutongGallery
 	// The category's name in the outliner and the tool.
 	FString CategoryName(EHutongGalleryCategory Category);
 
-	// Builds every piece and reports each label and triangle count; spawns nothing.
-	TArray<TPair<FString, int32>> BuildAll(const UHutongGalleryToolProperties* Settings);
-
 	// What one piece costs.
 	struct FHutongCostRow
 	{
@@ -147,6 +144,6 @@ namespace HutongGallery
 	// and a "# item <label> <x>" line per piece. For offline viewing.
 	void WriteObj(const UHutongGalleryToolProperties* Settings, const FString& Path);
 
-	// Same walk as BuildAll, priced at every level.
+	// Builds every piece and prices it at every level; spawns nothing. Cost.Report asserts each builds.
 	TArray<FHutongCostRow> BuildCostReport(const UHutongGalleryToolProperties* Settings);
 }

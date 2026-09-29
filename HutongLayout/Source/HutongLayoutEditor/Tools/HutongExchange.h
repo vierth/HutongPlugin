@@ -13,7 +13,8 @@ class UWorld;
 // Placed buildings to file and back.
 namespace HutongExchange
 {
-	inline constexpr int32 FormatVersion = 1;
+	// 2: the file carries its own defaults (FSceneFile::Defaults).
+	inline constexpr int32 FormatVersion = 2;
 
 	inline const TCHAR* FileExtension = TEXT("hutong.json");
 
@@ -73,8 +74,12 @@ namespace HutongExchange
 		// miters), by reflection so a new field in that category travels automatically.
 		TSharedPtr<FJsonObject> FootprintFields;
 
-		// Params; null on a layout-only record.
+		// Params as differences from Defaults; null on a layout-only record.
 		TSharedPtr<FJsonObject> Blob;
+
+		// The file's defaults for this record's type and preset: what Blob is a difference from, applied
+		// before it on import. Null in a file written before the defaults travelled.
+		TSharedPtr<FJsonObject> Defaults;
 	};
 
 	struct FSceneFile
@@ -82,8 +87,8 @@ namespace HutongExchange
 		int32 Version = FormatVersion;
 		FString LevelName;
 
-		// Arrangement only (type, footprint, position, yaw, facing), no params. Re-import rebuilds from
-		// current type defaults, so a generator or canon change shows on the same plan.
+		// An old arrangement-only file (type, footprint, position, yaw, facing), no params: rebuilt from
+		// current type defaults. Read, never written — no export drops a building's parameters now.
 		bool bLayoutOnly = false;
 
 		// Set frame origin in the source level; enough to place at recorded coordinates.
@@ -93,6 +98,12 @@ namespace HutongExchange
 		FVector2D BoundsSize = FVector2D::ZeroVector;
 
 		TArray<FRecord> Records;
+
+		// Every field of a fresh component, per type and preset used by a record here (key DefaultsKey),
+		// written at the top of the file. A record is read against these, not against the presets and
+		// shipped defaults of whatever project reads it, so a canon change or a differing preset cannot
+		// change the work in the file.
+		TMap<FString, TSharedPtr<FJsonObject>> Defaults;
 
 		// Unknown-type remap: old class name -> class to build, or NAME_None to skip. Filled by the import
 		// dialog before Place, so files predating a split or rename still land.
@@ -109,12 +120,18 @@ namespace HutongExchange
 
 	// --- reflected halves, public for tests ---
 	TSharedPtr<FJsonObject> WriteComponent(const UHutongBuildingComponent* Component);
+	// Defaults: the file's own for this type and preset; applied first, in place of the preset lookup.
 	bool ReadComponent(const TSharedRef<FJsonObject>& Blob, UHutongBuildingComponent* Component,
-		FString& OutProblem);
+		FString& OutProblem, const TSharedPtr<FJsonObject>& Defaults = nullptr);
+	// Every field of a fresh component of the class with the preset applied (identity left out): what a
+	// record is written as a difference from.
+	TSharedPtr<FJsonObject> DefaultsFor(UClass* Class, const FString& Preset);
+	FString DefaultsKey(FName ClassName, const FString& Preset);
 
 	// --- level -> set ---
+	// Every building with its parameters; there is no arrangement-only export.
 	bool Gather(const TArray<UHutongBuildingComponent*>& Buildings, UWorld* World,
-		FSceneFile& OutFile, FResult& OutResult, bool bLayoutOnly = false);
+		FSceneFile& OutFile, FResult& OutResult);
 
 	// --- set <-> file ---
 	bool Write(const FSceneFile& File, const FString& FilePath, FResult& OutResult);
@@ -136,10 +153,8 @@ namespace HutongExchange
 		EMode Mode, FName FolderOverride, FResult& OutResult);
 
 	// --- conveniences; these open their own FScopedTransaction.
-	void ExportLoaded(UWorld* World, const FString& FilePath, FResult& OutResult,
-		bool bLayoutOnly = false);
-	void ExportSelection(UWorld* World, const FString& FilePath, FResult& OutResult,
-		bool bLayoutOnly = false);
+	void ExportLoaded(UWorld* World, const FString& FilePath, FResult& OutResult);
+	void ExportSelection(UWorld* World, const FString& FilePath, FResult& OutResult);
 	// Resolve runs between read and placement (unknown-type dialog hook); false abandons the import.
 	using FResolveFile = TFunction<bool(FSceneFile&)>;
 

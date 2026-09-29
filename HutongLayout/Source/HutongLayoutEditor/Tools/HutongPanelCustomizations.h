@@ -25,6 +25,18 @@ public:
 	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
 };
 
+// A placed building in the level editor's Details, laid out as its tool: a simple / advanced switch
+// (the mode panel's setting), the simple view's rows only, engine categories out of the simple view,
+// and the tool's order — Metadata, Preset, the type's own settings, then Footprint, Detail,
+// Appearance, Identity. On UHutongBuildingComponent, the class declaring the shared fields, so every
+// type's layout asks it.
+class FHutongBuildingComponentCustomization : public IDetailCustomization
+{
+public:
+	static TSharedRef<IDetailCustomization> Make() { return MakeShared<FHutongBuildingComponentCustomization>(); }
+	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
+};
+
 namespace HutongPanelCustomizations
 {
 	void Register();

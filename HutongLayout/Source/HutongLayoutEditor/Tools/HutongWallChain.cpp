@@ -22,6 +22,23 @@ namespace HutongWallChain
 		return FMath::RadiansToDegrees(FMath::Atan2(Cross(From, To), FVector2D::DotProduct(From, To)));
 	}
 
+	void CornerEnd(const FVector2D& SegmentDir, bool bAtStart, double Yaw1Deg, double Yaw2Deg,
+		const FVector2D& Inward, const FVector2D& Corner, double Thickness, double& OutDrawnY, FEndFace& OutFace)
+	{
+		const FVector2D D = SegmentDir.GetSafeNormal();
+		const FVector2D Away = bAtStart ? D : -D;
+		auto Dir = [](double Yaw) { const double R = FMath::DegreesToRadians(Yaw); return FVector2D(FMath::Cos(R), FMath::Sin(R)); };
+		FVector2D Face = Dir(Yaw1Deg);
+		if (Yaw2Deg > -900.0 && FMath::Abs(Cross(Away, Dir(Yaw2Deg))) > FMath::Abs(Cross(Away, Face))) Face = Dir(Yaw2Deg);
+		// The way the face runs from the corner along the neighbour.
+		if (FVector2D::DotProduct(Face, Inward) < 0.0) Face = -Face;
+		// Body toward it: on the left of travel, the drawn (outer) line is local Y = 0.
+		OutDrawnY = Cross(D, Face) > 0.0 ? 0.0 : Thickness;
+		OutFace.bSet = true;
+		OutFace.Point = Corner;
+		OutFace.Dir = Face;
+	}
+
 	bool SideAlongFace(const FVector2D& SegmentDir, double EdgeYawDeg, double EdgeYaw2Deg,
 		const FVector2D& Inward, double Thickness, double& OutDrawnY, double ToleranceDeg, double Setback)
 	{

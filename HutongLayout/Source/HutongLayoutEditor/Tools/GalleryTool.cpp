@@ -898,18 +898,6 @@ namespace
 	}
 }
 
-TArray<TPair<FString, int32>> HutongGallery::BuildAll(const UHutongGalleryToolProperties* Settings)
-{
-	TArray<TPair<FString, int32>> Out;
-	for (const FGalleryItem& It : MakeItems(Settings, FHutongPalette()))
-	{
-		FDynamicMesh3 Mesh;
-		It.Build(Mesh, EHutongDetail::Near);
-		Out.Emplace(It.Label, Mesh.TriangleCount());
-	}
-	return Out;
-}
-
 TArray<UClass*> HutongGallery::AttachedClasses(const UHutongGalleryToolProperties* Settings, UWorld* World)
 {
 	TArray<UClass*> Out;

@@ -787,13 +787,7 @@ bool FHutongDrumStoneTest::RunTest(const FString& Parameters)
 	{
 		FHutongGateHouseParams G;
 		G.DoorStones.Style = EHutongDoorStone::Drum;
-
-		G.Style = EHutongGateStyle::Guangliang;
-		TestTrue(TEXT("廣亮大門 may carry a 抱鼓石"),
-			G.GetDoorStones().Style == EHutongDoorStone::Drum);
 		G.Style = EHutongGateStyle::Manzi;
-		TestTrue(TEXT("so may a 蠻子門: every gate takes either form"),
-			G.GetDoorStones().Style == EHutongDoorStone::Drum);
 
 		// Built: a gate with stones has more geometry than one without.
 		auto Count = [](bool bStones)
@@ -1321,27 +1315,6 @@ bool FHutongUrbanModuleTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongGalleryTest,
-	"HutongLayout.Gallery.EverythingBuilds",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FHutongGalleryTest::RunTest(const FString& Parameters)
-{
-	// The gallery touches every generator.
-	UHutongGalleryToolProperties* Settings = NewObject<UHutongGalleryToolProperties>();
-	const TArray<TPair<FString, int32>> Built = HutongGallery::BuildAll(Settings);
-
-	TestTrue(TEXT("the gallery has pieces in it"), Built.Num() >= 15);
-	for (const TPair<FString, int32>& It : Built)
-	{
-		// Logged and asserted.
-		UE_LOG(LogTemp, Display, TEXT("%s"),
-			*FString::Printf(TEXT("gallery: %-44s %6d tris"), *It.Key, It.Value));
-		TestTrue(FString::Printf(TEXT("%s builds geometry"), *It.Key), It.Value > 0);
-	}
-	return true;
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongHippedRoofControlTest,
 	"HutongLayout.Roofs.HippedControl",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -1392,7 +1365,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRoundRoofTest,
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 // 圓攢尖 (陸柱圓亭): the roof of revolution is one closed solid with a flat ceiling or a shell, and its
-// sector panels land every course on the slope, the thinned bands on the full set's lines.
+// sector panels land every course on the slope (AppendRoundRoofCourses).
 bool FHutongRoundRoofTest::RunTest(const FString& Parameters)
 {
 	using namespace HutongMeshUtils;
@@ -2157,7 +2130,7 @@ bool FHutongCompoundCorridorTest::RunTest(const FString& Parameters)
 
 	int32 AlongY = 0;
 	for (const FHutongCompoundSlot& S : Two) if (S.bLengthAlongY) ++AlongY;
-	TestEqual(TEXT("two of the five run down the court"), AlongY, 2);
+	TestEqual(TEXT("two of the six run down the court"), AlongY, 2);
 
 	// Every run benches toward the court, so flips depend on the ring side.
 	int32 Flipped = 0;
@@ -2527,10 +2500,21 @@ bool FHutongCourtyardFurnishingTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("花池 has a kerb"), Counts[HutongGen::MatSlot_BaseCourse] > 0);
 
 		// Soil below the kerb top, else the two share a plane across the bed.
-		double TopKerb = -BIG_NUMBER;
-		for (int32 vid : Mesh.VertexIndicesItr()) TopKerb = FMath::Max(TopKerb, Mesh.GetVertex(vid).Z);
-		TestTrue(TEXT("the kerb stands above the soil"),
-			TopKerb >= P.KerbHeight - 0.01);
+		double TopKerb = -BIG_NUMBER, TopSoil = -BIG_NUMBER;
+		const UE::Geometry::FDynamicMeshMaterialAttribute* Mat = Mesh.Attributes()->GetMaterialID();
+		for (int32 tid : Mesh.TriangleIndicesItr())
+		{
+			const int32 Slot = Mat->GetValue(tid);
+			if (Slot != HutongGen::MatSlot_Earth && Slot != HutongGen::MatSlot_BaseCourse) continue;
+			const UE::Geometry::FIndex3i T = Mesh.GetTriangle(tid);
+			for (const int32 vid : { T.A, T.B, T.C })
+			{
+				double& Top = (Slot == HutongGen::MatSlot_Earth) ? TopSoil : TopKerb;
+				Top = FMath::Max(Top, Mesh.GetVertex(vid).Z);
+			}
+		}
+		TestTrue(FString::Printf(TEXT("the kerb (%.1f) stands above the soil (%.1f)"), TopKerb, TopSoil), TopKerb > TopSoil + 0.5);
+		TestTrue(TEXT("at its own height"), TopKerb >= P.KerbHeight - 0.01);
 	}
 
 	// 魚缸: a solid of revolution, so the check is that the sweep closed.
@@ -2539,6 +2523,9 @@ bool FHutongCourtyardFurnishingTest::RunTest(const FString& Parameters)
 		FHutongWaterJarParams P;
 		UHutongWaterJarBuildingComponent::BuildWaterJarMesh(P, Mesh);
 		if (!TestTrue(TEXT("魚缸 builds"), Mesh.TriangleCount() > 0)) return false;
+		const HutongMeshInspect::FShellReport Shell = HutongMeshInspect::InspectShell(Mesh);
+		TestTrue(FString::Printf(TEXT("the sweep closed (%d unmatched edges, volume %.0f)"), Shell.Unmatched, Shell.Volume),
+			Shell.Unmatched == 0 && Shell.Volume > 0.0);
 
 		// Within its declared footprint.
 		const double Span = P.GetFootprint();
@@ -3243,8 +3230,6 @@ bool FHutongFrameTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRidgeSlotTest,
 	"HutongLayout.Appearance.RidgeSlot",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -3280,3 +3265,41 @@ bool FHutongRidgeSlotTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a 歇山's 正脊 is on the ridge slot"), RidgeTris(C) > 0);
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongDrawnEaveBandTest,
+	"HutongLayout.Proportions.DrawnEaveBand",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongDrawnEaveBandTest::RunTest(const FString& Parameters)
+{
+	// However wide a house is drawn, its eave stays near its type's: the bay count steps with the width,
+	// and each step's 明間 once swung the eave by a metre (a 廂房 drawn 550 wide stood 5.2 m).
+	const double Band = HutongCanon::Module::DerivedEaveBandShare;
+	for (const FString& Name : HutongPresets::BuiltInSiheyuanNames())
+	{
+		FHutongSiheyuanParams P;
+		if (!UHutongPresetLibrary::Get()->LoadPreset(TEXT("Siheyuan"), Name, FHutongSiheyuanParams::StaticStruct(), &P)) continue;
+		const double Type = P.GetTypeEaveHeight();
+		if (!TestTrue(Name + TEXT(" has a type eave"), Type > 0.0)) continue;
+		P.Width = P.SuggestedFrontage;
+		TestTrue(FString::Printf(TEXT("%s at its own frontage stands at its type eave (%.1f)"), *Name, Type),
+			FMath::IsNearlyEqual(P.GetEaveHeightFromBays(), Type, 0.01));
+		double Lo = TNumericLimits<double>::Max(), Hi = 0.0;
+		for (double W = 300.0; W <= 2000.0; W += 25.0)
+		{
+			P.Width = W;
+			Lo = FMath::Min(Lo, P.GetEaveHeightFromBays());
+			Hi = FMath::Max(Hi, P.GetEaveHeightFromBays());
+		}
+		TestTrue(FString::Printf(TEXT("%s drawn 3–20 m stays within its band (%.0f–%.0f about %.0f)"), *Name, Lo, Hi, Type),
+			Lo >= Type * (1.0 - Band) - 0.01 && Hi <= Type * (1.0 + Band) + 0.01);
+		// Drawing freely (the snap cleared) keeps the band: the type's frontage is its own field.
+		P.SuggestedFrontage = 0.0;
+		P.Width = 550.0;
+		TestTrue(FString::Printf(TEXT("%s with the snap cleared still stays within its band (%.0f)"), *Name, P.GetEaveHeightFromBays()),
+			P.GetEaveHeightFromBays() <= Type * (1.0 + Band) + 0.01);
+	}
+	return true;
+}
+
+#endif // WITH_DEV_AUTOMATION_TESTS

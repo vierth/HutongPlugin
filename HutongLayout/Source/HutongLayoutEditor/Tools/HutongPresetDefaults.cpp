@@ -5,6 +5,8 @@
 #include "Generation/SiheyuanGenerator.h"
 #include "Generation/PavilionGenerator.h"
 #include "Generation/HallGenerator.h"
+#include "Generation/WallGenerator.h"
+#include "Generation/GateHouseGenerator.h"
 #include "Generation/HutongCanon.h"
 
 // Courtyard building types, as presets rather than tools.
@@ -18,6 +20,7 @@ FHutongSiheyuanParams HutongPresets::MakeHouse(const HutongCanon::House::FHouse&
 	P.bHasFrontVeranda = H.bVeranda;
 	P.RearEave = H.RearEave;
 	P.SuggestedFrontage = H.FrontageCm;
+	P.TypeFrontage = P.SuggestedFrontage;
 	// 進深 unset: it is (檁數 - 1) x 步架 and the drag snaps to that.
 	P.SuggestedDepth = 0.0;
 	P.Purlins = H.Purlins;
@@ -47,6 +50,7 @@ FHutongSiheyuanParams HutongPresets::MakeCourtHall(const HutongCanon::Courtyard:
 	FHutongSiheyuanParams P = MakeHouse(bRearVeranda
 		? HutongCanon::House::MainHall : HutongCanon::House::MainHallSmall);
 	P.SuggestedFrontage = Size.HallCentralBayCm + 2.0 * Size.HallSideBayCm;
+	P.TypeFrontage = P.SuggestedFrontage;
 	P.SideBayWidthRatio = Size.HallSideBayCm / Size.HallCentralBayCm;
 	P.MinBayWidth = 0.9 * Size.HallSideBayCm;
 	P.MaxBayWidth = 1.05 * Size.HallCentralBayCm;
@@ -57,6 +61,7 @@ FHutongSiheyuanParams HutongPresets::MakeCourtEarRoom(const HutongCanon::Courtya
 {
 	FHutongSiheyuanParams P = MakeHouse(HutongCanon::House::EarRoom);
 	P.SuggestedFrontage = Size.EarRoomBayCm * FMath::Max(Size.EarRoomsPerFlank, 1);
+	P.TypeFrontage = P.SuggestedFrontage;
 	P.MinBayWidth = 0.85 * Size.EarRoomBayCm;
 	P.MaxBayWidth = 1.1 * Size.EarRoomBayCm;
 	return P;
@@ -70,6 +75,7 @@ FHutongSiheyuanParams HutongPresets::MakeCourtWing(const HutongCanon::Courtyard:
 	// 三間 at the hall's 次間: bay limits force exactly that frontage split.
 	const int32 Bays = FMath::Max(Size.WingBays, 1);
 	P.SuggestedFrontage = Bays * Size.HallSideBayCm;
+	P.TypeFrontage = P.SuggestedFrontage;
 	P.MinBayWidth = 0.9 * Size.HallSideBayCm;
 	P.MaxBayWidth = 1.1 * Size.HallSideBayCm;
 	return P;
@@ -112,6 +118,7 @@ void HutongPresets::RegisterBuiltInPresets()
 
 	// 後罩房: row behind the 正房, closing the plot.
 	Add(TEXT("Rear Row (後罩房)"), HutongCanon::House::RearRow);
+	Add(TEXT("Rear Row, Blank Back Wall (後罩房 無後窗)"), HutongCanon::House::RearRowBlankBack);
 
 	// 耳房: low ear rooms against the 正房 flanks.
 	Add(TEXT("Ear Room (耳房)"), HutongCanon::House::EarRoom);
@@ -124,6 +131,15 @@ void HutongPresets::RegisterBuiltInPresets()
 	{
 		const FHutongFrameParams P = MakeFrame(Frame.Value);
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Frame"), Frame.Key, FHutongFrameParams::StaticStruct(), &P);
+	}
+
+	// 大門: one per style, so the gate's rank is a preset pick (tool, Details, heights window).
+	for (const EHutongGateStyle Style : { EHutongGateStyle::Guangliang, EHutongGateStyle::Jinzhu, EHutongGateStyle::Manzi, EHutongGateStyle::Ruyi })
+	{
+		FHutongGateHouseParams P;
+		P.Style = Style;
+		UHutongPresetLibrary::RegisterBuiltIn(TEXT("GateHouse"),
+			StaticEnum<EHutongGateStyle>()->GetDisplayNameTextByValue((int64)Style).ToString(), FHutongGateHouseParams::StaticStruct(), &P);
 	}
 
 	// 亭: the 則例's two, the round one with its 倒掛楣子 as drawn.
@@ -173,4 +189,45 @@ const FString& HutongPresets::DefaultStreetRowHouseName()
 {
 	static const FString Name = TEXT("Front Row (倒座房)");
 	return Name;
+}
+
+namespace
+{
+	double BuiltEave(const HutongCanon::House::FHouse& House)
+	{
+		FHutongSiheyuanParams P = HutongPresets::MakeHouse(House);
+		P.Width = P.SuggestedFrontage;
+		return P.GetEaveHeight();
+	}
+}
+
+double HutongPresets::EaveRatio(EHutongCourtRole Role)
+{
+	using namespace HutongCanon::House;
+	const HutongCanon::House::FHouse* House = nullptr;
+	switch (Role)
+	{
+	case EHutongCourtRole::MainHall:  return 1.0;
+	case EHutongCourtRole::SideHouse: House = &SideHouse; break;
+	case EHutongCourtRole::EarRoom:   House = &EarRoom; break;
+	case EHutongCourtRole::FrontRow:  House = &FrontRow; break;
+	case EHutongCourtRole::RearRow:   House = &RearRow; break;
+	case EHutongCourtRole::LaneWall:
+	case EHutongCourtRole::CourtWall:
+		break;
+	default: return -1.0;
+	}
+	static const double Hall = BuiltEave(MainHallSmall);
+	if (House) return BuiltEave(*House) / Hall;
+	// A wall's body top as its role derives it (院牆 level with the wings, 隔牆 lower so a 垂花門 clears it).
+	FHutongWallParams Wall;
+	Wall.bDeriveFromRole = true;
+	Wall.Role = Role == EHutongCourtRole::LaneWall ? EHutongWallRole::Perimeter : EHutongWallRole::Courtyard;
+	return Wall.GetHeight() / Hall;
+}
+
+double HutongPresets::SuggestEave(EHutongCourtRole Role, EHutongCourtRole ReferenceRole, double ReferenceEave)
+{
+	const double Mine = EaveRatio(Role), Ref = EaveRatio(ReferenceRole);
+	return (Mine > 0.0 && Ref > 0.0) ? ReferenceEave * Mine / Ref : -1.0;
 }

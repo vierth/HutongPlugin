@@ -102,42 +102,56 @@ void UHutongWallTool::GetEffectiveRectBounds(double& OutMinX, double& OutMinY, d
 
 double UHutongWallTool::GetDrawnY() const
 {
+	double DrawnY;
+	HutongWallChain::FEndFace Start, End;
+	EndsOnNeighbours(bIsDragging, DrawnY, Start, End);
+	return DrawnY;
+}
+
+void UHutongWallTool::EndsOnNeighbours(bool bWithCursor, double& OutDrawnY, HutongWallChain::FEndFace& OutStart,
+	HutongWallChain::FEndFace& OutEnd) const
+{
 	const double T = Settings ? Settings->Params.GetThickness() : 30.0;
-	if (ChainPoints.Num() == 0) return 0.5 * T;
-	// Snapping off: line centred, regardless of what the anchor snapped to.
-	if (!SnappingActive()) return 0.5 * T;
-	// Drawn line = outer face when any vertex snapped to a face running along the segment (continues a wall flush).
-	// First such vertex decides for the whole run, anchor first, cursor end last.
-	TArray<FVector> Points = ChainPoints;
+	OutDrawnY = 0.5 * T;
+	OutStart = OutEnd = HutongWallChain::FEndFace();
+	if (ChainPoints.Num() == 0) return;
+
+	TArray<FVector2D> Points;
 	TArray<double> Yaw = ChainSnapYawDeg, Yaw2 = ChainSnapYaw2Deg;
 	TArray<FVector2D> Inward = ChainSnapInward;
-	if (bIsDragging)
+	for (const FVector& P : ChainPoints) Points.Add(FVector2D(P.X, P.Y));
+	// The cursor on the vertex just added (the closing click, or hover pinned to the end) is no segment:
+	// Build drops it, and here it made the end's segment zero length.
+	if (bWithCursor && FVector::Dist2D(CurrentWorld, ChainPoints.Last()) >= 10.0)
 	{
-		Points.Add(CurrentWorld);
+		Points.Add(FVector2D(CurrentWorld.X, CurrentWorld.Y));
 		Yaw.Add(CursorSnapYawDeg);
 		Yaw2.Add(CursorSnapYaw2Deg);
 		Inward.Add(CursorSnapInward);
 	}
 	const int32 Last = Points.Num() - 1;
-	// Anchor alone: no segment yet to index.
-	if (Last < 1) return 0.5 * T;
-	for (int32 k = 0; k <= Last && k < Yaw.Num(); ++k)
+	if (Last < 1 || Yaw.Num() <= Last) return;
+
+	// A run's ends snap to neighbours' corners and faces, nothing else. On a corner the run's outside
+	// corner is the neighbour's and its short face lies along it; the start's corner decides the side.
+	// On a face the short face is cut flush along it and the line stays the centre line.
+	auto EdgeFace = [](double YawDeg, const FVector2D& At)
 	{
-		if (Inward[k].IsNearlyZero()) continue;
-		const FVector& A = Points[k < Last ? k : k - 1];
-		const FVector& B = Points[k < Last ? k + 1 : k];
-		const FVector2D D = FVector2D(B.X - A.X, B.Y - A.Y).GetSafeNormal();
-		if (D.IsNearlyZero()) continue;
-		double DrawnY = 0.5 * T;
-		// Cursor segment still moving: once decided, it holds until well off the face, or the run jitters sideways.
-		const bool bCursor = bIsDragging && k >= Last - 1;
-		const double Tolerance = (bCursor && bCursorSideOn) ? HutongWallChain::AlongFaceDegAfter : HutongWallChain::AlongFaceDeg;
-		const bool bAlong = HutongWallChain::SideAlongFace(D, Yaw[k], Yaw2[k], Inward[k], T, DrawnY, Tolerance,
-			Settings->Params.GetAbuttingSetback());
-		if (bCursor) bCursorSideOn = bAlong;
-		if (bAlong) return DrawnY;
-	}
-	return 0.5 * T;
+		HutongWallChain::FEndFace Face;
+		Face.bSet = true;
+		Face.Point = At;
+		const double R = FMath::DegreesToRadians(YawDeg);
+		Face.Dir = FVector2D(FMath::Cos(R), FMath::Sin(R));
+		return Face;
+	};
+	double EndY = OutDrawnY;
+	const bool bStartCorner = Yaw[0] > -900.0 && Yaw2[0] > -900.0;
+	const bool bEndCorner = Yaw[Last] > -900.0 && Yaw2[Last] > -900.0;
+	if (bStartCorner) HutongWallChain::CornerEnd(Points[1] - Points[0], true, Yaw[0], Yaw2[0], Inward[0], Points[0], T, OutDrawnY, OutStart);
+	else if (Yaw[0] > -900.0) OutStart = EdgeFace(Yaw[0], Points[0]);
+	if (bEndCorner) HutongWallChain::CornerEnd(Points[Last] - Points[Last - 1], false, Yaw[Last], Yaw2[Last], Inward[Last], Points[Last], T, EndY, OutEnd);
+	else if (Yaw[Last] > -900.0) OutEnd = EdgeFace(Yaw[Last], Points[Last]);
+	if (!bStartCorner && bEndCorner) OutDrawnY = EndY;
 }
 
 double UHutongWallTool::CurrentSegmentYawDeg() const
@@ -154,36 +168,21 @@ bool UHutongWallTool::BuildChain(bool bWithCursor, TArray<HutongWallChain::FSegm
 	TArray<FVector2D> Points;
 	for (const FVector& P : ChainPoints) Points.Add(FVector2D(P.X, P.Y));
 	if (bWithCursor) Points.Add(FVector2D(CurrentWorld.X, CurrentWorld.Y));
-
-	auto FaceFrom = [](double YawDeg, const FVector2D& At)
-	{
-		HutongWallChain::FEndFace Face;
-		if (YawDeg > -900.0)
-		{
-			Face.bSet = true;
-			Face.Point = At;
-			const double R = FMath::DegreesToRadians(YawDeg);
-			Face.Dir = FVector2D(FMath::Cos(R), FMath::Sin(R));
-		}
-		return Face;
-	};
-	const HutongWallChain::FEndFace Start = FaceFrom(AnchorSnapYawDeg, Points[0]);
-	const HutongWallChain::FEndFace End = bWithCursor
-		? FaceFrom(CursorSnapYawDeg, Points.Last())
-		: FaceFrom(ChainSnapYawDeg.Num() > 1 ? ChainSnapYawDeg.Last() : -1000.0, Points.Last());
-	return HutongWallChain::Build(Points, Settings->Params.GetThickness(), GetDrawnY(), Start, End, OutSegments);
+	double DrawnY;
+	HutongWallChain::FEndFace Start, End;
+	EndsOnNeighbours(bWithCursor, DrawnY, Start, End);
+	return HutongWallChain::Build(Points, Settings->Params.GetThickness(), DrawnY, Start, End, OutSegments);
 }
 
 void UHutongWallTool::OnPlacementStarted(const FVector& HitWorld)
 {
-	bCursorSideOn = false;
-	bAxisSnapOn = false;
 	ChainPoints = { StartWorld };
 	ChainSnapYawDeg = { AnchorSnapYawDeg };
 	ChainSnapYaw2Deg = { AnchorSnapYaw2Deg };
 	ChainSnapInward = { AnchorSnapInward };
 	ChainGateFlags.Reset();
 	ChainEndBuilding.Reset();
+	bOpeningMarked = false;
 }
 
 bool UHutongWallTool::OnRectCommitted(const FVector& HitWorld)
@@ -201,12 +200,17 @@ bool UHutongWallTool::OnRectCommitted(const FVector& HitWorld)
 	ChainSnapYawDeg.Add(CursorSnapYawDeg);
 	ChainSnapYaw2Deg.Add(CursorSnapYaw2Deg);
 	ChainSnapInward.Add(CursorSnapInward);
-	ChainGateFlags.Add(bOpeningKeyHeld);
+	ChainGateFlags.Add(bOpeningMarked);
+	bOpeningMarked = false;
 	ChainEndBuilding = CursorSnapBuilding;
+	// A vertex on a placed building's outline joins the run to it: nothing left to draw.
+	if (IsOnOutline(P, CursorSnapBuilding.Get())) return true;
 	// Next segment starts here; the base's rotate/measure frame moves with it.
 	StartWorld = P;
 	return false;
 }
+
+
 
 bool UHutongWallTool::IsOnRunEnd(const FVector& RawCursor) const
 {
@@ -230,31 +234,17 @@ void UHutongWallTool::OnPlacementHover(const FVector& HitWorld)
 		CursorSnapYaw2Deg = ChainSnapYaw2Deg.Last();
 		CursorSnapInward = ChainSnapInward.Last();
 		CursorSnapBuilding = ChainEndBuilding;
-		bAxisSnapOn = false;
 		return;
 	}
-	// Pull onto frame axes when near, 15° steps under Shift. A point snap already placed the end.
-	if (bRotateModeActive || bSnapActive) { bAxisSnapOn = false; return; }
+	// Free: a run snaps its ends to corners, never its angle. Shift steps 15° off the frame.
+	if (bRotateModeActive || bSnapActive) return;
+	const bool bShift = FSlateApplication::IsInitialized() && FSlateApplication::Get().GetModifierKeys().IsShiftDown();
+	if (!bShift) return;
 	const double dx = CurrentWorld.X - StartWorld.X, dy = CurrentWorld.Y - StartWorld.Y;
 	const double Len = FMath::Sqrt(dx * dx + dy * dy);
 	if (Len < 1.0) return;
 	const double Angle = FMath::RadiansToDegrees(FMath::Atan2(dy, dx));
-	double Snapped = Angle;
-	const bool bShift = FSlateApplication::IsInitialized() && FSlateApplication::Get().GetModifierKeys().IsShiftDown();
-	if (bShift)
-	{
-		Snapped = PlacementYawDeg + FMath::RoundToDouble((Angle - PlacementYawDeg) / 15.0) * 15.0;
-	}
-	else
-	{
-		double Rel = Angle - PlacementYawDeg;
-		Rel -= 90.0 * FMath::RoundToDouble(Rel / 90.0);
-		// Hysteresis: stays on axis until well off, else it flickers.
-		const double Tolerance = bAxisSnapOn ? 10.0 : 6.0;
-		bAxisSnapOn = FMath::Abs(Rel) <= Tolerance;
-		if (!bAxisSnapOn) return;
-		Snapped = Angle - Rel;
-	}
+	const double Snapped = PlacementYawDeg + FMath::RoundToDouble((Angle - PlacementYawDeg) / 15.0) * 15.0;
 	const double R = FMath::DegreesToRadians(Snapped);
 	CurrentWorld = StartWorld + FVector(FMath::Cos(R) * Len, FMath::Sin(R) * Len, 0.0);
 }
@@ -268,6 +258,7 @@ void UHutongWallTool::CancelPlacement()
 	ChainSnapInward.Reset();
 	ChainGateFlags.Reset();
 	ChainEndBuilding.Reset();
+	bOpeningMarked = false;
 	Super::CancelPlacement();
 }
 
@@ -275,7 +266,7 @@ FText UHutongWallTool::GetStagePromptText() const
 {
 	if (!bIsDragging || bRotateModeActive) return Super::GetStagePromptText();
 	return FText::Format(NSLOCTEXT("WallTool", "PromptSegment",
-		"Click to end this segment and start the next, at any angle; click the last end again to finish the run. Hold G on the click for a gate on the segment it closes. Shift snaps the angle to 15°, - and = change height, Esc drops the run.{0}"),
+		"Click to end this segment and start the next, at any angle; click the last end again to finish the run, or end it on a placed building's outline and it finishes there. G puts a gate on this segment (press again to take it off). Shift snaps the angle to 15°, - and = change height, Esc drops the run.{0}"),
 		SnapKeyClause());
 }
 
@@ -343,8 +334,8 @@ void UHutongWallTool::SpawnFinalActor()
 FHutongWallParams UHutongWallTool::SegmentParams(int32 Index, int32 NumSegments, bool bCursorLeg) const
 {
 	FHutongWallParams P = Settings ? Settings->Params : FHutongWallParams();
-	const bool bMarked = bCursorLeg ? bOpeningKeyHeld : (ChainGateFlags.IsValidIndex(Index) && ChainGateFlags[Index]);
-	bool bAnyMarked = bOpeningKeyHeld && bIsDragging;
+	const bool bMarked = bCursorLeg ? bOpeningMarked : (ChainGateFlags.IsValidIndex(Index) && ChainGateFlags[Index]);
+	bool bAnyMarked = bOpeningMarked && bIsDragging;
 	for (int32 i = 0; i < NumSegments && i < ChainGateFlags.Num(); ++i) bAnyMarked = bAnyMarked || ChainGateFlags[i];
 
 	bool bCarries = bMarked;
@@ -433,7 +424,7 @@ FText UHutongWallTool::GetKeyHintText() const
 		? NSLOCTEXT("WallTool", "KeyHintGate", "[ ] gate position")
 		: NSLOCTEXT("WallTool", "KeyHintDoorway", "[ ] doorway position");
 	// No R key: segments follow the cursor, the frame needs no key.
-	return FText::Format(NSLOCTEXT("WallTool", "KeyHint", "{0} · G+click gate on segment · Shift 15° · - = height · {1} {2} · Esc cancel · Ctrl+Z undo"),
+	return FText::Format(NSLOCTEXT("WallTool", "KeyHint", "{0} · G gate on this segment · Shift 15° · - = height · {1} {2} · Esc cancel · Ctrl+Z undo"),
 		What, SnapKeyName(),
 		SnappingActive() ? NSLOCTEXT("WallTool", "KeyHintNoSnap", "no snap") : NSLOCTEXT("WallTool", "KeyHintSnap", "snap"));
 }
@@ -442,7 +433,7 @@ TArray<FText> UHutongWallTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongWallTool", "HelpRun",
-		"Click to start the wall, click to end each segment, click the last end again to finish. Hold G on a click to put a gate in that segment.");
+		"Click to start the wall (on a building's edge too: only a click well inside it selects the building), click to end each segment, click the last end again to finish. A segment ending on a placed building's outline finishes the run. G toggles a gate on the segment being drawn.");
 	Lines.Insert(NSLOCTEXT("HutongWallTool", "HelpOpening",
 		"[ and ] slide the gate or doorway along the wall (Shift nudges, Ctrl jumps)."), 1);
 	return Lines;

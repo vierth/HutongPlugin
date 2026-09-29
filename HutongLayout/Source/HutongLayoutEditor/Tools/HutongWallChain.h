@@ -45,6 +45,15 @@ namespace HutongWallChain
 	// A caller that chose "along" last frame passes WithinDegAfter (hysteresis) so the run does not jump
 	// half a thickness per pixel near the limit. Setback holds the outer face that far inside the
 	// neighbour's face (drawn line at -Setback or Thickness + Setback), so the wall reads as a separate piece.
+	// A run end on a neighbour's corner (a wall is snapped to corners only): the end's short face rests
+	// on the corner's edge more nearly square to the run, and the run's outside corner is the
+	// neighbour's corner exactly — the drawn line is that outer face (0 or Thickness), the body on the
+	// side the face edge runs from the corner. SegmentDir: the run's direction of travel; bAtStart: the
+	// corner is the run's first vertex (else its last). Yaw1/Yaw2: the corner's two edges. Inward: from
+	// the corner into the neighbour. OutFace: the end cut, through the corner along that edge.
+	void CornerEnd(const FVector2D& SegmentDir, bool bAtStart, double Yaw1Deg, double Yaw2Deg,
+		const FVector2D& Inward, const FVector2D& Corner, double Thickness, double& OutDrawnY, FEndFace& OutFace);
+
 	inline constexpr double AlongFaceDeg = 10.0;
 	inline constexpr double AlongFaceDegAfter = 16.0;
 	bool SideAlongFace(const FVector2D& SegmentDir, double EdgeYawDeg, double EdgeYaw2Deg,

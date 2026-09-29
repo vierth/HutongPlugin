@@ -47,6 +47,8 @@ namespace HutongSnap
 		{
 			AActor* Actor = Building ? Building->GetOwner() : nullptr;
 			if (!Actor) continue;
+			// Nothing unseen is a target: an actor hidden in the editor, a plan while plans are switched off.
+			if (Actor->IsHiddenEd() || (Building->bPlanOnly && !HutongPlanOutline::ArePlansVisible())) continue;
 
 			FFootprint F;
 			F.Building = Building;

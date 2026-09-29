@@ -61,6 +61,8 @@ void FHutongLayoutStyle::Register()
 	AddToolIcon("HutongLayout.BeginFlowerBedTool", TEXT("FlowerBedTool"));
 	AddToolIcon("HutongLayout.BeginWaterJarTool", TEXT("WaterJarTool"));
 	AddToolIcon("HutongLayout.BeginMeasureTool", TEXT("MeasureTool"));
+	AddToolIcon("HutongLayout.BeginHeightsTool", TEXT("HeightsTool"));
+	AddToolIcon("HutongLayout.BeginCourtsTool", TEXT("CourtsTool"));
 	AddToolIcon("HutongLayout.BeginImportTool", TEXT("ImportTool"));
 
 	FSlateStyleRegistry::RegisterSlateStyle(*StyleSet);

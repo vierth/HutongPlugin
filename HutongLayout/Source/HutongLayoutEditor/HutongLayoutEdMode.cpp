@@ -30,6 +30,8 @@
 #include "Tools/HallTool.h"
 #include "Tools/GalleryTool.h"
 #include "Tools/MeasureTool.h"
+#include "Tools/HeightsTool.h"
+#include "Tools/CourtsTool.h"
 #include "Tools/HutongImportTool.h"
 #include "Tools/RectDragToolBase.h"
 #include "Tools/EdModeInteractiveToolsContext.h"
@@ -53,10 +55,18 @@ public:
 		return Cast<URectDragToolBase>(TM->GetActiveTool(EToolSide::Left));
 	}
 
+	// Typing into a field (the heights window's eaves, a Details number): Esc, -, = and the letters
+	// are the text's, not the tool's.
+	static bool IsTyping(FSlateApplication& SlateApp)
+	{
+		const TSharedPtr<SWidget> Focused = SlateApp.GetKeyboardFocusedWidget();
+		return Focused.IsValid() && Focused->GetType().ToString().Contains(TEXT("EditableText"));
+	}
+
 	virtual bool HandleKeyDownEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
 	{
 		URectDragToolBase* Tool = GetActiveRectTool();
-		if (!Tool) return false;
+		if (!Tool || IsTyping(SlateApp)) return false;
 
 		const FKey Key = InKeyEvent.GetKey();
 		if (Key == EKeys::Escape)
@@ -107,17 +117,19 @@ public:
 		}
 		if (Key == EKeys::F)
 		{
-			// Only mid-placement, so the viewport keeps F for focus.
-			if (!Tool->IsPlacingActive() || InKeyEvent.IsRepeat()) return false;
+			if (InKeyEvent.IsRepeat()) return false;
+			// Nothing being placed: flips the selected building's facade; with no such building the
+			// viewport keeps F for focus.
+			if (!Tool->IsPlacingActive()) return !Tool->IsEditingPlan() && Tool->FlipSelectedFacing();
 			Tool->FlipFacing();
 			return true;
 		}
 		if (Key == EKeys::G)
 		{
-			// Hold G on the click ending a wall segment to give it the gate. Only mid-placement, so the
-			// viewport keeps G for game view.
+			// Toggles the gate on the wall segment being drawn. Only mid-placement, so the viewport
+			// keeps G for game view.
 			if (!Tool->IsPlacingActive()) return false;
-			Tool->SetOpeningKeyHeld(true);
+			if (!InKeyEvent.IsRepeat()) Tool->ToggleOpeningMark();
 			return true;
 		}
 		return false;
@@ -125,21 +137,13 @@ public:
 
 	virtual bool HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
 	{
+		if (IsTyping(SlateApp)) return false;
 		if (InKeyEvent.GetKey() == EKeys::R)
 		{
 			if (URectDragToolBase* Tool = GetActiveRectTool())
 			{
 				Tool->EndRotateMode();
 				return true;
-			}
-		}
-		if (InKeyEvent.GetKey() == EKeys::G)
-		{
-			if (URectDragToolBase* Tool = GetActiveRectTool())
-			{
-				const bool bWasHeld = Tool->bOpeningKeyHeld;
-				Tool->SetOpeningKeyHeld(false);
-				return bWasHeld;
 			}
 		}
 		return false;
@@ -255,6 +259,10 @@ void UHutongLayoutEdMode::Enter()
 	}
 	RegisterTool(Commands.BeginMeasureTool, TEXT("HutongMeasureTool"),
 		NewObject<UHutongMeasureToolBuilder>(this));
+	RegisterTool(Commands.BeginHeightsTool, TEXT("HutongHeightsTool"),
+		NewObject<UHutongHeightsToolBuilder>(this));
+	RegisterTool(Commands.BeginCourtsTool, TEXT("HutongCourtsTool"),
+		NewObject<UHutongCourtsToolBuilder>(this));
 	RegisterTool(Commands.BeginImportTool, TEXT("HutongImportTool"),
 		NewObject<UHutongImportToolBuilder>(this));
 
@@ -326,7 +334,7 @@ TMap<FName, TArray<TSharedPtr<FUICommandInfo>>> UHutongLayoutEdMode::GetModeComm
 		{ Commands.BeginFlowerBedTool, Commands.BeginWaterJarTool });
 	Result.Add(FName("Layout"),
 		{ Commands.BeginGalleryTool, Commands.BeginGalleryWallsTool, Commands.BeginGalleryHousesTool, Commands.BeginGalleryGatesTool, Commands.BeginGalleryCourtyardTool, Commands.BeginGalleryStreetTool, Commands.BeginGalleryTemplesTool,
-		  Commands.BeginMeasureTool, Commands.BeginImportTool });
+		  Commands.BeginMeasureTool, Commands.BeginHeightsTool, Commands.BeginCourtsTool, Commands.BeginImportTool });
 	return Result;
 }
 

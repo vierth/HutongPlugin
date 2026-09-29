@@ -224,7 +224,7 @@ bool FHutongCompoundWalkTest::RunTest(const FString& Parameters)
 	Tool->Settings = NewObject<UHutongCompoundToolProperties>(Tool);
 	UHutongCompoundToolProperties* S = Tool->Settings;
 
-	// Default first (大型, 三進, court walked round), then every size and plan with the walk.
+	// Default first (標准 size, 三進, court walked round), then every size and plan with the walk.
 	struct FCase { EHutongCompoundSize Size; EHutongCompoundPlan Plan; };
 	const FCase Cases[] = {
 		{ EHutongCompoundSize::Standard, EHutongCompoundPlan::ThreeCourtyards },

@@ -207,6 +207,8 @@ void FHutongLayoutEdModeToolkit::BuildToolPalette(FName PaletteName, FToolBarBui
 		ToolbarBuilder.AddToolBarButton(Commands.BeginGalleryStreetTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginGalleryTemplesTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginMeasureTool);
+		ToolbarBuilder.AddToolBarButton(Commands.BeginHeightsTool);
+		ToolbarBuilder.AddToolBarButton(Commands.BeginCourtsTool);
 		// The import *tool* stays with the placement tools: it drags a set onto the ground, and the
 		// Scene tab has no tool panel for its path and folder.
 		ToolbarBuilder.AddToolBarButton(Commands.BeginImportTool);
@@ -433,15 +435,6 @@ void FHutongLayoutEdModeToolkit::OnShowPlansChanged(ECheckBoxState State)
 	}
 }
 
-FReply FHutongLayoutEdModeToolkit::OnGenerateClicked()
-{
-	if (UHutongLayoutModeSettings* Settings = UHutongLayoutEdMode::GetActiveSettings())
-	{
-		Settings->GenerateLoadedGeometry();
-	}
-	return FReply::Handled();
-}
-
 TSharedRef<SWidget> FHutongLayoutEdModeToolkit::MakePlanRow() const
 {
 	FHutongLayoutEdModeToolkit* Self = const_cast<FHutongLayoutEdModeToolkit*>(this);
@@ -469,7 +462,6 @@ TSharedRef<SWidget> FHutongLayoutEdModeToolkit::MakePlanRow() const
 			]
 			+ SVerticalBox::Slot()
 			.AutoHeight()
-			.Padding(0.0f, 0.0f, 0.0f, 4.0f)
 			[
 				SNew(SCheckBox)
 				.IsChecked(this, &FHutongLayoutEdModeToolkit::GetShowPlansState)
@@ -482,16 +474,6 @@ TSharedRef<SWidget> FHutongLayoutEdModeToolkit::MakePlanRow() const
 					.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
 					.AutoWrapText(true)
 				]
-			]
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			[
-				SNew(SButton)
-				.HAlign(HAlign_Center)
-				.Text(LOCTEXT("Generate", "Generate Geometry"))
-				.ToolTipText(LOCTEXT("GenerateTip",
-					"Builds every laid-out building in the loaded region."))
-				.OnClicked(Self, &FHutongLayoutEdModeToolkit::OnGenerateClicked)
 			]
 		];
 }

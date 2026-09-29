@@ -16,6 +16,10 @@
 namespace
 {
 	constexpr float FillAlpha = 0.10f;
+	// Selected: fill this strong, outline in HutongPlanColours::Selected this thick. Every type
+	// colour is a hue; white is none of them, so a selected plan reads apart from its neighbours.
+	constexpr float SelectedFillAlpha = 0.38f;
+	constexpr float SelectedOutlineThickness = 7.0f;
 	// Hatch ticks along the facade: this far apart, this deep into the footprint.
 	constexpr double HatchSpacing = 60.0;
 	constexpr double HatchDepth = 45.0;
@@ -140,7 +144,7 @@ public:
 			if (GEngine && GEngine->DebugMeshMaterial)
 			{
 				FLinearColor Fill = OutlineColor;
-				Fill.A = bSelected ? FillAlpha * 2.0f : FillAlpha;
+				Fill.A = bSelected ? SelectedFillAlpha : FillAlpha;
 				FMaterialRenderProxy* Material =
 					&Collector.AllocateOneFrameResource<FColoredMaterialRenderProxy>(
 						GEngine->DebugMeshMaterial->GetRenderProxy(), Fill);
@@ -162,6 +166,7 @@ public:
 
 			for (int32 i = 0, j = 3; i < 4; j = i++)
 			{
+				if (bSelected) PDI->DrawLine(World[j], World[i], HutongPlanColours::Selected, DPG, SelectedOutlineThickness, 0.0f, true);
 				PDI->DrawLine(World[j], World[i], Line, DPG, Thickness, 0.0f, true);
 			}
 

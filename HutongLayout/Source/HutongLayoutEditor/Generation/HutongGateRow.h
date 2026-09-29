@@ -31,29 +31,33 @@ namespace HutongGen::GateRow
 		return NeighbourEave > 0.0 && NeighbourDepth >= 150.0;
 	}
 
+	// The eave that puts the gate's ridge at TargetRidgeZ, up or down. Solved, not added: 上檐出
+	// derives from 柱高 and the overhang carries the first 舉, so a taller gate grows a taller roof
+	// and adding the shortfall once overshoots.
+	inline double EaveForRidge(const FHutongGateHouseParams& InGate, double GateDepth, double TargetRidgeZ)
+	{
+		FHutongGateHouseParams Gate = InGate;
+		for (int32 Pass = 0; Pass < 6; ++Pass)
+		{
+			const double Have = Ridge::Gate(Gate, GateDepth);
+			if (FMath::Abs(Have - TargetRidgeZ) < 0.005) break;
+			FHutongGateHouseParams Probe = Gate;
+			Probe.EaveHeight = Gate.GetEaveHeight() + 10.0;
+			const double Slope = 0.1 * (Ridge::Gate(Probe, GateDepth) - Have);
+			if (Slope < UE_KINDA_SMALL_NUMBER) break;
+			Gate.EaveHeight = Gate.GetEaveHeight() + (TargetRidgeZ - Have) / Slope;
+		}
+		return Gate.GetEaveHeight();
+	}
+
 	// Raises the gate's eave until its ridge clears the row's by Clearance; zero row = no change.
-	// Solved, not added: 上檐出 derives from 柱高 and the overhang carries the first 舉, so a taller gate
-	// grows a taller roof and adding the shortfall once overshoots.
 	inline void LiftGateAboveRidge(FHutongGateHouseParams& Gate, double GateDepth,
 		double RowRidgeZ, double Clearance = HutongCanon::Gate::RidgeAboveRowCm)
 	{
 		if (RowRidgeZ <= 0.0) return;
 		const double Want = RowRidgeZ + FMath::Max(Clearance, 0.0);
-		const double Start = Gate.GetEaveHeight();
 		if (Ridge::Gate(Gate, GateDepth) >= Want) return;
-
-		for (int32 Pass = 0; Pass < 6; ++Pass)
-		{
-			const double Have = Ridge::Gate(Gate, GateDepth);
-			if (FMath::Abs(Have - Want) < 0.005) break;
-
-			FHutongGateHouseParams Probe = Gate;
-			Probe.EaveHeight = Gate.GetEaveHeight() + 10.0;
-			const double Slope = 0.1 * (Ridge::Gate(Probe, GateDepth) - Have);
-			if (Slope < UE_KINDA_SMALL_NUMBER) break;
-			Gate.EaveHeight = Gate.GetEaveHeight() + (Want - Have) / Slope;
-		}
 		// Never lowered.
-		Gate.EaveHeight = FMath::Max(Gate.EaveHeight, Start);
+		Gate.EaveHeight = FMath::Max(EaveForRidge(Gate, GateDepth, Want), Gate.GetEaveHeight());
 	}
 }

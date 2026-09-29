@@ -54,7 +54,6 @@ private:
 	// over them, which is while a tool is in hand.
 	ECheckBoxState GetShowPlansState() const;
 	void OnShowPlansChanged(ECheckBoxState State);
-	FReply OnGenerateClicked();
 
 	// Collapses the help block while no tool is active; see the definition.
 	EVisibility GetHelpVisibility() const;

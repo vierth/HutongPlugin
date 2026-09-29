@@ -95,26 +95,6 @@ namespace
 		return Prop->GetMetaData(TEXT("Category")) == Category;
 	}
 
-	TSharedPtr<FJsonObject> WriteCategory(const UHutongBuildingComponent* Component,
-		const TCHAR* Category)
-	{
-		TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
-		for (TFieldIterator<FProperty> It(Component->GetClass()); It; ++It)
-		{
-			FProperty* Prop = *It;
-			if (!IsInCategory(Prop, Category)) continue;
-			const void* Value = Prop->ContainerPtrToValuePtr<void>(Component);
-			TSharedPtr<FJsonValue> Json =
-				FJsonObjectConverter::UPropertyToJsonValue(Prop, Value, CheckFlags, SkipFlags);
-			if (Json.IsValid())
-			{
-				Out->SetField(FJsonObjectConverter::StandardizeCase(Prop->GetAuthoredName()), Json);
-			}
-		}
-		if (Out->Values.Num() == 0) return nullptr;
-		return TSharedPtr<FJsonObject>(Out);
-	}
-
 	void ReadCategory(const TSharedRef<FJsonObject>& Object, UHutongBuildingComponent* Component,
 		const TCHAR* Category)
 	{
@@ -290,29 +270,37 @@ TSharedPtr<FJsonObject> WriteComponent(const UHutongBuildingComponent* Component
 	KeepOwnFieldsOnly(Out, Component->GetClass());
 
 	// Diffed against a fresh component of the same type and preset, so only decisions are written;
-	// the rest follows shipped defaults on re-import, picking up canon changes.
-	if (UHutongBuildingComponent* Reference = NewObject<UHutongBuildingComponent>(
-		GetTransientPackage(), Component->GetClass(), NAME_None, RF_Transient))
+	// that fresh component travels in the file's defaults (Gather), so the record reads back the same
+	// wherever the defaults have since moved.
+	if (const TSharedPtr<FJsonObject> Reference = DefaultsFor(Component->GetClass(), Component->Preset))
 	{
-		if (!Component->Preset.IsEmpty()) Reference->ApplyPresetParams(Component->Preset);
-
-		TSharedRef<FJsonObject> RefBlob = MakeShared<FJsonObject>();
-		if (FJsonObjectConverter::UStructToJsonObject(Reference->GetClass(), Reference, RefBlob,
-			CheckFlags, SkipFlags))
-		{
-			KeepOwnFieldsOnly(RefBlob, Reference->GetClass());
-			// Identity is not a parameter: Sync matches on the id, so it is written even when every field
-			// is default.
-			RefBlob->RemoveField(FJsonObjectConverter::StandardizeCase(
-				GET_MEMBER_NAME_STRING_CHECKED(UHutongBuildingComponent, BuildingId)));
-			PruneEqual(Out, RefBlob);
-		}
+		PruneEqual(Out, Reference.ToSharedRef());
 	}
 	return Out;
 }
 
+TSharedPtr<FJsonObject> DefaultsFor(UClass* Class, const FString& Preset)
+{
+	UHutongBuildingComponent* Reference = Class ? NewObject<UHutongBuildingComponent>(
+		GetTransientPackage(), Class, NAME_None, RF_Transient) : nullptr;
+	if (!Reference) return nullptr;
+	if (!Preset.IsEmpty()) Reference->ApplyPresetParams(Preset);
+	TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
+	if (!FJsonObjectConverter::UStructToJsonObject(Class, Reference, Out, CheckFlags, SkipFlags)) return nullptr;
+	KeepOwnFieldsOnly(Out, Class);
+	// Identity is not a parameter: Sync matches on the id, so it is written even when every field is default.
+	Out->RemoveField(FJsonObjectConverter::StandardizeCase(
+		GET_MEMBER_NAME_STRING_CHECKED(UHutongBuildingComponent, BuildingId)));
+	return TSharedPtr<FJsonObject>(Out);
+}
+
+FString DefaultsKey(FName ClassName, const FString& Preset)
+{
+	return ClassName.ToString() + TEXT("|") + Preset;
+}
+
 bool ReadComponent(const TSharedRef<FJsonObject>& Blob, UHutongBuildingComponent* Component,
-	FString& OutProblem)
+	FString& OutProblem, const TSharedPtr<FJsonObject>& Defaults)
 {
 	if (!Component)
 	{
@@ -324,10 +312,18 @@ bool ReadComponent(const TSharedRef<FJsonObject>& Blob, UHutongBuildingComponent
 	TSharedRef<FJsonObject> Filtered = MakeShared<FJsonObject>(*Blob);
 	KeepOwnFieldsOnly(Filtered, Component->GetClass());
 
-	// Preset first: the record holds differences from it. A preset missing from this project is
-	// not fatal (differences land on shipped defaults) but is reported.
+	// The file's own defaults first when it carries them: the record is a difference from those, not
+	// from this project's presets and shipped defaults.
+	if (Defaults.IsValid())
+	{
+		TSharedRef<FJsonObject> Base = MakeShared<FJsonObject>(*Defaults);
+		KeepOwnFieldsOnly(Base, Component->GetClass());
+		FJsonObjectConverter::JsonObjectToUStruct(Base, Component->GetClass(), Component, CheckFlags, SkipFlags, /*bStrictMode*/ false);
+	}
+	// Else preset first: an older file holds differences from it. A preset missing from this project
+	// is not fatal (differences land on shipped defaults) but is reported.
 	FString PresetName;
-	if (Filtered->TryGetStringField(TEXT("preset"), PresetName) && !PresetName.IsEmpty())
+	if (!Defaults.IsValid() && Filtered->TryGetStringField(TEXT("preset"), PresetName) && !PresetName.IsEmpty())
 	{
 		if (!Component->ApplyPresetParams(PresetName))
 		{
@@ -394,11 +390,10 @@ FTransform ComposeRecordTransform(const FRecord& Record, const FTransform& SetTo
 }
 
 bool Gather(const TArray<UHutongBuildingComponent*>& Buildings, UWorld* World,
-	FSceneFile& OutFile, FResult& OutResult, bool bLayoutOnly)
+	FSceneFile& OutFile, FResult& OutResult)
 {
 	OutFile = FSceneFile();
 	OutFile.LevelName = World ? World->GetMapName() : FString();
-	OutFile.bLayoutOnly = bLayoutOnly;
 
 	TArray<UHutongBuildingComponent*> Work;
 	Work.Reserve(Buildings.Num());
@@ -428,18 +423,13 @@ bool Gather(const TArray<UHutongBuildingComponent*>& Buildings, UWorld* World,
 			B->Modify();
 		}
 
-		// A layout-only export writes no parameters at all; the type and the footprint are the record.
-		TSharedPtr<FJsonObject> Blob;
-		if (!bLayoutOnly)
+		const TSharedPtr<FJsonObject> Blob = WriteComponent(B);
+		if (!Blob.IsValid())
 		{
-			Blob = WriteComponent(B);
-			if (!Blob.IsValid())
-			{
-				OutResult.Problems.Add(FString::Printf(TEXT("Could not serialise %s; skipped."),
-					*Actor->GetActorNameOrLabel()));
-				++OutResult.Skipped;
-				continue;
-			}
+			OutResult.Problems.Add(FString::Printf(TEXT("Could not serialise %s; skipped."),
+				*Actor->GetActorNameOrLabel()));
+			++OutResult.Skipped;
+			continue;
 		}
 
 		FRecord Rec;
@@ -452,10 +442,13 @@ bool Gather(const TArray<UHutongBuildingComponent*>& Buildings, UWorld* World,
 		Rec.bHasFacing = B->GetFacade(Rec.Facing);
 		Rec.bRunAlongY = B->IsRunAlongY();
 		Rec.Variant = B->GetTypeVariant();
-		if (bLayoutOnly) Rec.FootprintFields = WriteCategory(B, TEXT("Footprint"));
 		Rec.Detail = B->DetailLevel;
 		Rec.bPlanOnly = B->bPlanOnly;
 		Rec.Blob = Blob;
+		// This type and preset's defaults, once per file.
+		const FString Key = DefaultsKey(Rec.ClassName, B->Preset);
+		if (!OutFile.Defaults.Contains(Key)) OutFile.Defaults.Add(Key, DefaultsFor(B->GetClass(), B->Preset));
+		Rec.Defaults = OutFile.Defaults.FindRef(Key);
 
 		const FTransform Xf = Actor->GetActorTransform();
 		const FVector Rel = SetRot.UnrotateVector(Xf.GetLocation() - Anchor);
@@ -490,6 +483,28 @@ bool Write(const FSceneFile& File, const FString& FilePath, FResult& OutResult)
 	Root->SetStringField(TEXT("exportedAt"), FDateTime::UtcNow().ToIso8601());
 	// Stated in the file so a reader knows whether absent parameters are missing or omitted.
 	Root->SetBoolField(TEXT("layoutOnly"), File.bLayoutOnly);
+
+	// At the top: every field of each type and preset below, which the buildings are differences from.
+	// A file read after the shipped defaults or a preset change still says what its buildings were.
+	{
+		TArray<FString> Keys;
+		File.Defaults.GetKeys(Keys);
+		Keys.Sort();
+		TArray<TSharedPtr<FJsonValue>> Entries;
+		for (const FString& Key : Keys)
+		{
+			const TSharedPtr<FJsonObject>& Fields = File.Defaults[Key];
+			if (!Fields.IsValid()) continue;
+			FString Type, Preset;
+			Key.Split(TEXT("|"), &Type, &Preset);
+			TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+			Entry->SetStringField(TEXT("type"), Type);
+			Entry->SetStringField(TEXT("preset"), Preset);
+			Entry->SetObjectField(TEXT("fields"), Fields);
+			Entries.Add(MakeShared<FJsonValueObject>(Entry));
+		}
+		if (Entries.Num() > 0) Root->SetArrayField(TEXT("defaults"), Entries);
+	}
 
 	TSharedRef<FJsonObject> Set = MakeShared<FJsonObject>();
 	Set->SetObjectField(TEXT("originWorld"), Vec3(File.SetOriginWorld));
@@ -611,6 +626,21 @@ bool Read(const FString& FilePath, FSceneFile& OutFile, FResult& OutResult)
 	Root->TryGetStringField(TEXT("level"), OutFile.LevelName);
 	Root->TryGetBoolField(TEXT("layoutOnly"), OutFile.bLayoutOnly);
 
+	const TArray<TSharedPtr<FJsonValue>>* DefaultEntries = nullptr;
+	if (Root->TryGetArrayField(TEXT("defaults"), DefaultEntries) && DefaultEntries)
+	{
+		for (const TSharedPtr<FJsonValue>& Entry : *DefaultEntries)
+		{
+			const TSharedPtr<FJsonObject>* E = nullptr;
+			const TSharedPtr<FJsonObject>* Fields = nullptr;
+			FString Type, Preset;
+			if (!Entry.IsValid() || !Entry->TryGetObject(E) || !E) continue;
+			if (!(*E)->TryGetStringField(TEXT("type"), Type) || !(*E)->TryGetObjectField(TEXT("fields"), Fields) || !Fields) continue;
+			(*E)->TryGetStringField(TEXT("preset"), Preset);
+			OutFile.Defaults.Add(DefaultsKey(FName(*Type), Preset), *Fields);
+		}
+	}
+
 	const TSharedPtr<FJsonObject>* Set = nullptr;
 	if (Root->TryGetObjectField(TEXT("set"), Set) && Set)
 	{
@@ -721,6 +751,9 @@ bool Read(const FString& FilePath, FSceneFile& OutFile, FResult& OutResult)
 		if ((*Obj)->TryGetObjectField(TEXT("component"), Blob) && Blob)
 		{
 			Rec.Blob = *Blob;
+			FString Preset;
+			Rec.Blob->TryGetStringField(TEXT("preset"), Preset);
+			Rec.Defaults = OutFile.Defaults.FindRef(DefaultsKey(Rec.ClassName, Preset));
 		}
 		else if (!OutFile.bLayoutOnly)
 		{
@@ -801,7 +834,9 @@ namespace
 		}
 		if (Record.Blob.IsValid())
 		{
-			const bool bOk = ReadComponent(Record.Blob.ToSharedRef(), Component, OutProblem);
+			// A record read as another type (remapped) takes that type's defaults, not the file's.
+			const bool bOk = ReadComponent(Record.Blob.ToSharedRef(), Component, OutProblem,
+				bForceLayout ? nullptr : Record.Defaults);
 			// A record for another type: only shared fields came out of the blob, so apply the placement's
 			// facts on top.
 			if (bOk && bForceLayout) ApplyLayout(Record, Component);
@@ -1010,7 +1045,7 @@ void Place(UWorld* World, const FSceneFile& File, const FTransform& SetToWorld,
 namespace
 {
 	void ExportThese(const TArray<UHutongBuildingComponent*>& Buildings, UWorld* World,
-		const FString& FilePath, FResult& OutResult, bool bLayoutOnly)
+		const FString& FilePath, FResult& OutResult)
 	{
 		OutResult = FResult();
 
@@ -1018,21 +1053,21 @@ namespace
 		const FScopedTransaction Transaction(LOCTEXT("ExportScene", "Export Hutong Scene"));
 
 		FSceneFile File;
-		if (!Gather(Buildings, World, File, OutResult, bLayoutOnly)) return;
+		if (!Gather(Buildings, World, File, OutResult)) return;
 		if (!Write(File, FilePath, OutResult)) return;
 
 		OutResult.bSucceeded = true;
 	}
 }
 
-void ExportLoaded(UWorld* World, const FString& FilePath, FResult& OutResult, bool bLayoutOnly)
+void ExportLoaded(UWorld* World, const FString& FilePath, FResult& OutResult)
 {
-	ExportThese(HutongDetailOps::CollectLoaded(World), World, FilePath, OutResult, bLayoutOnly);
+	ExportThese(HutongDetailOps::CollectLoaded(World), World, FilePath, OutResult);
 }
 
-void ExportSelection(UWorld* World, const FString& FilePath, FResult& OutResult, bool bLayoutOnly)
+void ExportSelection(UWorld* World, const FString& FilePath, FResult& OutResult)
 {
-	ExportThese(HutongDetailOps::CollectSelected(), World, FilePath, OutResult, bLayoutOnly);
+	ExportThese(HutongDetailOps::CollectSelected(), World, FilePath, OutResult);
 }
 
 void ImportAtRecordedTransforms(UWorld* World, const FString& FilePath, EMode Mode,

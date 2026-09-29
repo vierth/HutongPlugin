@@ -75,6 +75,12 @@ struct FHutongSiheyuanParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Layout", meta=(DisplayName="Suggested Frontage (面闊)", UIMin="0", UIMax="2000", ClampMin="0", Units="cm", ToolTip="Frontage the drag snaps to, in cm; zero leaves the drag free."))
 	double SuggestedFrontage = 0.0;
 
+	// The frontage the type's own eave is read at (GetTypeEaveHeight), set with the preset; not the drag
+	// snap, so clearing SuggestedFrontage to draw freely keeps the band. Zero falls back to
+	// SuggestedFrontage (placements from before the field).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Proportions", meta=(DisplayName="Type Frontage (面闊)", UIMin="0", UIMax="2000", ClampMin="0", Units="cm", ToolTip="Frontage the type's own eave is read at, in cm; a drawn house's derived eave stays near it. Zero uses the suggested frontage."))
+	double TypeFrontage = 0.0;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Layout", meta=(DisplayName="Suggested Depth (進深)", UIMin="0", UIMax="1200", ClampMin="0", Units="cm", ToolTip="Depth the drag snaps to, in cm; zero derives it."))
 	double SuggestedDepth = 0.0;
 
@@ -438,13 +444,32 @@ struct FHutongSiheyuanParams
 			bDeriveProportions ? SideBayWidthRatio : 1.0);
 	}
 
-	// 檐柱高 = 8/10 明間面闊, via the same platform-and-column solve as GetFloorHeight.
+	// 檐柱高 = 8/10 明間面闊, via the same platform-and-column solve as GetFloorHeight, held within
+	// DerivedEaveBandShare of the type's eave (GetTypeEaveHeight): the drawn width sets the bays, the
+	// type sets the height, so near-equal footprints stand near-equal.
 	double GetEaveHeightFromBays() const
 	{
-		const double Col = HutongGen::Proportions::ColumnFromCentralBay(
-			GetCentralBayWidth(), ColumnHeightPerBay, MinColumnHeight);
-		return HutongGen::Proportions::EaveFromColumn(Col,
-			ColumnHeightInDiameters, PlatformHeightInDiameters);
+		const double Drawn = EaveFromCentralBay(GetCentralBayWidth());
+		const double Type = GetTypeEaveHeight();
+		if (Type <= 0.0) return Drawn;
+		const double Band = HutongCanon::Module::DerivedEaveBandShare;
+		return FMath::Clamp(Drawn, Type * (1.0 - Band), Type * (1.0 + Band));
+	}
+
+	// The eave the rule gives at the type's frontage; zero without one.
+	double GetTypeEaveHeight() const
+	{
+		const double Frontage = TypeFrontage > 0.0 ? TypeFrontage : SuggestedFrontage;
+		if (Frontage <= 0.0) return 0.0;
+		const int32 N = HutongGen::ComputeBayCount(Frontage, MinBayWidth, MaxBayWidth);
+		return EaveFromCentralBay(HutongGen::CentralBayWidth(Frontage, N,
+			bDeriveProportions ? SideBayWidthRatio : 1.0));
+	}
+
+	double EaveFromCentralBay(double CentralBay) const
+	{
+		const double Col = HutongGen::Proportions::ColumnFromCentralBay(CentralBay, ColumnHeightPerBay, MinColumnHeight);
+		return HutongGen::Proportions::EaveFromColumn(Col, ColumnHeightInDiameters, PlatformHeightInDiameters);
 	}
 
 	double GetEaveHeight() const

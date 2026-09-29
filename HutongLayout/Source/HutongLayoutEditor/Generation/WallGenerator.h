@@ -51,7 +51,7 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Openings", meta=(HutongBasic, DisplayName="Decorative Windows (什錦窗)", ToolTip="Adds a row of decorative windows (什錦窗) along the wall."))
 	bool bHasWindows = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Role", ToolTip="Role of the wall."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(HutongBasic, DisplayName="Role", ToolTip="Role of the wall."))
 	EHutongWallRole Role = EHutongWallRole::Perimeter;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Derive From Role", ToolTip="Takes height, thickness and cap from the role."))

@@ -61,6 +61,8 @@ public:
 	virtual TArray<FText> GetToolHelpLines() const override;
 	// Segments follow the cursor; the wall has no R key.
 	virtual bool HasRotateKey() const override { return false; }
+	// Walls start on other buildings' faces: a press on an outline anchors, not selects.
+	virtual bool StartsOnFootprintEdges() const override { return true; }
 	virtual FText GetKeyHintText() const override;
 	virtual void Render(IToolsContextRenderAPI* RenderAPI) override;
 
@@ -98,12 +100,13 @@ protected:
 	TArray<bool> ChainGateFlags;
 	TWeakObjectPtr<class UHutongBuildingComponent> ChainEndBuilding;
 
-	// Where the drawn line sits across the wall: its centre, or the face the anchor snapped onto.
+	// Where the drawn line sits across the wall: its centre, or the outer face when an end is on a
+	// neighbour's corner.
 	double GetDrawnY() const;
-	// Whether the cursor's segment decided the side last frame (wider tolerance keeps it).
-	mutable bool bCursorSideOn = false;
-	// Whether the drawn segment sat on a frame axis last frame (wider tolerance keeps it).
-	bool bAxisSnapOn = false;
+	// The drawn line and both end cuts: the corner rule (HutongWallChain::CornerEnd), or a flush cut on a face.
+	void EndsOnNeighbours(bool bWithCursor, double& OutDrawnY, HutongWallChain::FEndFace& OutStart, HutongWallChain::FEndFace& OutEnd) const;
+	// Ends snap to neighbours' corners and faces; the run is free everywhere else.
+	virtual bool PointSnapsOnly() const override { return true; }
 	// The segments as they stand, with the cursor's unfinished one when asked.
 	bool BuildChain(bool bWithCursor, TArray<HutongWallChain::FSegment>& OutSegments) const;
 	// The bearing of the current segment, for the lane readout and the angle snap.

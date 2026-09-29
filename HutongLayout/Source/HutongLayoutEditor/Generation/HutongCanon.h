@@ -40,6 +40,12 @@ namespace HutongCanon
 		// height, floored on 柱高 (not the doorway) so the opening stack stays undistorted.
 		inline constexpr double MinColumnHeightCm = 235.0;
 
+		// JUDGEMENT — a drawn house's derived eave stays within this share of its type's own (the eave
+		// the same rule gives at the preset's suggested frontage). The bay count steps with the drawn
+		// width, and 8/10 of each step's 明間 swung the eave by a metre between near-equal footprints,
+		// or to five metres for one wide bay.
+		inline constexpr double DerivedEaveBandShare = 0.10;
+
 		// CANON 營造 — 明間 is widest; each 次間 a fixed fraction of it.
 		inline constexpr double SideBayWidthRatio = 0.85;
 
@@ -534,6 +540,10 @@ namespace HutongCanon
 		// 後罩房: closes the back of a 三進 plot.
 		inline constexpr FHouse RearRow =
 			{ 328.0, 260.0, 320.0, false, EHutongRearEave::Courtyard, 1300.0, EHutongPurlins::Five, 100.0, true };
+
+		// 後罩房 against a neighbour's plot: blank 封護檐 back wall, no 高窗 and no eave over the boundary.
+		inline constexpr FHouse RearRowBlankBack =
+			{ 328.0, 260.0, 320.0, false, EHutongRearEave::Lane, 1300.0, EHutongPurlins::Five, 100.0, false };
 
 		// 耳房: low rooms at the hall's flanks; the 柱高 floor bites here.
 		// CANON p.83 — 3.0 m, two per flank (三正四耳) in a 大型 court; 2.4 m, one, in a 小型 (compound size table).

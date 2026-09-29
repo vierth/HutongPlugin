@@ -35,6 +35,11 @@ struct FHutongFootprintSkew
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(DisplayName="Corner +Y (Y端角)", Units="cm", ToolTip="Offset of the corner at the far end of local Y, in local X and Y, in cm."))
 	FVector2D Corner01 = FVector2D::ZeroVector;
 
+	// Ends: the end bay's reach from each end of the run (origin end, far end), filled from the
+	// building's bays by UHutongBuildingComponent::GetFootprintSkew; zero = the generic zone. Derived,
+	// never saved or compared.
+	double EndBayReach[2] = { 0.0, 0.0 };
+
 	FVector2D Get(int32 Corner) const
 	{
 		switch (Corner)
@@ -129,7 +134,8 @@ namespace HutongFootprint
 		OutB = bX ? Skew.Get(CornerB).Y : Skew.Get(CornerB).X;
 	}
 
-	// End zone length: across size plus half the largest offset there, capped at mid-run.
+	// End zone length: the end bay where the building has bays (a slid corner widens or narrows that
+	// bay alone), else across size plus 1.5× the largest offset there; capped at mid-run.
 	inline double EndZone(const FVector2D& Size, const FHutongFootprintSkew& Skew, bool bStart)
 	{
 		const double L = RunAlongX(Size) ? Size.X : Size.Y;
@@ -139,7 +145,8 @@ namespace HutongFootprint
 		EndAcrossOffsets(Size, Skew, bStart, AA, AB);
 		const double MaxAbs = FMath::Max(FMath::Max(FMath::Abs(A), FMath::Abs(B)), FMath::Max(FMath::Abs(AA), FMath::Abs(AB)));
 		if (MaxAbs < 1.0e-6) return 0.0;
-		return FMath::Clamp(T + 1.5 * MaxAbs, 20.0, 0.5 * L);
+		const double Bay = Skew.EndBayReach[bStart ? 0 : 1];
+		return FMath::Clamp(Bay > 0.0 ? Bay : T + 1.5 * MaxAbs, 20.0, 0.5 * L);
 	}
 
 	// Map a rectangle point under either mode.
@@ -251,6 +258,31 @@ namespace HutongFootprint
 				const double InA = bStart ? A : -A, InB = bStart ? B : -B;
 				if (InA > Z - MinEdge || InB > Z - MinEdge) return false;
 			}
+		}
+		return true;
+	}
+
+	// Whether a convex quad and an axis-aligned box share any area or edge (separating axes: the box's
+	// two and the quad's four edge normals). A box across a footprint picks it without holding a corner.
+	inline bool QuadOverlapsBox(const FVector2D C[4], const FVector2D& Lo, const FVector2D& Hi)
+	{
+		const FVector2D Box[4] = { Lo, FVector2D(Hi.X, Lo.Y), Hi, FVector2D(Lo.X, Hi.Y) };
+		auto Separated = [&](const FVector2D& Axis)
+		{
+			double AMin = TNumericLimits<double>::Max(), AMax = -AMin, BMin = AMin, BMax = -AMin;
+			for (int32 i = 0; i < 4; ++i)
+			{
+				const double A = FVector2D::DotProduct(C[i], Axis), B = FVector2D::DotProduct(Box[i], Axis);
+				AMin = FMath::Min(AMin, A); AMax = FMath::Max(AMax, A);
+				BMin = FMath::Min(BMin, B); BMax = FMath::Max(BMax, B);
+			}
+			return AMax < BMin || BMax < AMin;
+		};
+		if (Separated(FVector2D(1.0, 0.0)) || Separated(FVector2D(0.0, 1.0))) return false;
+		for (int32 i = 0; i < 4; ++i)
+		{
+			const FVector2D E = C[(i + 1) % 4] - C[i];
+			if (Separated(FVector2D(-E.Y, E.X))) return false;
 		}
 		return true;
 	}

@@ -121,7 +121,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCostHouseBudgetTest,
 
 bool FHutongCostHouseBudgetTest::RunTest(const FString& Parameters)
 {
-	// The five shipped presets make up a city, so they carry the budget.
+	// The shipped house presets make up a city, so they carry the budget.
 	for (const FString& Name : HutongPresets::BuiltInSiheyuanNames())
 	{
 		FHutongSiheyuanParams P = PresetParams(Name);
