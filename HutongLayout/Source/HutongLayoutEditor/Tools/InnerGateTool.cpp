@@ -193,24 +193,8 @@ void UHutongInnerGateTool::Render(IToolsContextRenderAPI* RenderAPI)
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
 	if (MaxX - MinX < 1.0 || MaxY - MinY < 1.0) return;
 
-	// Bar along the facing edge.
-	const HutongGen::BaySide::FEdge Edge =
-		HutongGen::BaySide::GetEdge(BaySide, MinX, MinY, MaxX, MaxY);
-	const double SpanMin = Edge.bAlongX ? MinX : MinY;
-	const double SpanMax = Edge.bAlongX ? MaxX : MaxY;
-
-	const FLinearColor Green(0.25f, 1.0f, 0.45f);
-	const int32 Ticks = 9;
-	for (int32 i = 0; i < Ticks; ++i)
-	{
-		const double A0 = FMath::Lerp(SpanMin, SpanMax, (i + 0.15) / Ticks);
-		const double A1 = FMath::Lerp(SpanMin, SpanMax, (i + 0.85) / Ticks);
-		const FVector P0 = Edge.bAlongX
-			? LocalRectToWorld(A0, Edge.FixedCoord) : LocalRectToWorld(Edge.FixedCoord, A0);
-		const FVector P1 = Edge.bAlongX
-			? LocalRectToWorld(A1, Edge.FixedCoord) : LocalRectToWorld(Edge.FixedCoord, A1);
-		DrawPreviewLine(PDI, P0, P1, Green, 7.0f);
-	}
+	// One opening: one chevron through the face.
+	DrawRectBaysAndFacing(PDI, BaySide, MinX, MinY, MaxX, MaxY, {});
 }
 
 TArray<FText> UHutongInnerGateTool::GetToolHelpLines() const

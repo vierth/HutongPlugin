@@ -1,4 +1,5 @@
 #include "Tools/HutongImportTool.h"
+#include "Tools/HutongOverlaps.h"
 #include "Tools/HutongImportTypes.h"
 
 #include "HutongLayoutModeSettings.h"
@@ -234,6 +235,7 @@ void UHutongImportTool::PlaceAtRecordedCoordinates()
 			return HutongImportTypes::ResolveUnknownTypes(File);
 		});
 	HutongExchange::Report(Result, TEXT("import"));
+	HutongOverlaps::CheckAfterImport(Result.Placed);
 }
 
 void UHutongImportTool::SpawnFinalActor()
@@ -267,6 +269,7 @@ void UHutongImportTool::SpawnFinalActor()
 	ToolManager->EndUndoTransaction();
 
 	HutongExchange::Report(Result, TEXT("import"));
+	HutongOverlaps::CheckAfterImport(Result.Placed);
 }
 
 UInteractiveTool* UHutongImportToolBuilder::BuildTool(const FToolBuilderState& SceneState) const

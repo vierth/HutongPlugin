@@ -24,4 +24,6 @@ public:
 private:
 	// Enter, Backspace and Escape are not routed to interactive tools by the framework.
 	TSharedPtr<IInputProcessor> InputProcessor;
+	// The context's own answer, put back on Exit.
+	bool bContextEndedToolsOnSave = true;
 };

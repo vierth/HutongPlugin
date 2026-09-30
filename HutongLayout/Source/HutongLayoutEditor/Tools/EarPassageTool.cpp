@@ -171,11 +171,7 @@ void UHutongEarPassageTool::Render(IToolsContextRenderAPI* RenderAPI)
 
 	const FHutongEarPassageParams P = GetResolvedParams();
 
-	const FLinearColor TickColor(0.25f, 1.0f, 0.45f, 1.0f);
 	const FLinearColor StripColor(0.60f, 0.85f, 0.45f, 1.0f);
-	const double TickLen = FMath::Max(30.0, 0.04 * FMath::Max(SizeX, SizeY));
-	const double TickInset = 0.4 * TickLen;
-	const FRotator Rot(0.0, PlacementYawDeg, 0.0);
 
 	const HutongGen::BaySide::FEdge Edge = HutongGen::BaySide::GetEdge(BaySide, MinX, MinY, MaxX, MaxY);
 	const double SpanMin = Edge.bAlongX ? MinX : MinY;
@@ -185,12 +181,6 @@ void UHutongEarPassageTool::Render(IToolsContextRenderAPI* RenderAPI)
 	// Point at T along the frontage, U across, drag frame.
 	auto At = [&](double T, double U) { return Edge.bAlongX ? LocalRectToWorld(SpanMin + T, U) : LocalRectToWorld(U, SpanMin + T); };
 	auto OnEdge = [&](double T) { return At(T, Edge.FixedCoord); };
-	auto DrawTick = [&](double T)
-	{
-		const FVector Base = OnEdge(T);
-		const FVector OutDir = Rot.RotateVector(FVector(Edge.OutDir.X, Edge.OutDir.Y, 0.0));
-		DrawPreviewLine(PDI, Base - OutDir * TickInset, Base + OutDir * TickLen, TickColor, 5.0f);
-	};
 
 	// Computed in build frame (facade on -Y), then turned by the same RotateVertex as the mesh, so strip
 	// end and doorway land where built on +Y and -X, which reverse the frontage.
@@ -203,7 +193,7 @@ void UHutongEarPassageTool::Render(IToolsContextRenderAPI* RenderAPI)
 	// Room bay ticks along the facade edge, strip line included.
 	FHutongPlanBays Bays = UHutongEarPassageBuildingComponent::PlanBaysInBuildFrame(P);
 	HutongGen::PlanBays::OntoFacade(Bays, BaySide, SizeX, SizeY);
-	for (const double T : Bays.Boundaries) DrawTick(T);
+	DrawRectBaysAndFacing(PDI, BaySide, MinX, MinY, MaxX, MaxY, Bays.Boundaries, Bays.DoorBay);
 
 	// Passage strip and clear way, dashed across the depth.
 	const double ClearA = Facade(P.GetClearX0());

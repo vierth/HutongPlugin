@@ -37,6 +37,15 @@ public:
 	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
 };
 
+// The Scene tab: each Selection setting carries an Apply button, lit while applying it would change
+// something; categories in working order.
+class FHutongModeSettingsCustomization : public IDetailCustomization
+{
+public:
+	static TSharedRef<IDetailCustomization> Make() { return MakeShared<FHutongModeSettingsCustomization>(); }
+	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
+};
+
 namespace HutongPanelCustomizations
 {
 	void Register();

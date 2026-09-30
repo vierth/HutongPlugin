@@ -48,8 +48,8 @@ class UHutongCompoundToolProperties : public UInteractiveToolPropertySet
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="North Direction (yaw)", UIMin="-180", UIMax="180", ClampMin="-360", ClampMax="360", Units="deg", ToolTip="World yaw that is north, in degrees; zero is +X."))
-	double NorthYawDeg = 0.0;
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="North Direction (yaw)", UIMin="-180", UIMax="180", ClampMin="-360", ClampMax="360", Units="deg", ToolTip="World yaw that is north, in degrees; zero is +X, 180 (the default) is -X."))
+	double NorthYawDeg = 180.0;
 
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Plot Size (院落尺度)", ToolTip="Stamps the plot at one of the three ordinary widths, sizing its buildings with it; Custom sizes the plot by dragging."))
 	EHutongCompoundSize PlotSize = EHutongCompoundSize::Standard;

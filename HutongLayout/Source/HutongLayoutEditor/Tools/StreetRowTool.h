@@ -19,6 +19,14 @@ enum class EHutongStreetRowKind : uint8
 	Shops UMETA(DisplayName = "Shops (鋪面房)"),
 };
 
+// Where a row of houses stands in its plots: lining the lane at the front, or closing them at the back.
+UENUM()
+enum class EHutongStreetRowPosition : uint8
+{
+	Front UMETA(DisplayName = "Front Row (倒座房)"),
+	Rear UMETA(DisplayName = "Rear Row (後罩房)"),
+};
+
 UCLASS()
 class UHutongStreetRowToolProperties : public UInteractiveToolPropertySet
 {
@@ -28,6 +36,9 @@ public:
 
 	UPROPERTY(EditAnywhere, Category="Row", meta=(ToolTip="What the bays that are not gates are built as."))
 	EHutongStreetRowKind Kind = EHutongStreetRowKind::Houses;
+
+	UPROPERTY(EditAnywhere, Category="Row", meta=(HutongBasic, DisplayName="Row Position", EditCondition="Kind == EHutongStreetRowKind::Houses", EditConditionHides, ToolTip="Whether the houses are the plots' front row (倒座房) or rear row (後罩房); picks their preset."))
+	EHutongStreetRowPosition Position = EHutongStreetRowPosition::Front;
 
 	UPROPERTY(EditAnywhere, Category="Row", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Forces the number of bays; zero derives it from the length."))
 	int32 BayCountOverride = 0;
@@ -63,6 +74,7 @@ public:
 	virtual void CancelPlacement() override;
 	virtual void FlipFacing() override;
 	virtual FText GetKeyHintText() const override;
+	virtual void OnPropertyModified(UObject* PropertySet, FProperty* Property) override;
 
 protected:
 	virtual void RegisterToolSettings() override;

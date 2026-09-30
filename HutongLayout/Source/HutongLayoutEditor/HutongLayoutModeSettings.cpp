@@ -5,6 +5,7 @@
 #include "HutongLayoutEdMode.h"
 
 #include "Tools/HutongDetailOps.h"
+#include "Tools/HutongOverlaps.h"
 #include "Tools/HutongExchange.h"
 #include "Tools/HutongImportTypes.h"
 #include "Generation/HutongBuildingComponent.h"
@@ -65,7 +66,7 @@ namespace
 		return true;
 	}
 
-	bool PickOpenFile(const FString& DefaultDir, FString& OutPath)
+	bool PickOpenFile(const FString& DefaultDir, const FString& DefaultName, FString& OutPath)
 	{
 		IDesktopPlatform* Platform = FDesktopPlatformModule::Get();
 		if (!Platform) return false;
@@ -73,7 +74,7 @@ namespace
 		const void* Parent = FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr);
 		TArray<FString> Files;
 		if (!Platform->OpenFileDialog(Parent, TEXT("Import a Hutong scene"),
-			DefaultDir, FString(), HutongExchange::SceneFileTypes, EFileDialogFlags::None, Files))
+			DefaultDir, DefaultName, HutongExchange::SceneFileTypes, EFileDialogFlags::None, Files))
 		{
 			return false;
 		}
@@ -106,11 +107,19 @@ void UHutongLayoutModeSettings::CreateStarterMaterials()
 	}
 }
 
-void UHutongLayoutModeSettings::PromoteSelection()
+
+void UHutongLayoutModeSettings::FindOverlappingBuildings()
 {
-	const int32 Changed = HutongDetailOps::SetLevel(HutongDetailOps::CollectSelected(), TargetLevel);
-	UE_LOG(LogTemp, Display, TEXT("Hutong: %d building(s) rebuilt at the target detail."), Changed);
-	RefreshCounts();
+	const TArray<UHutongBuildingComponent*> Loaded = HutongDetailOps::CollectLoaded(EditorWorld());
+	const TArray<HutongOverlaps::FPair> Pairs = HutongOverlaps::Find(Loaded, Loaded);
+	if (Pairs.Num() > 0)
+	{
+		HutongOverlaps::OpenWindow(Pairs);
+		return;
+	}
+	FNotificationInfo Info(NSLOCTEXT("HutongLayout", "NoOverlaps", "No loaded buildings overlap another by more than 60%."));
+	Info.ExpireDuration = 4.0f;
+	FSlateNotificationManager::Get().AddNotification(Info);
 }
 
 void UHutongLayoutModeSettings::DeleteUnusedGeneratedMeshes()
@@ -151,76 +160,87 @@ TArray<FString> UHutongLayoutModeSettings::GetConvertPresetOptions() const
 	return Names;
 }
 
-void UHutongLayoutModeSettings::ConvertSelection()
-{
-	const HutongDetailOps::FConvertTarget Target = HutongDetailOps::FindConvertTarget(ConvertTo);
-	if (!Target.IsValid())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Hutong: pick a type in Convert To first."));
-		return;
-	}
 
-	const int32 Changed = HutongDetailOps::Convert(
-		HutongDetailOps::CollectSelected(), Target, ConvertPreset);
-	UE_LOG(LogTemp, Display, TEXT("Hutong: %d building(s) converted to %s."), Changed, *Target.Label);
+
+
+
+
+bool UHutongLayoutModeSettings::CanApplyDetailLevel() const
+{
+	return HutongDetailOps::CollectSelected().ContainsByPredicate(
+		[this](const UHutongBuildingComponent* B) { return B->DetailLevel != TargetLevel; });
+}
+
+void UHutongLayoutModeSettings::ApplyDetailLevel()
+{
+	const int32 Changed = HutongDetailOps::SetLevel(HutongDetailOps::CollectSelected(), TargetLevel);
+	UE_LOG(LogTemp, Display, TEXT("Hutong: %d building(s) rebuilt at the chosen detail level."), Changed);
 	RefreshCounts();
 }
 
-void UHutongLayoutModeSettings::DivideSelection()
+bool UHutongLayoutModeSettings::CanApplyConvert() const
 {
-	const TArray<UHutongBuildingComponent*> Picked = HutongDetailOps::CollectSelected();
+	return bConvertPending && HutongDetailOps::FindConvertTarget(ConvertTo).IsValid()
+		&& HutongDetailOps::CollectSelected().Num() > 0;
+}
+
+void UHutongLayoutModeSettings::ApplyConvert()
+{
+	const HutongDetailOps::FConvertTarget Target = HutongDetailOps::FindConvertTarget(ConvertTo);
+	if (!Target.IsValid()) return;
+	const int32 Changed = HutongDetailOps::Convert(HutongDetailOps::CollectSelected(), Target, ConvertPreset);
+	UE_LOG(LogTemp, Display, TEXT("Hutong: %d building(s) converted to %s."), Changed, *Target.Label);
+	bConvertPending = false;
+	RefreshCounts();
+}
+
+bool UHutongLayoutModeSettings::CanApplyDivide() const
+{
+	return HutongDetailOps::CollectSelected().ContainsByPredicate(
+		[](const UHutongBuildingComponent* B) { return HutongDetailOps::CanDivide(B); });
+}
+
+void UHutongLayoutModeSettings::ApplyDivide()
+{
 	int32 Divided = 0;
 	FText WhyNot;
 	{
 		const FScopedTransaction Transaction(NSLOCTEXT("HutongDetailOps", "DivideBuildings", "Divide Hutong Buildings"));
-		for (UHutongBuildingComponent* B : Picked)
+		for (UHutongBuildingComponent* B : HutongDetailOps::CollectSelected())
 		{
 			if (!HutongDetailOps::CanDivide(B)) continue;
 			FHutongPlanBays Bays;
 			B->GetPlanBays(Bays);
-			const int32 Count = Bays.Boundaries.Num() - 1;
-			const int32 Line = DivideAtBayLine > 0 ? DivideAtBayLine : Count / 2;
+			const int32 Line = DivideAtBayLine > 0 ? DivideAtBayLine : (Bays.Boundaries.Num() - 1) / 2;
 			if (HutongDetailOps::DivideBuilding(B, Line, WhyNot)) ++Divided;
 		}
 	}
-	if (Divided == 0 && !WhyNot.IsEmpty())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Hutong: %s"), *WhyNot.ToString());
-	}
+	if (Divided == 0 && !WhyNot.IsEmpty()) { UE_LOG(LogTemp, Warning, TEXT("Hutong: %s"), *WhyNot.ToString()); }
 	UE_LOG(LogTemp, Display, TEXT("Hutong: %d building(s) divided."), Divided);
 	RefreshCounts();
+}
+
+bool UHutongLayoutModeSettings::CanFuse() const
+{
+	return HutongDetailOps::CollectSelected().Num() == 2;
 }
 
 void UHutongLayoutModeSettings::FuseSelection()
 {
 	FText Message;
-	const bool bFused = HutongDetailOps::FuseSelected(Message);
-	if (bFused)
-	{
-		UE_LOG(LogTemp, Display, TEXT("Hutong: %s"), *Message.ToString());
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Hutong: %s"), *Message.ToString());
-	}
+	if (HutongDetailOps::FuseSelected(Message)) { UE_LOG(LogTemp, Display, TEXT("Hutong: %s"), *Message.ToString()); }
+	else { UE_LOG(LogTemp, Warning, TEXT("Hutong: %s"), *Message.ToString()); }
 	RefreshCounts();
 }
 
-void UHutongLayoutModeSettings::DemoteSelectionToMassing()
+void UHutongLayoutModeSettings::SyncToSelection()
 {
-	const int32 Changed = HutongDetailOps::SetLevel(
-		HutongDetailOps::CollectSelected(), EHutongDetail::Massing);
-	UE_LOG(LogTemp, Display, TEXT("Hutong: %d building(s) demoted to massing."), Changed);
-	RefreshCounts();
-}
-
-void UHutongLayoutModeSettings::SetLoadedRegionToTarget()
-{
-	const int32 Changed = HutongDetailOps::SetLevel(
-		HutongDetailOps::CollectLoaded(EditorWorld()), TargetLevel);
-	UE_LOG(LogTemp, Display, TEXT("Hutong: %d loaded building(s) rebuilt at the target detail."),
-		Changed);
-	RefreshCounts();
+	// Mixed levels leave the dropdown where it was.
+	const TArray<UHutongBuildingComponent*> Picked = HutongDetailOps::CollectSelected();
+	if (Picked.Num() > 0 && !Picked.ContainsByPredicate([&](const UHutongBuildingComponent* B) { return B->DetailLevel != Picked[0]->DetailLevel; }))
+	{
+		TargetLevel = Picked[0]->DetailLevel;
+	}
 }
 
 void UHutongLayoutModeSettings::GenerateLoadedGeometry()
@@ -270,13 +290,15 @@ void UHutongLayoutModeSettings::DoExport(bool bSelection, const TCHAR* FallbackN
 {
 	FString Dir, Name;
 	DialogDefaults(Remembered, FallbackName, Dir, Name);
+	// A fresh time-stamped name each time: an export never lands on an older file unasked.
+	Name = FString::Printf(TEXT("%s_%s.%s"), FallbackName, *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")), HutongExchange::FileExtension);
 
 	FString Path;
 	if (!PickSaveFile(Dir, Name, Path)) return;
 
 	HutongExchange::FResult Result;
 	if (bSelection) HutongExchange::ExportSelection(EditorWorld(), Path, Result);
-	else            HutongExchange::ExportLoaded(EditorWorld(), Path, Result);
+	else            HutongExchange::ExportAll(EditorWorld(), Path, Result);
 	HutongExchange::Report(Result, TEXT("export"));
 
 	// Remember only after a successful write, so a failed export does not aim the next dialog at
@@ -289,14 +311,35 @@ void UHutongLayoutModeSettings::DoExport(bool bSelection, const TCHAR* FallbackN
 	}
 }
 
-void UHutongLayoutModeSettings::ExportLoaded()
+void UHutongLayoutModeSettings::ExportAll()
 {
-	DoExport(/*bSelection*/ false, TEXT("HutongScene.hutong.json"), LastExportFile);
+	DoExport(/*bSelection*/ false, TEXT("hutong_layout"), LastExportFile);
 }
 
 void UHutongLayoutModeSettings::ExportSelection()
 {
-	DoExport(/*bSelection*/ true, TEXT("HutongSelection.hutong.json"), LastSelectionExportFile);
+	DoExport(/*bSelection*/ true, TEXT("hutong_selection"), LastSelectionExportFile);
+}
+
+void UHutongLayoutModeSettings::ImportLayout()
+{
+	if (bCustomizePlacement) PlaceSceneByHand();
+	else ImportAtRecordedCoordinates();
+}
+
+bool UHutongLayoutModeSettings::HasSelection() const
+{
+	return HutongDetailOps::CollectSelected().Num() > 0;
+}
+
+bool UHutongLayoutModeSettings::HasSelectedLayout() const
+{
+	return HutongDetailOps::CollectSelected().ContainsByPredicate([](const UHutongBuildingComponent* B) { return B->bPlanOnly; });
+}
+
+bool UHutongLayoutModeSettings::HasSelectedBuilt() const
+{
+	return HutongDetailOps::CollectSelected().ContainsByPredicate([](const UHutongBuildingComponent* B) { return !B->bPlanOnly; });
 }
 
 void UHutongLayoutModeSettings::ImportAtRecordedCoordinates()
@@ -305,7 +348,7 @@ void UHutongLayoutModeSettings::ImportAtRecordedCoordinates()
 	DialogDefaults(LastSceneFile, TEXT(""), Dir, Name);
 
 	FString Path;
-	if (!PickOpenFile(Dir, Path)) return;
+	if (!PickOpenFile(Dir, Name, Path)) return;
 
 	HutongExchange::FResult Result;
 	HutongExchange::ImportAtRecordedTransforms(EditorWorld(), Path,
@@ -314,6 +357,7 @@ void UHutongLayoutModeSettings::ImportAtRecordedCoordinates()
 	HutongExchange::Report(Result, TEXT("import"));
 
 	if (Result.bSucceeded) { LastSceneFile = Path; SaveConfig(); }
+	HutongOverlaps::CheckAfterImport(Result.Placed);
 
 	// Select the set as it lands so the move/rotate gizmos turn it as one: coordinates from
 	// another level mean nothing here.
@@ -342,7 +386,7 @@ void UHutongLayoutModeSettings::PlaceSceneByHand()
 	DialogDefaults(LastSceneFile, TEXT(""), Dir, Name);
 
 	FString Path;
-	if (!PickOpenFile(Dir, Path)) return;
+	if (!PickOpenFile(Dir, Name, Path)) return;
 
 	// The Import tool seeds itself from this on start: the file is chosen here, the placement
 	// is the tool's.
@@ -381,5 +425,14 @@ void UHutongLayoutModeSettings::PostEditChangeProperty(FPropertyChangedEvent& Ev
 	if (Event.GetPropertyName() == GET_MEMBER_NAME_CHECKED(UHutongLayoutModeSettings, bShowPlanOutlines))
 	{
 		HutongPlanOutline::SetPlansVisible(bShowPlanOutlines);
+	}
+	if (Event.GetPropertyName() == GET_MEMBER_NAME_CHECKED(UHutongLayoutModeSettings, bPlansOverBuildings))
+	{
+		HutongPlanOutline::SetPlansOverBuildings(bPlansOverBuildings);
+	}
+	if (Event.GetPropertyName() == GET_MEMBER_NAME_CHECKED(UHutongLayoutModeSettings, ConvertTo)
+		|| Event.GetPropertyName() == GET_MEMBER_NAME_CHECKED(UHutongLayoutModeSettings, ConvertPreset))
+	{
+		bConvertPending = true;
 	}
 }

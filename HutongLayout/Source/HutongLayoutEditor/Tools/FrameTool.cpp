@@ -189,23 +189,23 @@ void UHutongFrameTool::DrawFront(FPrimitiveDrawInterface* PDI, const FVector& Or
 							: LocalRectToWorldFrom(Origin, Edge.FixedCoord, A);
 	};
 
-	const FLinearColor Green(0.25f, 1.0f, 0.45f);
-	const int32 Ticks = 9;
-	for (int32 i = 0; i < Ticks; ++i)
-	{
-		DrawPreviewLine(PDI, EdgePoint(FMath::Lerp(SpanMin, SpanMax, (i + 0.15) / Ticks)),
-			EdgePoint(FMath::Lerp(SpanMin, SpanMax, (i + 0.85) / Ticks)), Green, 7.0f);
-	}
-	if (!Settings) return;
-	const FHutongSiheyuanParams& H = Settings->Params.House;
-	const int32 N = BayCount();
 	const double Span = SpanMax - SpanMin;
-	const FLinearColor Orange(1.0f, 0.55f, 0.15f);
-	for (int32 i = 0; i <= N; ++i)
+	const double Across = Edge.bAlongX ? MaxY - MinY : MaxX - MinX;
+	const double InSign = Edge.bAlongX ? -Edge.OutDir.Y : -Edge.OutDir.X;
+	TArray<double> Bounds;
+	int32 DoorBay = INDEX_NONE;
+	if (Settings)
 	{
-		const double A = SpanMin + H.GetBayBoundary(i, N, Span, H.GetColumnRadius());
-		DrawPreviewLine(PDI, EdgePoint(A), EdgePoint(FMath::Min(A + 0.02 * Span, SpanMax)), Orange, 9.0f);
+		const FHutongSiheyuanParams& H = Settings->Params.House;
+		const int32 N = BayCount();
+		for (int32 i = 0; i <= N; ++i) Bounds.Add(H.GetBayBoundary(i, N, Span, H.GetColumnRadius()));
+		DoorBay = N / 2;
 	}
+	DrawBaysAndFacing(PDI, [&](double Along, double Depth)
+	{
+		const double Fixed = Edge.FixedCoord + InSign * Depth;
+		return Edge.bAlongX ? LocalRectToWorldFrom(Origin, SpanMin + Along, Fixed) : LocalRectToWorldFrom(Origin, Fixed, SpanMin + Along);
+	}, Span, Across, Bounds, DoorBay);
 }
 
 void UHutongFrameTool::Render(IToolsContextRenderAPI* RenderAPI)

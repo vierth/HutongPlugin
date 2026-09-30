@@ -16,9 +16,10 @@ void DrawLine(FPrimitiveDrawInterface* PDI, const FVector& A, const FVector& B,
 	{
 		return;
 	}
-	static const FLinearColor Backing(0.02f, 0.02f, 0.02f, 1.0f);
-	PDI->DrawLine(A, B, Backing, SDPG_Foreground, Thickness + 4.0f);
-	PDI->DrawLine(A, B, Color, SDPG_Foreground, Thickness);
+	// Thickness in pixels: in world units a traced map's zoom thins every stroke to a hairline.
+	const FLinearColor Backing(0.02f, 0.02f, 0.02f, Color.A);
+	PDI->DrawLine(A, B, Backing, SDPG_Foreground, Thickness + 3.0f, 0.0f, /*bScreenSpace*/ true);
+	PDI->DrawLine(A, B, Color, SDPG_Foreground, Thickness, 0.0f, /*bScreenSpace*/ true);
 }
 
 void DrawDashedLine(FPrimitiveDrawInterface* PDI, const FVector& A, const FVector& B,

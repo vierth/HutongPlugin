@@ -1,4 +1,5 @@
 #include "Misc/AutomationTest.h"
+#include "Tools/HutongOverlaps.h"
 #include "Tools/HutongDetailOps.h"
 #include "Generation/HutongBuildingComponent.h"
 #include "Generation/HutongPlanOutlineComponent.h"
@@ -306,3 +307,85 @@ bool FHutongRevertToPlanTest::RunTest(const FString& Parameters)
 }
 
 #endif
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanSharedEdgeTest, "HutongLayout.Detail.PlanSharedEdge",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongPlanSharedEdgeTest::RunTest(const FString& Parameters)
+{
+	// A gate flush with its house: one edge, drawn by the gate alone.
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
+	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
+
+	auto Plan = [&](const FVector2D& Size, const FVector& At, const TCHAR* Name) -> UHutongPlanOutlineComponent*
+	{
+		UHutongBuildingComponent* B = PlaceNamed(World, UHutongSiheyuanBuildingComponent::StaticClass(),
+			Size, FTransform(At), Name);
+		if (!B) return nullptr;
+		B->bPlanOnly = true;
+		B->ApplyPlanOutline();
+		return B->GetOwner()->FindComponentByClass<UHutongPlanOutlineComponent>();
+	};
+	UHutongPlanOutlineComponent* House = Plan(FVector2D(900.0, 600.0), FVector::ZeroVector, TEXT("SharedHouse"));
+	UHutongPlanOutlineComponent* Gate = Plan(FVector2D(300.0, 600.0), FVector(900.0, 0.0, 0.0), TEXT("SharedGate"));
+	UHutongPlanOutlineComponent* Far = Plan(FVector2D(300.0, 600.0), FVector(5000.0, 0.0, 0.0), TEXT("FarGate"));
+	if (!TestTrue(TEXT("three plans place"), House && Gate && Far)) { World->DestroyWorld(false); return false; }
+
+	const TArray<TPair<FVector, FVector>> HouseYields = House->CollectWinningNeighbourEdges();
+	const bool bSharedEdge = HouseYields.ContainsByPredicate([](const TPair<FVector, FVector>& E)
+	{
+		return FMath::IsNearlyEqual(E.Key.X, 900.0, 0.01) && FMath::IsNearlyEqual(E.Value.X, 900.0, 0.01);
+	});
+	TestTrue(TEXT("the house yields the shared edge to the smaller gate"), bSharedEdge);
+	TestEqual(TEXT("only the touching gate's edges"), HouseYields.Num(), 4);
+	TestEqual(TEXT("the gate yields nothing"), Gate->CollectWinningNeighbourEdges().Num(), 0);
+
+	World->DestroyWorld(false);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongOverlapsTest, "HutongLayout.Detail.Overlaps",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongOverlapsTest::RunTest(const FString& Parameters)
+{
+	// Share of the smaller footprint: a square half over another is 0.5, one inside a bigger one 1.
+	const TArray<FVector2D> Square = { {0, 0}, {100, 0}, {100, 100}, {0, 100} };
+	const TArray<FVector2D> Half = { {50, 0}, {150, 0}, {150, 100}, {50, 100} };
+	const TArray<FVector2D> Big = { {-50, -50}, {200, -50}, {200, 200}, {-50, 200} };
+	const TArray<FVector2D> Clockwise = { {0, 0}, {0, 100}, {100, 100}, {100, 0} };
+	TestTrue(TEXT("half over is 0.5"), FMath::IsNearlyEqual(HutongOverlaps::OverlapShare(Square, Half), 0.5, 1e-6));
+	TestTrue(TEXT("inside a bigger one is 1"), FMath::IsNearlyEqual(HutongOverlaps::OverlapShare(Square, Big), 1.0, 1e-6));
+	TestTrue(TEXT("winding does not matter"), FMath::IsNearlyEqual(HutongOverlaps::OverlapShare(Clockwise, Square), 1.0, 1e-6));
+
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
+	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
+	auto Place = [&](const FVector& At, const TCHAR* Name)
+	{
+		return PlaceNamed(World, UHutongSiheyuanBuildingComponent::StaticClass(), FVector2D(900.0, 600.0), FTransform(At), Name);
+	};
+	UHutongBuildingComponent* Old = Place(FVector::ZeroVector, TEXT("OverlapOld"));
+	UHutongBuildingComponent* Twin = Place(FVector(100.0, 50.0, 0.0), TEXT("OverlapTwin"));
+	UHutongBuildingComponent* Neighbour = Place(FVector(900.0, 0.0, 0.0), TEXT("OverlapNeighbour"));
+	if (!TestTrue(TEXT("three buildings place"), Old && Twin && Neighbour)) { World->DestroyWorld(false); return false; }
+
+	const TArray<HutongOverlaps::FPair> Pairs = HutongOverlaps::Find({ Twin }, { Old, Twin, Neighbour });
+	if (TestEqual(TEXT("one pair: the twin over the old one, not the flush neighbour"), Pairs.Num(), 1))
+	{
+		TestTrue(TEXT("the building already there comes first"), Pairs[0].First.Get() == Old && Pairs[0].Second.Get() == Twin);
+	}
+	TestEqual(TEXT("a whole-level scan meets the pair once"), HutongOverlaps::Find({ Old, Twin, Neighbour }, { Old, Twin, Neighbour }).Num(), 1);
+
+	Old->Notes = TEXT("");
+	Old->Confidence = EHutongConfidence::Inferred;
+	Twin->Notes = TEXT("Traced off sheet 3M6");
+	Twin->Confidence = EHutongConfidence::Attested;
+	Twin->Court = TEXT("East court");
+	HutongOverlaps::TransferMetadata(Twin, Old);
+	TestTrue(TEXT("notes carried"), Old->Notes.Contains(TEXT("Traced off sheet 3M6")));
+	TestEqual(TEXT("the higher confidence kept"), Old->Confidence, EHutongConfidence::Attested);
+	TestEqual(TEXT("court filled where empty"), Old->Court, FString(TEXT("East court")));
+
+	World->DestroyWorld(false);
+	return true;
+}

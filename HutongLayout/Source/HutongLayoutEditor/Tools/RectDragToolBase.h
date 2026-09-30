@@ -189,6 +189,10 @@ public:
 	bool TurnSelectedFacing(int32 Delta);
 	// F with nothing being placed: facade to the other side, bays and door with it.
 	bool FlipSelectedFacing();
+	// [ and ] with nothing being placed: one bay fewer or more on each selected building that counts them.
+	bool AdjustSelectedBays(int32 Delta);
+	// G with nothing being placed: the gate on each selected wall, on or off.
+	bool ToggleSelectedGate();
 
 	// Named clicks of a placement, and the one awaited.
 	virtual TArray<FText> GetStageNames() const;
@@ -288,6 +292,23 @@ protected:
 	class UHutongBuildingComponent* FindFuseNeighbour(const class UHutongBuildingComponent* Building, bool bAtEnd) const;
 	// World position of a divide or fuse marker on the footprint's centre line.
 	FVector PlanBayMarkerWorld(const class UHutongBuildingComponent* Building, double Along) const;
+	// The fuse marker: on the join, a quarter of the depth off centre, clear of the end edge's resize handle.
+	FVector FuseMarkerWorld(const class UHutongBuildingComponent* Building, bool bAtEnd) const;
+
+	// Dragging an edge another laid-out building shares (not a wall), or a corner on it, slides the
+	// join: the neighbour's facing edge follows unless Ctrl is held. Captured at the press, rewound and reapplied with the
+	// edited building.
+	struct FJoint
+	{
+		FRunLegState Start;
+		// The neighbour's edge on the join: 4..7 as the handle ids (−Y, +X, +Y, −X).
+		int32 Edge = INDEX_NONE;
+	};
+	TArray<FJoint> Joints;
+	void CaptureJoint(class UHutongBuildingComponent* Building, int32 Hit);
+	void CaptureJointOnEdge(class UHutongBuildingComponent* Building, int32 Edge);
+	void UpdateJoint();
+	bool HasJoint() const { return Joints.Num() > 0; }
 	// Acts once the marker press is released unmoved.
 	void DivideAtMarker(class UHutongBuildingComponent* Building, int32 BayLine);
 	void FuseAtMarker(class UHutongBuildingComponent* Building, bool bAtEnd);
@@ -309,6 +330,8 @@ protected:
 	static double PlanHandleSize(const FVector2D& Size);
 	// Shift corner squares; on a run they fit its thickness, else an end's two merge.
 	static double PlanCornerHandleSize(const FVector2D& Size);
+	// Half-width a Shift corner is drawn at here: the handle size, never under a few pixels.
+	double SkewCornerRadius(const FVector2D& Size, const FVector& At) const;
 	// Wall, path, corridor: short side a fraction of the long.
 	static bool IsLineLikePlan(const FVector2D& Size);
 	static bool PlanHandleEnabled(const FVector2D& Size, int32 Handle);
@@ -452,6 +475,16 @@ protected:
 	void UpdateRotateFromCursor(const FVector& CursorWorld);
 
 	// Preview line: wider near-black pass, then the coloured line on top.
+	// A placement's facing and bays, one look for every type: the facade edge heavy, a line right across at
+	// each inner bay boundary, a chevron per bay pointing out through the facade, the door bay heavier on
+	// the edge. At maps (along the facade from its start, depth inward from it) to world. Bounds run
+	// 0..Span; fewer than two draws one bay.
+	static void DrawBaysAndFacing(FPrimitiveDrawInterface* PDI, TFunctionRef<FVector(double, double)> At,
+		double Span, double Across, const TArray<double>& Bounds, int32 DoorBay = INDEX_NONE);
+	// The same for a footprint in the drag frame, facade on Side.
+	void DrawRectBaysAndFacing(FPrimitiveDrawInterface* PDI, EHutongBaySide Side, double MinX, double MinY,
+		double MaxX, double MaxY, const TArray<double>& Bounds, int32 DoorBay = INDEX_NONE) const;
+
 	static void DrawPreviewLine(FPrimitiveDrawInterface* PDI, const FVector& A, const FVector& B,
 		const FLinearColor& Color, float Thickness);
 

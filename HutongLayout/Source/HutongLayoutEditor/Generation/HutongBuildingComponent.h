@@ -454,17 +454,7 @@ public:
 		const double ColR = P.GetColumnRadius();
 		for (int32 i = 0; i <= N; ++i) Out.Boundaries.Add(P.GetBayBoundary(i, N, P.Width, ColR));
 		if (P.bHasFrontDoorCenter) Out.DoorBay = P.GetDoorBayIndex(N);
-
-		// Rows: 檐柱 at the front edge, facade a 廊步 in under a 前廊, rear 金柱 a 廊步 inside the
-		// 後檐柱 in the back wall.
-		double FY, RY;
-		P.GetBuiltVerandaDepths(P.Depth, FMath::Clamp(P.WallThickness, 1.0, FMath::Min(P.Width, P.Depth) * 0.2), FY, RY);
-		if (FY > 0.0) Out.ColumnRows.Add(0.0);
-		Out.ColumnRows.Add(FY);
-		if (RY > 0.0) Out.ColumnRows.Add(P.Depth - RY);
-		Out.ColumnRows.Add(P.Depth);
 		Out.ColumnRadius = ColR;
-		Out.FootingSize = HutongCanon::Frame::BaseStoneSide * 2.0 * ColR;
 		HutongGen::PlanBays::OntoFacade(Out, BaySide, FootprintX, FootprintY);
 	}
 
@@ -1300,14 +1290,7 @@ public:
 		const double ColR = H.GetColumnRadius();
 		for (int32 i = 0; i <= N; ++i) Out.Boundaries.Add(H.GetBayBoundary(i, N, H.Width, ColR));
 		Out.DoorBay = H.GetDoorBayIndex(N);
-
-		const HutongGen::FrameLayout::FLayout L = HutongGen::FrameLayout::Make(H);
-		Out.ColumnRows.Add(L.Y[0]);
-		if (L.bFrontVeranda) Out.ColumnRows.Add(L.Y[L.Front]);
-		if (L.bRearVeranda) Out.ColumnRows.Add(L.Y[L.Rear]);
-		Out.ColumnRows.Add(L.Y.Last());
-		Out.ColumnRadius = 0.5 * L.D;
-		Out.FootingSize = HutongCanon::Frame::BaseStoneSide * L.D;
+		Out.ColumnRadius = HutongGen::FrameLayout::Make(H).D * 0.5;
 		HutongGen::PlanBays::OntoFacade(Out, BaySide, FootprintX, FootprintY);
 	}
 

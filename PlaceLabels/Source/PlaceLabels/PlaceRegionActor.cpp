@@ -35,6 +35,22 @@ APlaceRegionActor::APlaceRegionActor()
 #endif
 }
 
+#if WITH_EDITORONLY_DATA
+void APlaceRegionActor::SyncSpriteVisibility()
+{
+	if (SpriteComponent)
+	{
+		SpriteComponent->SetVisibility(UPlaceRegionComponent::IsEditorDrawingVisible());
+	}
+}
+
+void APlaceRegionActor::PostRegisterAllComponents()
+{
+	Super::PostRegisterAllComponents();
+	SyncSpriteVisibility();
+}
+#endif
+
 #if WITH_EDITOR
 void APlaceRegionActor::RecomputeParent()
 {

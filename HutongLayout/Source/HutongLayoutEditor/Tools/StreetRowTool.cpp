@@ -29,6 +29,14 @@ UInteractiveTool* UHutongStreetRowToolBuilder::BuildTool(const FToolBuilderState
 	return NewObject<UHutongStreetRowTool>(SceneState.ToolManager);
 }
 
+namespace
+{
+	FString PresetForPosition(EHutongStreetRowPosition Position)
+	{
+		return Position == EHutongStreetRowPosition::Rear ? FString(TEXT("Rear Row (後罩房)")) : HutongPresets::DefaultStreetRowHouseName();
+	}
+}
+
 void UHutongStreetRowTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongStreetRowToolProperties>(this);
@@ -41,7 +49,18 @@ void UHutongStreetRowTool::RegisterToolSettings()
 	HousePresets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
 	RegisterSettings(HousePresets);
 
-	ApplyDefaultPreset(HousePresets, HutongPresets::DefaultStreetRowHouseName());
+	ApplyDefaultPreset(HousePresets, PresetForPosition(Settings->Position));
+}
+
+void UHutongStreetRowTool::OnPropertyModified(UObject* PropertySet, FProperty* Property)
+{
+	Super::OnPropertyModified(PropertySet, Property);
+	if (PropertySet != Settings || !Property || !HousePresets
+		|| Property->GetFName() != GET_MEMBER_NAME_CHECKED(UHutongStreetRowToolProperties, Position)) return;
+	// The position is the house preset: front row or rear row, loaded over the houses' parameters.
+	HousePresets->Preset = PresetForPosition(Settings->Position);
+	HousePresets->LoadSelectedPreset();
+	NotifyOfPropertyChangeByTool(HousePresets);
 }
 
 bool UHutongStreetRowTool::IsRunAlongX() const
@@ -321,7 +340,6 @@ void UHutongStreetRowTool::Render(IToolsContextRenderAPI* RenderAPI)
 	const FLinearColor Division(1.0f, 0.85f, 0.3f);
 	const FLinearColor GateFill(1.0f, 0.55f, 0.1f);
 	const FLinearColor Hover(1.0f, 1.0f, 1.0f);
-	const FLinearColor Green(0.25f, 1.0f, 0.45f);
 
 	auto At = [&](double Along, double Across)
 	{
@@ -371,7 +389,11 @@ void UHutongStreetRowTool::Render(IToolsContextRenderAPI* RenderAPI)
 			DrawPreviewLine(PDI, Base - OutDir * 0.4 * TickLen, Base + OutDir * TickLen, C, 5.0f);
 		}
 	};
-	Ticks(BuildingSide, Green, 0.0, L, N);
+	{
+		TArray<double> Bounds;
+		for (int32 i = 0; i <= N; ++i) Bounds.Add(i * W);
+		DrawRectBaysAndFacing(PDI, (EHutongBaySide)BuildingSide, MinX, MinY, MaxX, MaxY, Bounds);
+	}
 	for (int32 Bay : GateBays) Ticks(GateSide(), GateFill, Bay * W, (Bay + 1) * W, 2);
 }
 

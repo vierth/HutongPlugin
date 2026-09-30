@@ -12,62 +12,44 @@ class UHutongLayoutModeSettings : public UObject
 	GENERATED_BODY()
 
 public:
-	// Declared first: category order is declaration order. Writes each loaded building's placement
-	// and its changes from type defaults: enough to rebuild the street.
-	UFUNCTION(CallInEditor, Category = "Export", meta = (DisplayName = "Export Loaded Buildings", ToolTip = "Writes every loaded building to a scene file."))
-	void ExportLoaded();
+	// Categories: Geometry, Export, Import, Housekeeping, Selection, Information (FHutongModeSettingsCustomization
+	// orders them and draws every action as a button row with its description, greyed when it has nothing to act on).
 
-	UFUNCTION(CallInEditor, Category = "Export", meta = (DisplayName = "Export Selection", ToolTip = "Writes the selected buildings to a scene file."))
-	void ExportSelection();
-
-private:
-	// The two export buttons differ in what they gather and which name they remember.
-	void DoExport(bool bSelection, const TCHAR* FallbackName, FString& Remembered);
-
-public:
 	// Tool panel's simple/advanced switch; toggled there, not on this panel.
 	UPROPERTY(config)
 	bool bShowAdvancedSettings = false;
 
-	UPROPERTY(EditAnywhere, config, Category = "Plan", meta = (DisplayName = "Layout Only (outlines, no geometry)", ToolTip = "Places new buildings as footprint outlines with no geometry."))
+	// ---- Geometry: laid-out outlines or built meshes ----
+
+	UPROPERTY(EditAnywhere, config, Category = "Geometry", meta = (DisplayName = "Layout Only (outlines, no geometry)", ToolTip = "Places new buildings as footprint outlines with no geometry."))
 	bool bPlanOnly = true;
 
 	// Mirrors HutongPlanOutline's switch: plans draw regardless of mode, and another plugin's panel
 	// wants them hidden. Seeded on Enter so a fresh object cannot report hidden plans as visible.
-	UPROPERTY(EditAnywhere, Category = "Plan", meta = (DisplayName = "Show Plan Outlines", ToolTip = "Draws the footprint outline of every laid-out building."))
+	UPROPERTY(EditAnywhere, Category = "Geometry", meta = (DisplayName = "Show Plan Outlines", ToolTip = "Draws the footprint outline of every laid-out building."))
 	bool bShowPlanOutlines = true;
 
+	// Off: a built building hides the plans behind it. Mirrors hutong.PlansOverBuildings.
+	UPROPERTY(EditAnywhere, config, Category = "Geometry", meta = (DisplayName = "Plans Show Through Buildings", ToolTip = "Draws plan outlines over built buildings instead of hidden behind them."))
+	bool bPlansOverBuildings = false;
 
-	UFUNCTION(CallInEditor, Category = "Plan", meta = (DisplayName = "Generate Geometry (loaded)", ToolTip = "Builds full geometry for every laid-out building currently loaded."))
 	void GenerateLoadedGeometry();
 
-	UFUNCTION(CallInEditor, Category = "Plan", meta = (DisplayName = "Generate Geometry (selection)", ToolTip = "Builds full geometry for the selected laid-out buildings."))
 	void GenerateSelectedGeometry();
 
-	UFUNCTION(CallInEditor, Category = "Plan", meta = (DisplayName = "Revert To Layout (loaded)", ToolTip = "Removes the geometry of every loaded built building, leaving its outline."))
 	void RevertLoadedToLayout();
 
-	UFUNCTION(CallInEditor, Category = "Plan", meta = (DisplayName = "Revert To Layout (selection)", ToolTip = "Removes the geometry of the selected built buildings, leaving their outlines."))
 	void RevertSelectedToLayout();
 
-	// Placement unchanged: rebuilt from the parameters each building carries.
-	UFUNCTION(CallInEditor, Category = "Selection", meta = (DisplayName = "Rebuild Selection", ToolTip = "Re-bakes each selected building from the parameters it carries."))
-	void RebuildSelection();
+	// ---- Selection: a setting, then Apply (drawn by FHutongModeSettingsCustomization) ----
 
-	UPROPERTY(EditAnywhere, config, Category = "Selection", meta = (DisplayName = "Promote To", ToolTip = "Detail level that Promote Selection and Set Loaded Region apply."))
+	// Follows the selection: shows the selected buildings' level until changed.
+	UPROPERTY(EditAnywhere, config, Category = "Selection", meta = (DisplayName = "Detail Level", ToolTip = "Detail level Apply sets on the selected buildings."))
 	EHutongDetail TargetLevel = EHutongDetail::Near;
-
-	UFUNCTION(CallInEditor, Category = "Selection", meta = (DisplayName = "Promote Selection", ToolTip = "Sets the selected buildings to the Promote To level and rebuilds them."))
-	void PromoteSelection();
-
-	// Identical buildings share one mesh asset under /Game/HutongLayout/Generated; a rebuild or a deleted
-	// building can leave one no building wears.
-	UFUNCTION(CallInEditor, Category = "Selection", meta = (DisplayName = "Delete Unused Generated Meshes", ToolTip = "Finds the shared building meshes no building uses any more and offers them for deletion, with the editor's own reference check."))
-	void DeleteUnusedGeneratedMeshes();
 
 	// Converts a placed building's type: footprint, facing and transform stay; parameters come from
 	// the new type (shop to house, 院牆 to 隔牆) with no redraw.
-	UPROPERTY(EditAnywhere, config, Category = "Selection", meta = (DisplayName = "Convert To", GetOptions = "GetConvertOptions", ToolTip = "Building type that Convert Selection turns the selected buildings into."))
+	UPROPERTY(EditAnywhere, config, Category = "Selection", meta = (DisplayName = "Convert To", GetOptions = "GetConvertOptions", ToolTip = "Building type Apply turns the selected buildings into."))
 	FString ConvertTo;
 
 	UFUNCTION()
@@ -81,44 +63,56 @@ public:
 	UFUNCTION()
 	TArray<FString> GetConvertPresetOptions() const;
 
-	UFUNCTION(CallInEditor, Category = "Selection", meta = (DisplayName = "Convert Selection", ToolTip = "Turns the selected buildings into the Convert To type in place."))
-	void ConvertSelection();
-
-	// Straight to Massing rather than to the target.
-	UFUNCTION(CallInEditor, Category = "Selection", meta = (DisplayName = "Demote Selection To Massing", ToolTip = "Sets the selected buildings to the Massing level and rebuilds them."))
-	void DemoteSelectionToMassing();
-
-	UPROPERTY(EditAnywhere, config, Category = "Selection", meta = (DisplayName = "Divide At Bay Line", UIMin = "0", UIMax = "32", ClampMin = "0", ToolTip = "Bay line Divide Selection cuts at, from the origin end; zero is the middle."))
+	UPROPERTY(EditAnywhere, config, Category = "Selection", meta = (DisplayName = "Divide At Bay Line", UIMin = "0", UIMax = "32", ClampMin = "0", ToolTip = "Bay line Apply divides the selected buildings at, from the origin end; zero is the middle."))
 	int32 DivideAtBayLine = 0;
 
-	UFUNCTION(CallInEditor, Category = "Selection", meta = (DisplayName = "Divide Selection", ToolTip = "Divides each selected building in two at the bay line above."))
-	void DivideSelection();
+	// Whether the selection holds anything the button acts on.
+	bool HasSelection() const;
+	bool HasSelectedLayout() const;
+	bool HasSelectedBuilt() const;
 
-	UFUNCTION(CallInEditor, Category = "Selection", meta = (DisplayName = "Fuse Selection", ToolTip = "Fuses two selected buildings standing end to end on one line into one."))
+	// What each Apply would do, for its button's enabled state.
+	bool CanApplyDetailLevel() const;
+	bool CanApplyConvert() const;
+	bool CanApplyDivide() const;
+	bool CanFuse() const;
+
+	void ApplyDetailLevel();
+	void ApplyConvert();
+	void ApplyDivide();
 	void FuseSelection();
 
-	// Everything streamed in: under World Partition, the region you stand in, not the level.
-	UFUNCTION(CallInEditor, Category = "Loaded Region", meta = (DisplayName = "Set Loaded Region To Promote Level", ToolTip = "Sets every loaded building to the Promote To level and rebuilds it."))
-	void SetLoadedRegionToTarget();
+	// Called when the editor selection changes: the level dropdown shows what is selected.
+	void SyncToSelection();
 
-	UFUNCTION(CallInEditor, Category = "Loaded Region", meta = (DisplayName = "Rebuild Loaded Buildings", ToolTip = "Re-bakes every loaded building from the parameters it carries."))
-	void RebuildLoaded();
+	// ---- Export ----
 
-	// One editable material asset per slot, worn by every placement and rebuild instead of the
-	// tinted default until a palette material is assigned. Existing assets are kept.
-	UFUNCTION(CallInEditor, Category = "Materials", meta = (DisplayName = "Create Starter Materials", ToolTip = "Writes one editable material per surface slot to /Game/HutongLayout/Materials; existing assets are kept."))
-	void CreateStarterMaterials();
+	// Writes each loaded building's placement and its changes from type defaults: enough to rebuild the street.
+	void ExportAll();
+
+	void ExportSelection();
+
+	// ---- Import ----
+
+	// Off: the file's buildings go back to the coordinates it recorded. On: the Import tool carries
+	// the set under the cursor to be turned and dropped by hand.
+	UPROPERTY(EditAnywhere, config, Category = "Import", meta = (DisplayName = "Customize Placement", ToolTip = "Places the imported layout by hand under the cursor instead of at its recorded coordinates."))
+	bool bCustomizePlacement = false;
+
+	void ImportLayout();
 
 	UPROPERTY(EditAnywhere, config, Category = "Import", meta = (DisplayName = "Import Folder", ToolTip = "Outliner folder imported buildings go in; empty keeps the file's."))
 	FName ImportFolder = TEXT("HutongImport");
 
-	UPROPERTY(EditAnywhere, config, Category = "Import", meta = (DisplayName = "Update Matching Placements", ToolTip = "Updates buildings whose id matches an imported record in place."))
+	UPROPERTY(EditAnywhere, config, Category = "Import", meta = (DisplayName = "Update Matching Placements", ToolTip = "A building already in the level with the same id as an imported one is updated in place instead of duplicated."))
 	bool bUpdateMatchingPlacements = true;
 
 	// Coordinates from another level mean nothing here, so the Import tool carries the set under
 	// the cursor, turns it with R and drops it on a click.
-	UFUNCTION(CallInEditor, Category = "Import", meta = (DisplayName = "Place By Hand (Import Tool)", ToolTip = "Loads a scene file into the Import tool to place by hand."))
 	void PlaceSceneByHand();
+
+	// Straight back to the world coordinates the file recorded, with no drag.
+	void ImportAtRecordedCoordinates();
 
 	// Remembered here rather than on the import tool's property set.
 	UPROPERTY(config)
@@ -132,19 +126,42 @@ public:
 	UPROPERTY(config)
 	FString LastSelectionExportFile;
 
-	// Straight back to the world coordinates the file recorded, with no drag.
-	UFUNCTION(CallInEditor, Category = "Import", meta = (DisplayName = "Import At Recorded Coordinates", ToolTip = "Places a scene file's buildings at the world coordinates it recorded."))
-	void ImportAtRecordedCoordinates();
+	// ---- Housekeeping ----
 
-	UPROPERTY(VisibleAnywhere, Category = "Loaded Region", meta = (DisplayName = "Buildings", ToolTip = "Number of loaded buildings at the last count."))
+	// Placement unchanged: rebuilt from the parameters each building carries.
+	void RebuildLoaded();
+
+	void RebuildSelection();
+
+	// One editable material asset per slot, worn by every placement and rebuild instead of the
+	// tinted default until a palette material is assigned. Existing assets are kept.
+	void CreateStarterMaterials();
+
+	// Identical buildings share one mesh asset under /Game/HutongLayout/Generated; a rebuild or a deleted
+	// building can leave one no building wears.
+	// Two buildings on one footprint under different ids; imports check their own arrivals.
+	void FindOverlappingBuildings();
+
+	void DeleteUnusedGeneratedMeshes();
+
+	// ---- Information ----
+
+	UPROPERTY(VisibleAnywhere, Category = "Information", meta = (DisplayName = "Buildings", ToolTip = "Number of loaded buildings at the last count."))
 	int32 LoadedBuildings = 0;
 
-	UPROPERTY(VisibleAnywhere, Category = "Loaded Region", meta = (DisplayName = "Triangles", ToolTip = "Total triangles across the loaded buildings at the last count."))
+	UPROPERTY(VisibleAnywhere, Category = "Information", meta = (DisplayName = "Triangles", ToolTip = "Total triangles across the loaded buildings at the last count."))
 	int64 LoadedTriangles = 0;
 
 	// Counted on demand rather than every frame.
-	UFUNCTION(CallInEditor, Category = "Loaded Region", meta = (DisplayName = "Count Loaded Buildings", ToolTip = "Counts the loaded buildings and their triangles."))
 	void RefreshCounts();
 
+private:
+	// The two export buttons differ in what they gather and which name they remember.
+	void DoExport(bool bSelection, const TCHAR* FallbackName, FString& Remembered);
+
+	// Convert To / Convert Preset changed since the last Apply.
+	bool bConvertPending = false;
+
+public:
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& Event) override;
 };

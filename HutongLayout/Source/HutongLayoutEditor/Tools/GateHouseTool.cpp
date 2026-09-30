@@ -56,6 +56,9 @@ void UHutongGateHouseTool::GetEffectiveRectBounds(
 	// the front line whichever side the cursor is on: the anchor is the row's front corner, and a
 	// gate grown into the lane would put its back on the row's front.
 	const double RowDepth = MatchedRowDepth();
+	// Depth has a floor, no ceiling: a gate is as deep as the row it stands in, and the band's top
+	// (3.5 m for a 如意門) stopped a gate drawn across a 6 m row short of its back.
+	constexpr double DepthCap = 1.0e7;
 	auto PinDepth = [&](double& Lo, double& Hi, double Inward)
 	{
 		if (Inward > 0.0) { Lo = 0.0; Hi = RowDepth; }
@@ -66,13 +69,13 @@ void UHutongGateHouseTool::GetEffectiveRectBounds(
 	{
 		ClampAxis(OutMinX, OutMaxX, R.FrontageMin, R.FrontageMax);
 		if (RowDepth > 0.0 && RowInwardLocal.Y != 0.0) PinDepth(OutMinY, OutMaxY, RowInwardLocal.Y);
-		else ClampAxis(OutMinY, OutMaxY, R.DepthMin, R.DepthMax);
+		else ClampAxis(OutMinY, OutMaxY, R.DepthMin, DepthCap);
 	}
 	else
 	{
 		ClampAxis(OutMinY, OutMaxY, R.FrontageMin, R.FrontageMax);
 		if (RowDepth > 0.0 && RowInwardLocal.X != 0.0) PinDepth(OutMinX, OutMaxX, RowInwardLocal.X);
-		else ClampAxis(OutMinX, OutMaxX, R.DepthMin, R.DepthMax);
+		else ClampAxis(OutMinX, OutMaxX, R.DepthMin, DepthCap);
 	}
 }
 

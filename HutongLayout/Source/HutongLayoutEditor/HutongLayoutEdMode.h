@@ -43,15 +43,10 @@ public:
 	static FString ToolIdentifierFor(const class UHutongBuildingComponent* Building);
 
 private:
-	// A save terminates every tool (PreSaveWorld, lest one hold preview actors). Ours hold none
-	// (PDI previews, actors spawned on click), so the tool is reopened after the save and autosave
-	// no longer takes it mid-street. Only a save restores it.
-	void RememberToolBeforeSave();
-	void RestoreToolAfterSave();
-
-	FString ToolBeforeSave;
-	FDelegateHandle PreSaveHandle;
-	FDelegateHandle PostSaveHandle;
+	// The editor's context ends every tool before a save (lest one hold preview actors). Ours hold
+	// none (PDI previews, actors spawned on click), so while the mode is up a save leaves the tool
+	// alone and autosave no longer drops a placement in progress. The previous answer, for Exit.
+	bool bContextEndedToolsOnSave = true;
 
 	// Clicking a building opens its kind's tool on its tab. Never mid-placement or mid-edit: the
 	// selecting click may be a drag's press.

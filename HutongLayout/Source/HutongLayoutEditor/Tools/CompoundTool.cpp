@@ -1157,7 +1157,7 @@ TArray<FText> UHutongCompoundTool::GetToolHelpLines() const
 	Lines[0] = NSLOCTEXT("HutongCompoundTool", "HelpDrag",
 		"Click to set the plot's southeast corner, move northwest to size it, click to lay it out. The orange edge is the street.");
 	Lines.Insert(NSLOCTEXT("HutongCompoundTool", "HelpNorth",
-		"The plan faces south by the compass, so R does nothing; set North Direction if north is not +X."), 1);
+		"The plan faces south by the compass, so R does nothing; set North Direction if north is not -X."), 1);
 	Lines.Insert(NSLOCTEXT("HutongCompoundTool", "HelpMin",
 		"The plot stops at the smallest size the settings allow; corridors or a deeper main hall (正房) raise it."), 1);
 	Lines.Insert(NSLOCTEXT("HutongCompoundTool", "HelpWhat",

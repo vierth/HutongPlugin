@@ -14,6 +14,9 @@
 #include "GameFramework/Actor.h"
 #include "Misc/ScopedSlowTask.h"
 #include "ScopedTransaction.h"
+#include "WorldPartition/WorldPartition.h"
+#include "WorldPartition/WorldPartitionHandle.h"
+#include "WorldPartition/WorldPartitionHelpers.h"
 
 #define LOCTEXT_NAMESPACE "HutongDetailOps"
 
@@ -38,6 +41,36 @@ TArray<UHutongBuildingComponent*> CollectSelected()
 		}
 	}
 	return Out;
+}
+
+namespace
+{
+	TArray<FWorldPartitionReference>& PinnedBuildings()
+	{
+		static TArray<FWorldPartitionReference> Pinned;
+		static const FDelegateHandle Cleanup = FWorldDelegates::OnWorldCleanup.AddLambda(
+			[](UWorld*, bool, bool) { Pinned.Empty(); });
+		return Pinned;
+	}
+}
+
+TArray<UHutongBuildingComponent*> CollectAll(UWorld* World)
+{
+	if (UWorldPartition* Partition = World ? World->GetWorldPartition() : nullptr)
+	{
+		TArray<FWorldPartitionReference>& Pinned = PinnedBuildings();
+		FWorldPartitionHelpers::FForEachActorWithLoadingParams Params;
+		Params.ActorClasses = { AStaticMeshActor::StaticClass() };
+		FScopedSlowTask Task(0.0f, LOCTEXT("LoadingAll", "Loading every building in the level…"));
+		Task.MakeDialog();
+		FWorldPartitionHelpers::ForEachActorWithLoading(Partition, [&](const FWorldPartitionActorDescInstance* Desc)
+		{
+			const AActor* Actor = Desc ? Desc->GetActor() : nullptr;
+			if (Actor && Actor->FindComponentByClass<UHutongBuildingComponent>()) Pinned.Emplace(Partition, Desc->GetGuid());
+			return true;
+		}, Params);
+	}
+	return CollectLoaded(World);
 }
 
 TArray<UHutongBuildingComponent*> CollectLoaded(UWorld* World)

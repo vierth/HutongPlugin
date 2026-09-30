@@ -3,6 +3,7 @@
 #include "PlaceLabelGeometry.h"
 #include "PlaceLabelHierarchy.h"
 #include "PlaceLabelSubsystem.h"
+#include "PlaceRegionActor.h"
 #include "Engine/CollisionProfile.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -52,6 +53,8 @@ public:
 		, bDrawFill(UPlaceRegionComponent::IsEditorDrawingVisible())
 	{
 		bWillEverBeLit = false;
+		// Parallel gather reorders proxies every frame: a shared edge's winner would flicker.
+		bSupportsParallelGDME = false;
 
 		// Triangulated once here rather than per frame.
 		if (bDrawFill)
@@ -83,7 +86,7 @@ public:
 		const bool bSelected = IsSelected();
 		FLinearColor Color = OutlineColor;
 		Color.A = bSelected ? 1.0f : 0.5f;
-		const float Thickness = bSelected ? 3.0f : 1.5f;
+		const float Thickness = bSelected ? 3.5f : 2.0f;
 
 		for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ++ViewIndex)
 		{
@@ -144,7 +147,7 @@ public:
 					PDI->DrawLine(
 						FVector(WorldPoints[j].X, WorldPoints[j].Y, Z + DrawLift),
 						FVector(WorldPoints[i].X, WorldPoints[i].Y, Z + DrawLift),
-						Color, DPG, Thickness);
+						Color, DPG, Thickness, 0.0f, /*bScreenSpace*/ true);
 				}
 			};
 
@@ -157,7 +160,7 @@ public:
 					PDI->DrawLine(
 						FVector(WorldPoints[i].X, WorldPoints[i].Y, MinZ + DrawLift),
 						FVector(WorldPoints[i].X, WorldPoints[i].Y, MaxZ + DrawLift),
-						Color, DPG, Thickness);
+						Color, DPG, Thickness, 0.0f, /*bScreenSpace*/ true);
 				}
 			}
 			else
@@ -282,6 +285,13 @@ void UPlaceRegionComponent::SetEditorDrawingVisible(bool bVisible)
 			It->MarkRenderStateDirty();
 		}
 	}
+
+#if WITH_EDITORONLY_DATA
+	for (TObjectIterator<APlaceRegionActor> It; It; ++It)
+	{
+		It->SyncSpriteVisibility();
+	}
+#endif
 }
 
 bool UPlaceRegionComponent::RecomputeDerivedParent()

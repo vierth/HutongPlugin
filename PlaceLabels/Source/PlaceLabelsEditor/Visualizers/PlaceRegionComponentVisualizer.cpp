@@ -47,9 +47,9 @@ namespace
 		double Size, float Thickness)
 	{
 		const double H = Size * 0.5;
-		PDI->DrawLine(P - FVector(H, 0, 0), P + FVector(H, 0, 0), Color, SDPG_Foreground, Thickness);
-		PDI->DrawLine(P - FVector(0, H, 0), P + FVector(0, H, 0), Color, SDPG_Foreground, Thickness);
-		PDI->DrawLine(P - FVector(0, 0, H), P + FVector(0, 0, H), Color, SDPG_Foreground, Thickness);
+		PDI->DrawLine(P - FVector(H, 0, 0), P + FVector(H, 0, 0), Color, SDPG_Foreground, Thickness, 0.0f, true);
+		PDI->DrawLine(P - FVector(0, H, 0), P + FVector(0, H, 0), Color, SDPG_Foreground, Thickness, 0.0f, true);
+		PDI->DrawLine(P - FVector(0, 0, H), P + FVector(0, 0, H), Color, SDPG_Foreground, Thickness, 0.0f, true);
 	}
 
 	// DrawHandle rotated 45 degrees, so a removal never reads as a corner.
@@ -57,9 +57,9 @@ namespace
 		double Size, float Thickness)
 	{
 		const double H = Size * 0.5 * UE_INV_SQRT_2;
-		PDI->DrawLine(P + FVector(-H, -H, 0), P + FVector(H, H, 0), Color, SDPG_Foreground, Thickness);
-		PDI->DrawLine(P + FVector(-H, H, 0), P + FVector(H, -H, 0), Color, SDPG_Foreground, Thickness);
-		PDI->DrawLine(P + FVector(0, -H, -H), P + FVector(0, H, H), Color, SDPG_Foreground, Thickness);
+		PDI->DrawLine(P + FVector(-H, -H, 0), P + FVector(H, H, 0), Color, SDPG_Foreground, Thickness, 0.0f, true);
+		PDI->DrawLine(P + FVector(-H, H, 0), P + FVector(H, -H, 0), Color, SDPG_Foreground, Thickness, 0.0f, true);
+		PDI->DrawLine(P + FVector(0, -H, -H), P + FVector(0, H, H), Color, SDPG_Foreground, Thickness, 0.0f, true);
 	}
 
 	FVector LocalPointToWorld(const UPlaceRegionComponent* Region, int32 Index)
@@ -161,7 +161,7 @@ void FPlaceRegionComponentVisualizer::DrawVisualization(const UActorComponent* C
 		const bool bBad = BadEdges.Contains(i);
 
 		PDI->SetHitProxy(N >= 3 ? new HPlaceRegionEdgeProxy(Component, i) : nullptr);
-		PDI->DrawLine(A, B, bBad ? ErrorColor : OutlineColor, SDPG_Foreground, bBad ? 4.0f : 2.5f);
+		PDI->DrawLine(A, B, bBad ? ErrorColor : OutlineColor, SDPG_Foreground, bBad ? 4.0f : 2.5f, 0.0f, true);
 		PDI->SetHitProxy(nullptr);
 	}
 

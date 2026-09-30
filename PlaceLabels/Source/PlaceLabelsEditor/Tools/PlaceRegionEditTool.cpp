@@ -22,8 +22,8 @@ namespace
 {
 	// Handles are sized and picked in pixels, then converted to world units per point.
 	constexpr double HandlePickPixels = 13.0;
-	constexpr double HandleDrawPixels = 9.0;
-	constexpr double InsertDrawPixels = 7.0;
+	constexpr double HandleDrawPixels = 12.0;
+	constexpr double InsertDrawPixels = 9.0;
 
 	// Below this the polygon stops being one.
 	constexpr int32 MinCorners = 3;

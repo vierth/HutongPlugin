@@ -15,6 +15,10 @@ namespace HutongDetailOps
 	// Every building component in the world.
 	TArray<UHutongBuildingComponent*> CollectLoaded(UWorld* World);
 
+	// Every building in the level, loading what World Partition has unloaded; those stay loaded until
+	// the world is torn down, so an id minted on them can be saved. For Export All only: it is slow.
+	TArray<UHutongBuildingComponent*> CollectAll(UWorld* World);
+
 	// Sets the level on each and re-bakes it.
 	int32 SetLevel(const TArray<UHutongBuildingComponent*>& Buildings, EHutongDetail Level);
 

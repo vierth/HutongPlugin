@@ -179,55 +179,28 @@ void UHutongHallTool::Render(IToolsContextRenderAPI* RenderAPI)
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
 	if (MaxX - MinX < 1.0 || MaxY - MinY < 1.0) return;
 
-	const HutongGen::BaySide::FEdge Edge =
-		HutongGen::BaySide::GetEdge(BaySide, MinX, MinY, MaxX, MaxY);
-	const double SpanMin = Edge.bAlongX ? MinX : MinY;
-	const double SpanMax = Edge.bAlongX ? MaxX : MaxY;
-
-	auto EdgePoint = [&](double A)
-	{
-		return Edge.bAlongX ? LocalRectToWorld(A, Edge.FixedCoord)
-							: LocalRectToWorld(Edge.FixedCoord, A);
-	};
-
-	// Facade ticks, with the bay boundaries marked.
-	const FLinearColor Green(0.25f, 1.0f, 0.45f);
-	const int32 Ticks = 9;
-	for (int32 i = 0; i < Ticks; ++i)
-	{
-		const double A0 = FMath::Lerp(SpanMin, SpanMax, (i + 0.15) / Ticks);
-		const double A1 = FMath::Lerp(SpanMin, SpanMax, (i + 0.85) / Ticks);
-		DrawPreviewLine(PDI, EdgePoint(A0), EdgePoint(A1), Green, 7.0f);
-	}
-
+	const bool bAlongX = HutongGen::BaySide::IsAlongX(BaySide);
+	const double Span = bAlongX ? MaxX - MinX : MaxY - MinY;
+	TArray<double> Bounds;
+	int32 DoorBay = INDEX_NONE;
 	if (Settings)
 	{
 		const int32 N = ComputeBayCountForSide();
-		const double ColR = Settings->Params.GetColumnRadius();
-		const double Span = SpanMax - SpanMin;
-		const FLinearColor Orange(1.0f, 0.55f, 0.15f);
 		// The 大式 hall's bays are the figure's, scaled to the frontage.
-		TArray<double> Grand;
 		if (Settings->Params.IsGrand())
 		{
 			const double K = GetSizedParams().GetGrandScale();
 			double X = 0.5 * (Span - HutongCanon::GrandHall::Frontage * K);
-			Grand.Add(X);
-			for (const double Bay : HutongCanon::GrandHall::Bays) Grand.Add(X += Bay * K);
+			Bounds.Add(X);
+			for (const double Bay : HutongCanon::GrandHall::Bays) Bounds.Add(X += Bay * K);
 		}
-		for (int32 i = 0; i <= N; ++i)
+		else
 		{
-			const double A = SpanMin + (Grand.IsValidIndex(i) ? Grand[i] : Settings->Params.GetBayBoundary(i, N, Span, ColR));
-			// Door bay, marked as the siheyuan marks it.
-			const bool bDoorEdge = (i == N / 2 || i == N / 2 + 1);
-			DrawPreviewLine(PDI, EdgePoint(A), EdgePoint(A), Green, 1.0f);
-			if (bDoorEdge && i <= N)
-			{
-				const double A1 = FMath::Min(A + 0.02 * Span, SpanMax);
-				DrawPreviewLine(PDI, EdgePoint(A), EdgePoint(A1), Orange, 9.0f);
-			}
+			for (int32 i = 0; i <= N; ++i) Bounds.Add(Settings->Params.GetBayBoundary(i, N, Span, Settings->Params.GetColumnRadius()));
 		}
+		DoorBay = (Bounds.Num() - 1) / 2;
 	}
+	DrawRectBaysAndFacing(PDI, BaySide, MinX, MinY, MaxX, MaxY, Bounds, DoorBay);
 }
 
 FText UHutongHallTool::GetKeyHintText() const

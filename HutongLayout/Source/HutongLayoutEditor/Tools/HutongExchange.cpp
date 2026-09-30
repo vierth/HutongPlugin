@@ -1065,6 +1065,11 @@ void ExportLoaded(UWorld* World, const FString& FilePath, FResult& OutResult)
 	ExportThese(HutongDetailOps::CollectLoaded(World), World, FilePath, OutResult);
 }
 
+void ExportAll(UWorld* World, const FString& FilePath, FResult& OutResult)
+{
+	ExportThese(HutongDetailOps::CollectAll(World), World, FilePath, OutResult);
+}
+
 void ExportSelection(UWorld* World, const FString& FilePath, FResult& OutResult)
 {
 	ExportThese(HutongDetailOps::CollectSelected(), World, FilePath, OutResult);

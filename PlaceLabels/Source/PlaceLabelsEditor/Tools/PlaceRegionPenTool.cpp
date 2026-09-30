@@ -26,7 +26,7 @@ namespace
 {
 	// Sized and picked in pixels, then converted per point.
 	constexpr double PenHandlePickPixels = 13.0;
-	constexpr double PenHandleDrawPixels = 8.0;
+	constexpr double PenHandleDrawPixels = 12.0;
 
 	// How far the cursor may travel between press and release and still count as a click.
 	constexpr double ClickSlopPixels = PlaceLabelsEdit::ClickSlopPixels;
@@ -898,13 +898,15 @@ void UPlaceRegionPenTool::Render(IToolsContextRenderAPI* RenderAPI)
 	// Rubber band and closing segment: dashed and thinner, as neither exists yet.
 	if (bHoverValid && HoverKind == EHover::Ground)
 	{
+		// Dashes a handle long on screen, whatever the zoom.
+		const double Dash = HandleSizeAt(HoverPoint);
 		PlaceLabelsEdit::DrawDashedLine(PDI, PendingPoints.Last(), HoverPoint,
-			PlaceLabelsEdit::PendingColor, 3.0f);
+			PlaceLabelsEdit::PendingColor, 3.0f, Dash);
 
 		if (PendingPoints.Num() >= 2)
 		{
 			PlaceLabelsEdit::DrawDashedLine(PDI, HoverPoint, PendingPoints[0],
-				PlaceLabelsEdit::PendingColor, 2.0f);
+				PlaceLabelsEdit::PendingColor, 2.0f, Dash);
 		}
 	}
 }

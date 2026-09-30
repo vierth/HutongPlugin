@@ -183,6 +183,14 @@ void UPlaceLabelsEdMode::Enter()
 	// Opens on Select, not Pen.
 	GetToolManager()->SelectActiveToolType(EToolSide::Left, TEXT("PlaceRegionSelectTool"));
 
+	// The editor's context ends every tool before a save; ours hold no preview actors, so a save
+	// (autosave included) leaves a polygon being drawn alone.
+	if (UEditorInteractiveToolsContext* Context = GetInteractiveToolsContext(EToolsContextScope::Editor))
+	{
+		bContextEndedToolsOnSave = Context->GetDeactivateToolsOnSaveWorld();
+		Context->SetDeactivateToolsOnSaveWorld(false);
+	}
+
 	if (FSlateApplication::IsInitialized())
 	{
 		TSharedRef<FPlaceLabelsInputProcessor> Processor = MakeShared<FPlaceLabelsInputProcessor>();
@@ -201,6 +209,11 @@ void UPlaceLabelsEdMode::Exit()
 		FSlateApplication::Get().UnregisterInputPreProcessor(InputProcessor);
 	}
 	InputProcessor.Reset();
+
+	if (UEditorInteractiveToolsContext* Context = GetInteractiveToolsContext(EToolsContextScope::Editor))
+	{
+		Context->SetDeactivateToolsOnSaveWorld(bContextEndedToolsOnSave);
+	}
 
 	Super::Exit();
 }

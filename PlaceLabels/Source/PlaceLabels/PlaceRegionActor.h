@@ -22,6 +22,10 @@ public:
 	// A clickable icon at the region's centre.
 	UPROPERTY()
 	TObjectPtr<class UBillboardComponent> SpriteComponent;
+
+	// Icon shown only while the Place Labels mode is up, like the outline.
+	void SyncSpriteVisibility();
+	virtual void PostRegisterAllComponents() override;
 #endif
 
 #if WITH_EDITOR

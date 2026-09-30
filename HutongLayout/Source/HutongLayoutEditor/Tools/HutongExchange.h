@@ -154,6 +154,8 @@ namespace HutongExchange
 
 	// --- conveniences; these open their own FScopedTransaction.
 	void ExportLoaded(UWorld* World, const FString& FilePath, FResult& OutResult);
+	// Every building in the level, loaded or not (World Partition loads the rest first).
+	void ExportAll(UWorld* World, const FString& FilePath, FResult& OutResult);
 	void ExportSelection(UWorld* World, const FString& FilePath, FResult& OutResult);
 	// Resolve runs between read and placement (unknown-type dialog hook); false abandons the import.
 	using FResolveFile = TFunction<bool(FSceneFile&)>;

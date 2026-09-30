@@ -395,8 +395,8 @@ TArray<FText> URectDragToolBase::GetToolHelpLines() const
 		FText::Format(LOCTEXT("HelpSnap", "Placements snap to the buildings already down. Tap and release {0} before clicking to place one freely."), SnapKeyName()),
 		LOCTEXT("HelpEdge", "Click on a footprint's edge to start a new one against it; Ctrl+click to place inside it."),
 		LOCTEXT("HelpSelect", "Drag a box on open ground to select buildings (Shift adds). Drag a selected footprint to move it, its handles to resize, its ring to rotate."),
-		LOCTEXT("HelpFacade", "With a building selected and nothing being placed, [ and ] turn its facade to the next side."),
-		LOCTEXT("HelpScene", "Rebuild, promote, export and import what is already placed on the Scene tab."),
+		LOCTEXT("HelpFacade", "With buildings selected and nothing being placed: [ and ] one bay fewer or more, Shift+[ and ] turn the facade, F flips it, G puts a gate in a wall or takes it out."),
+		LOCTEXT("HelpScene", "Generate, change detail, convert, export and import what is already placed on the Scene tab."),
 	};
 	if (HasRotateKey())
 	{
@@ -485,16 +485,16 @@ FText URectDragToolBase::GetPlanEditPromptText() const
 		Selected->GetPlanOpenings(Openings);
 		if (!Selected->bPlanOnly && Openings.Num() > 0)
 		{
-			return LOCTEXT("PromptWallSelected", "Wall selected: drag the doorway marker to slide it along the run; Shift-drag a corner to cut the end on the bias (斜角). [ and ] turn a facade. Click open ground to place.");
+			return LOCTEXT("PromptWallSelected", "Wall selected: drag the doorway marker to slide it along the run; Shift-drag a corner to cut the end on the bias (斜角). G toggles the gate. Click open ground to place.");
 		}
 		if (!Selected->bPlanOnly)
 		{
-			return LOCTEXT("PromptBuiltSelected", "Building selected: Shift-drag a corner to angle the footprint (斜角); it rebuilds on release. [ and ] turn the facade. Click open ground to place.");
+			return LOCTEXT("PromptBuiltSelected", "Building selected: Shift-drag a corner to angle the footprint (斜角); it rebuilds on release. [ and ] change the bays, Shift+[ ] turns the facade. Click open ground to place.");
 		}
 	}
 	if (GetSelectedPlanBuilding())
 	{
-		return LOCTEXT("PromptPlanSelectedSkew", "Laid-out building selected: drag a handle to resize, Shift-drag a corner to angle it (斜角), the ring to rotate, the inside to move, a doorway marker to slide it; [ and ] turn the facade. Click open ground to place another.");
+		return LOCTEXT("PromptPlanSelectedSkew", "Laid-out building selected: drag a handle to resize (an edge shared with a laid-out neighbour slides the join; hold Ctrl while dragging to move this one alone), Shift-drag a corner to angle it (斜角), the ring to rotate, the inside to move, a doorway marker to slide it; [ and ] change the bays, Shift+[ ] turns the facade, G a wall's gate. Click open ground to place another.");
 	}
 	return FText::GetEmpty();
 }
@@ -660,6 +660,47 @@ FText URectDragToolBase::GetPlacementSummaryText() const
 		Summary += TEXT("  ·  ") + Detail;
 	}
 	return FText::FromString(Summary);
+}
+
+void URectDragToolBase::DrawBaysAndFacing(FPrimitiveDrawInterface* PDI, TFunctionRef<FVector(double, double)> At,
+	double Span, double Across, const TArray<double>& Bounds, int32 DoorBay)
+{
+	if (!PDI || Span < 1.0 || Across < 1.0) return;
+	TArray<double> B = Bounds.Num() >= 2 ? Bounds : TArray<double>{ 0.0, Span };
+	B.Sort();
+	const FLinearColor Green(0.25f, 1.0f, 0.45f);
+	const FLinearColor Orange(1.0f, 0.55f, 0.15f);
+	DrawPreviewLine(PDI, At(0.0, 0.0), At(Span, 0.0), Green, 7.0f);
+	for (int32 i = 1; i + 1 < B.Num(); ++i) DrawPreviewLine(PDI, At(B[i], 0.0), At(B[i], Across), Green, 3.0f);
+	const double TipIn = FMath::Min(0.15 * Across, 60.0);
+	for (int32 i = 0; i + 1 < B.Num(); ++i)
+	{
+		const double Width = B[i + 1] - B[i];
+		const double Half = FMath::Min(FMath::Clamp(0.3 * Width, 20.0, 150.0), 0.4 * (Across - TipIn));
+		if (Half <= 0.0) continue;
+		const double Mid = 0.5 * (B[i] + B[i + 1]);
+		DrawPreviewLine(PDI, At(Mid - Half, TipIn + Half), At(Mid, TipIn), Green, 5.0f);
+		DrawPreviewLine(PDI, At(Mid, TipIn), At(Mid + Half, TipIn + Half), Green, 5.0f);
+	}
+	if (B.IsValidIndex(DoorBay) && B.IsValidIndex(DoorBay + 1))
+	{
+		DrawPreviewLine(PDI, At(B[DoorBay], 0.0), At(B[DoorBay + 1], 0.0), Orange, 11.0f);
+	}
+}
+
+void URectDragToolBase::DrawRectBaysAndFacing(FPrimitiveDrawInterface* PDI, EHutongBaySide Side, double MinX, double MinY,
+	double MaxX, double MaxY, const TArray<double>& Bounds, int32 DoorBay) const
+{
+	const HutongGen::BaySide::FEdge Edge = HutongGen::BaySide::GetEdge((HutongGen::EBaySide)Side, MinX, MinY, MaxX, MaxY);
+	const double SpanMin = Edge.bAlongX ? MinX : MinY;
+	const double Span = Edge.bAlongX ? MaxX - MinX : MaxY - MinY;
+	const double Across = Edge.bAlongX ? MaxY - MinY : MaxX - MinX;
+	const double InSign = Edge.bAlongX ? -Edge.OutDir.Y : -Edge.OutDir.X;
+	DrawBaysAndFacing(PDI, [&](double Along, double Depth)
+	{
+		const double Fixed = Edge.FixedCoord + InSign * Depth;
+		return Edge.bAlongX ? LocalRectToWorld(SpanMin + Along, Fixed) : LocalRectToWorld(Fixed, SpanMin + Along);
+	}, Span, Across, Bounds, DoorBay);
 }
 
 void URectDragToolBase::DrawPreviewLine(FPrimitiveDrawInterface* PDI, const FVector& A, const FVector& B,
@@ -1541,6 +1582,75 @@ bool URectDragToolBase::FlipSelectedFacing()
 		[](const UHutongBuildingComponent&, EHutongBaySide Side) { return HutongGen::BaySide::Opposite(Side); });
 }
 
+namespace
+{
+	TArray<UHutongBuildingComponent*> SelectedBuildings()
+	{
+		TArray<UHutongBuildingComponent*> Out;
+		USelection* Selected = GEditor ? GEditor->GetSelectedActors() : nullptr;
+		for (int32 i = 0; Selected && i < Selected->Num(); ++i)
+		{
+			AActor* Actor = Cast<AActor>(Selected->GetSelectedObject(i));
+			if (UHutongBuildingComponent* B = Actor ? Actor->FindComponentByClass<UHutongBuildingComponent>() : nullptr) Out.Add(B);
+		}
+		return Out;
+	}
+
+	// Same seam as a panel edit: built re-bakes, laid-out redraws.
+	void RebuildEdited(UHutongBuildingComponent* B)
+	{
+		B->Rebuild();
+		B->ApplyPlacementAttachments();
+	}
+}
+
+bool URectDragToolBase::AdjustSelectedBays(int32 Delta)
+{
+	TArray<UHutongBuildingComponent*> Work = SelectedBuildings();
+	Work.RemoveAll([](const UHutongBuildingComponent* B) { return HutongDetailOps::GetBayCountOverride(B) == INDEX_NONE; });
+	if (Work.Num() == 0 || Delta == 0) return false;
+
+	const FScopedTransaction Transaction(LOCTEXT("AdjustBays", "Change Bay Count"));
+	for (UHutongBuildingComponent* B : Work)
+	{
+		// A derived count is seeded from the bays drawn, so the first press steps from what is seen.
+		FHutongPlanBays Bays;
+		B->GetPlanBays(Bays);
+		const int32 Forced = HutongDetailOps::GetBayCountOverride(B);
+		const int32 Current = Forced > 0 ? Forced : FMath::Max(1, Bays.Boundaries.Num() - 1);
+		const int32 Next = FMath::Max(1, Current + Delta);
+		if (Next == Current) continue;
+		if (B->GetOwner()) B->GetOwner()->Modify();
+		B->Modify();
+		HutongDetailOps::SetBayCountOverride(B, Next);
+		RebuildEdited(B);
+	}
+	return true;
+}
+
+bool URectDragToolBase::ToggleSelectedGate()
+{
+	TArray<UHutongWallBuildingComponent*> Walls;
+	for (UHutongBuildingComponent* B : SelectedBuildings())
+	{
+		if (UHutongWallBuildingComponent* W = Cast<UHutongWallBuildingComponent>(B)) Walls.Add(W);
+	}
+	if (Walls.Num() == 0) return false;
+
+	const FScopedTransaction Transaction(LOCTEXT("ToggleGate", "Toggle Wall Gate"));
+	for (UHutongWallBuildingComponent* W : Walls)
+	{
+		if (W->GetOwner()) W->GetOwner()->Modify();
+		W->Modify();
+		// Any opening off; none, a gate (牆垣門) on.
+		const bool bOpen = W->Params.bHasGate || W->Params.Doorway != EHutongWallDoorway::None;
+		W->Params.bHasGate = !bOpen;
+		if (bOpen) W->Params.Doorway = EHutongWallDoorway::None;
+		RebuildEdited(W);
+	}
+	return true;
+}
+
 bool URectDragToolBase::SetSelectedFacing(const FText& Title,
 	TFunctionRef<EHutongBaySide(const UHutongBuildingComponent&, EHutongBaySide)> NextSide)
 {
@@ -1630,6 +1740,14 @@ double URectDragToolBase::PlanCornerHandleSize(const FVector2D& Size)
 	return FMath::Clamp(0.35 * FMath::Min(Size.X, Size.Y), 12.0, 160.0);
 }
 
+double URectDragToolBase::SkewCornerRadius(const FVector2D& Size, const FVector& At) const
+{
+	// A run's corners are sized off its thickness, a few centimetres, and were a pixel or two to hit
+	// zoomed out. Two at one end may then overlap; the nearer takes the press.
+	constexpr double MinPixels = 8.0;
+	return FMath::Max(0.5 * PlanCornerHandleSize(Size), MinPixels * WorldPerPixelAt(At));
+}
+
 bool URectDragToolBase::IsLineLikePlan(const FVector2D& Size)
 {
 	return HutongFootprint::IsLineLike(Size);
@@ -1645,9 +1763,9 @@ bool URectDragToolBase::PlanHandleEnabled(const FVector2D& Size, int32 Handle)
 bool URectDragToolBase::PressStartsPlacement(const FVector& Ground, const UHutongBuildingComponent* Selected, int32 SelectedHit) const
 {
 	if (!StartsOnFootprintEdges()) return false;
-	// Handles still wanted here: a wall's own (run ends, openings), the rotate ring, Shift's corners.
-	if (Selected && SelectedHit != INDEX_NONE
-		&& (Cast<UHutongWallBuildingComponent>(Selected) || SelectedHit == PlanHandleRing || (SelectedHit < 4 && IsSkewKeyDown())))
+	// Every handle of the selected building beats a wall start: its resize handles reach inside
+	// the footprint, and a press there to resize was taken as a wall anchor on the edge.
+	if (Selected && SelectedHit != INDEX_NONE && SelectedHit != PlanHandleInside)
 	{
 		return false;
 	}
@@ -1727,8 +1845,8 @@ int32 URectDragToolBase::HitTestPlan(const UHutongBuildingComponent* Building, c
 			if (FVector::Dist2D(Ground, PlanBayMarkerWorld(Building, Bays.Boundaries[i])) <= MarkerPick) return PlanHandleBay + i;
 		}
 		const double Run = Building->ArePlanBaysAlongX() ? Size.X : Size.Y;
-		if (FindFuseNeighbour(Building, true) && FVector::Dist2D(Ground, PlanBayMarkerWorld(Building, Run)) <= MarkerPick) return PlanHandleFuseEnd;
-		if (FindFuseNeighbour(Building, false) && FVector::Dist2D(Ground, PlanBayMarkerWorld(Building, 0.0)) <= MarkerPick) return PlanHandleFuseStart;
+		if (FindFuseNeighbour(Building, true) && FVector::Dist2D(Ground, FuseMarkerWorld(Building, true)) <= MarkerPick) return PlanHandleFuseEnd;
+		if (FindFuseNeighbour(Building, false) && FVector::Dist2D(Ground, FuseMarkerWorld(Building, false)) <= MarkerPick) return PlanHandleFuseStart;
 	}
 	FVector2D Quad[4];
 	Building->GetFootprintCorners(Quad);
@@ -1736,7 +1854,7 @@ int32 URectDragToolBase::HitTestPlan(const UHutongBuildingComponent* Building, c
 	// Shift: corners angle on any footprint (a wall end cut on the bias to meet an off-square
 	// neighbour). Picked at drawn size, inside a run's thickness.
 	const bool bSkew = IsSkewKeyDown();
-	const double CornerPick = 0.75 * PlanCornerHandleSize(Size);
+	const double CornerPick = 1.5 * SkewCornerRadius(Size, Ground);
 	if (bSkew)
 	{
 		int32 Nearest = INDEX_NONE;
@@ -1852,6 +1970,7 @@ void URectDragToolBase::BeginPlanEdit(UHutongBuildingComponent* Building, int32 
 	{
 		PlanEdit = EPlanEdit::Resize;
 		EditHandle = Hit;
+		CaptureJoint(Building, Hit);
 	}
 }
 
@@ -2071,6 +2190,128 @@ FVector URectDragToolBase::PlanBayMarkerWorld(const UHutongBuildingComponent* Bu
 	return Owner->GetActorTransform().TransformPosition(FVector(Q.X, Q.Y, 0.0));
 }
 
+FVector URectDragToolBase::FuseMarkerWorld(const UHutongBuildingComponent* Building, bool bAtEnd) const
+{
+	const AActor* Owner = Building ? Building->GetOwner() : nullptr;
+	if (!Owner) return FVector::ZeroVector;
+	const FVector2D Size = Building->GetFootprintSize();
+	const bool bAlongX = Building->ArePlanBaysAlongX();
+	const double Along = bAtEnd ? (bAlongX ? Size.X : Size.Y) : 0.0;
+	const double Across = 0.25 * (bAlongX ? Size.Y : Size.X);
+	const FVector2D Q = HutongFootprint::Map(Size, Building->GetFootprintSkew(),
+		bAlongX ? Along : Across, bAlongX ? Across : Along);
+	return Owner->GetActorTransform().TransformPosition(FVector(Q.X, Q.Y, 0.0));
+}
+
+namespace
+{
+	// Edge 4..7 (−Y, +X, +Y, −X) of a footprint quad, corners anticlockwise from the origin.
+	void QuadEdge(const FVector2D Quad[4], int32 Edge, FVector2D& A, FVector2D& B)
+	{
+		const int32 First = (Edge - 4 + 0) % 4;
+		A = Quad[First];
+		B = Quad[(First + 1) % 4];
+	}
+}
+
+void URectDragToolBase::CaptureJoint(UHutongBuildingComponent* Building, int32 Hit)
+{
+	Joints.Reset();
+	const AActor* Owner = Building ? Building->GetOwner() : nullptr;
+	if (!Owner || Hit < 0 || Hit > 7 || Cast<UHutongWallBuildingComponent>(Building)) return;
+	// A corner moves both its edges: neighbours on either follow (the corner lies on both lines).
+	if (Hit < 4)
+	{
+		CaptureJointOnEdge(Building, 4 + Hit);
+		CaptureJointOnEdge(Building, 4 + (Hit + 3) % 4);
+	}
+	else
+	{
+		CaptureJointOnEdge(Building, Hit);
+	}
+}
+
+void URectDragToolBase::CaptureJointOnEdge(UHutongBuildingComponent* Building, int32 Hit)
+{
+	const AActor* Owner = Building->GetOwner();
+	FVector2D Quad[4], A0, A1;
+	Building->GetFootprintCorners(Quad);
+	QuadEdge(Quad, Hit, A0, A1);
+	const FTransform Xf = Owner->GetActorTransform();
+	const FVector2D WA0(Xf.TransformPosition(FVector(A0, 0.0))), WA1(Xf.TransformPosition(FVector(A1, 0.0)));
+	const FVector2D Dir = (WA1 - WA0).GetSafeNormal();
+	const FVector2D Centre(Xf.TransformPosition(FVector(0.5 * (Quad[0] + Quad[2]), 0.0)));
+	const double Len = FVector2D::Distance(WA0, WA1);
+	// Hand-placed neighbours read as touching a few centimetres off; the join brings them onto the line.
+	const double Tolerance = FMath::Max(2.0, 3.0 * WorldPerPixelAt(FVector(0.5 * (WA0 + WA1), 0.0)));
+
+	for (const HutongSnap::FFootprint& F : GetFootprints())
+	{
+		UHutongBuildingComponent* Other = F.Building.Get();
+		if (!Other || Other == Building || !Other->bPlanOnly || Other->HasFootprintSkew()
+			|| Cast<UHutongWallBuildingComponent>(Other) || !Other->GetOwner()) continue;
+		if (Joints.ContainsByPredicate([&](const FJoint& J) { return J.Start.Building.Get() == Other; })) continue;
+		FVector2D OQuad[4];
+		Other->GetFootprintCorners(OQuad);
+		const FTransform OXf = Other->GetOwner()->GetActorTransform();
+		const FVector2D OCentre(OXf.TransformPosition(FVector(0.5 * (OQuad[0] + OQuad[2]), 0.0)));
+		for (int32 E = 4; E < 8; ++E)
+		{
+			FVector2D B0, B1;
+			QuadEdge(OQuad, E, B0, B1);
+			const FVector2D WB0(OXf.TransformPosition(FVector(B0, 0.0))), WB1(OXf.TransformPosition(FVector(B1, 0.0)));
+			// On the dragged edge's line…
+			if (FMath::Abs(FVector2D::CrossProduct(Dir, WB0 - WA0)) > Tolerance
+				|| FMath::Abs(FVector2D::CrossProduct(Dir, WB1 - WA0)) > Tolerance) continue;
+			// …overlapping a good part of it…
+			const double T0 = FVector2D::DotProduct(Dir, WB0 - WA0), T1 = FVector2D::DotProduct(Dir, WB1 - WA0);
+			const double Overlap = FMath::Min(Len, FMath::Max(T0, T1)) - FMath::Max(0.0, FMath::Min(T0, T1));
+			if (Overlap < 0.3 * FMath::Min(Len, FVector2D::Distance(WB0, WB1))) continue;
+			// …and on its far side, not lying over it.
+			const FVector2D Normal(-Dir.Y, Dir.X);
+			if (FVector2D::DotProduct(Normal, Centre - WA0) * FVector2D::DotProduct(Normal, OCentre - WA0) >= 0.0) continue;
+			FJoint& J = Joints.AddDefaulted_GetRef();
+			CaptureLegState(Other, J.Start);
+			J.Edge = E;
+			break;
+		}
+	}
+}
+
+void URectDragToolBase::UpdateJoint()
+{
+	UHutongBuildingComponent* B = EditedPlan.Get();
+	if (!B || !B->GetOwner()) return;
+	const bool bAlone = FSlateApplication::IsInitialized() && FSlateApplication::Get().GetModifierKeys().IsControlDown();
+	FVector2D Quad[4];
+	B->GetFootprintCorners(Quad);
+	const FVector Edge = B->GetOwner()->GetActorTransform().TransformPosition(PlanHandleLocal(Quad, EditHandle));
+	for (const FJoint& J : Joints)
+	{
+		UHutongBuildingComponent* Partner = J.Start.Building.Get();
+		if (!Partner || !Partner->GetOwner()) continue;
+		RestoreLegState(J.Start);
+		if (!bAlone)
+		{
+			// The neighbour's joined edge goes to the dragged edge's line; its opposite edge stays.
+			const bool bX = J.Edge == 5 || J.Edge == 7;
+			const bool bMax = J.Edge == 5 || J.Edge == 6;
+			const FVector Local = J.Start.Transform.InverseTransformPosition(Edge);
+			const double T = bX ? Local.X : Local.Y;
+			const double Len0 = bX ? J.Start.Size.X : J.Start.Size.Y;
+			const double Len = FMath::Max(PlanMinSize, bMax ? T : Len0 - T);
+			Partner->SetFootprintSize(bX ? FVector2D(Len, J.Start.Size.Y) : FVector2D(J.Start.Size.X, Len));
+			if (!bMax)
+			{
+				const double Accepted = bX ? Partner->GetFootprintSize().X : Partner->GetFootprintSize().Y;
+				const FVector Shift = bX ? FVector(Len0 - Accepted, 0.0, 0.0) : FVector(0.0, Len0 - Accepted, 0.0);
+				Partner->GetOwner()->SetActorLocation(J.Start.Transform.GetLocation() + J.Start.Transform.TransformVector(Shift));
+			}
+		}
+		Partner->ApplyPlanOutline();
+	}
+}
+
 void URectDragToolBase::DivideAtMarker(UHutongBuildingComponent* Building, int32 BayLine)
 {
 	FText WhyNot;
@@ -2163,7 +2404,8 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 	case EPlanEdit::Resize:
 	{
 		FVector G = Ground;
-		if (SnappingActive())
+		// Joined, the nearest snap is the partner's own edge, which would hold the join still.
+		if (SnappingActive() && !HasJoint())
 		{
 			const HutongSnap::FResult R = HutongSnap::FindSnap(GetFootprints(), G, EffectiveSnapRadius(G), Owner);
 			if (R.bSnapped) G = FVector(R.Point.X, R.Point.Y, G.Z);
@@ -2185,6 +2427,7 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 		const FVector Shift(SideX < 0 ? S.X - Accepted.X : 0.0, SideY < 0 ? S.Y - Accepted.Y : 0.0, 0.0);
 		Owner->SetActorTransform(EditStartTransform);
 		Owner->SetActorLocation(EditStartTransform.GetLocation() + EditStartTransform.TransformVector(Shift));
+		if (HasJoint()) UpdateJoint();
 		break;
 	}
 	case EPlanEdit::Skew:
@@ -2481,7 +2724,13 @@ void URectDragToolBase::CommitPlanEdit()
 			return;
 		}
 
-		// Rewound and reapplied inside one transaction.
+		// Rewound and reapplied inside one transaction, the joined neighbour with it.
+		TArray<FRunLegState> PartnerFinal;
+		for (const FJoint& J : Joints)
+		{
+			CaptureLegState(J.Start.Building.Get(), PartnerFinal.AddDefaulted_GetRef());
+			RestoreLegState(J.Start);
+		}
 		Owner->SetActorTransform(EditStartTransform);
 		B->SetFootprintSize(EditStartSize);
 		B->FootprintSkew = EditStartSkew;
@@ -2500,11 +2749,23 @@ void URectDragToolBase::CommitPlanEdit()
 			if (bOpening) B->SetPlanOpeningCentre(EditHandle, FinalCentre);
 			// The same seam a panel edit goes through.
 			B->Rebuild();
+			for (const FRunLegState& PartnerState : PartnerFinal)
+			{
+				UHutongBuildingComponent* Partner = PartnerState.Building.Get();
+				AActor* PartnerOwner = Partner ? Partner->GetOwner() : nullptr;
+				if (!PartnerOwner) continue;
+				PartnerOwner->Modify();
+				Partner->Modify();
+				if (UActorComponent* Outline = PartnerOwner->FindComponentByClass<UHutongPlanOutlineComponent>()) Outline->Modify();
+				RestoreLegState(PartnerState);
+				Partner->Rebuild();
+			}
 		}
 	}
 	PlanEdit = EPlanEdit::None;
 	EditedPlan.Reset();
 	EditHandle = INDEX_NONE;
+	Joints.Reset();
 	UpdatePlacementReadout();
 }
 
@@ -2543,6 +2804,15 @@ void URectDragToolBase::CancelPlanEdit()
 		if (PlanEdit == EPlanEdit::Opening) B->SetPlanOpeningCentre(EditHandle, EditStartOpeningCentre);
 		B->ApplyPlanOutline();
 	}
+	for (const FJoint& J : Joints)
+	{
+		if (UHutongBuildingComponent* Partner = J.Start.Building.Get())
+		{
+			RestoreLegState(J.Start);
+			Partner->ApplyPlanOutline();
+		}
+	}
+	Joints.Reset();
 	PlanEdit = EPlanEdit::None;
 	EditedPlan.Reset();
 	EditHandle = INDEX_NONE;
@@ -2628,7 +2898,7 @@ void URectDragToolBase::DrawPlanHandles(FPrimitiveDrawInterface* PDI) const
 			const bool bAtEnd = End == 1;
 			if (!FindFuseNeighbour(B, bAtEnd)) continue;
 			const int32 H = bAtEnd ? PlanHandleFuseEnd : PlanHandleFuseStart;
-			const FVector C = PlanBayMarkerWorld(B, bAtEnd ? RunLen : 0.0) + Lift;
+			const FVector C = FuseMarkerWorld(B, bAtEnd) + Lift;
 			const FLinearColor Col = ColorFor(H, PlanFuseColor);
 			const float T = Thick(H);
 			// Two triangles meeting at the join, pointing into each building.
@@ -2649,7 +2919,7 @@ void URectDragToolBase::DrawPlanHandles(FPrimitiveDrawInterface* PDI) const
 	// its thickness.
 	const bool bSkewMode = IsSkewKeyDown() || PlanEdit == EPlanEdit::Skew;
 	if (!B->bPlanOnly && !bSkewMode) return;
-	const double CornerR = 0.5 * PlanCornerHandleSize(Size);
+	const double CornerR = SkewCornerRadius(Size, Xf.TransformPosition(PlanHandleLocal(Quad, 0)));
 
 	// Corners: crossed square, turned with the footprint.
 	for (int32 H = 0; H < 8; ++H)

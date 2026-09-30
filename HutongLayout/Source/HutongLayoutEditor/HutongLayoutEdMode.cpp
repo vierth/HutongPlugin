@@ -4,6 +4,7 @@
 #include "UObject/ObjectSaveContext.h"
 #include "InteractiveToolManager.h"
 #include "EditorModeManager.h"
+#include "Tools/EdModeInteractiveToolsContext.h"
 #include "HutongLayoutCommands.h"
 #include "HutongLayoutEdModeToolkit.h"
 #include "HutongLayoutModeSettings.h"
@@ -96,9 +97,11 @@ public:
 			// Repeats wanted: holding a bracket key walks the value.
 			if (!Tool->IsPlacingActive())
 			{
-				// Nothing being placed: the keys turn the selected building's facade instead.
-				if (InKeyEvent.IsRepeat()) return false;
-				return Tool->TurnSelectedFacing(Key == EKeys::RightBracket ? 1 : -1);
+				// Nothing being placed: the selected buildings' bay count; with Shift, their facade a step round.
+				if (InKeyEvent.IsRepeat() || Tool->IsEditingPlan()) return false;
+				const int32 Delta = Key == EKeys::RightBracket ? 1 : -1;
+				return InKeyEvent.GetModifierKeys().IsShiftDown()
+					? Tool->TurnSelectedFacing(Delta) : Tool->AdjustSelectedBays(Delta);
 			}
 			const FModifierKeysState& Mods = InKeyEvent.GetModifierKeys();
 			Tool->AdjustBracketValue(Key == EKeys::RightBracket ? 1 : -1,
@@ -126,9 +129,12 @@ public:
 		}
 		if (Key == EKeys::G)
 		{
-			// Toggles the gate on the wall segment being drawn. Only mid-placement, so the viewport
-			// keeps G for game view.
-			if (!Tool->IsPlacingActive()) return false;
+			// Toggles the gate on the wall segment being drawn, or with nothing being placed on the
+			// selected walls; with neither the viewport keeps G for game view.
+			if (!Tool->IsPlacingActive())
+			{
+				return !InKeyEvent.IsRepeat() && !Tool->IsEditingPlan() && Tool->ToggleSelectedGate();
+			}
 			if (!InKeyEvent.IsRepeat()) Tool->ToggleOpeningMark();
 			return true;
 		}
@@ -175,6 +181,7 @@ void UHutongLayoutEdMode::Enter()
 	if (UHutongLayoutModeSettings* Settings = Cast<UHutongLayoutModeSettings>(SettingsObject))
 	{
 		Settings->bShowPlanOutlines = HutongPlanOutline::ArePlansVisible();
+		HutongPlanOutline::SetPlansOverBuildings(Settings->bPlansOverBuildings);
 	}
 
 	const FHutongLayoutCommands& Commands = FHutongLayoutCommands::Get();
@@ -277,10 +284,11 @@ void UHutongLayoutEdMode::Enter()
 
 	SelectionHandle = USelection::SelectionChangedEvent.AddUObject(this, &UHutongLayoutEdMode::OnEditorSelectionChanged);
 
-	PreSaveHandle = FEditorDelegates::PreSaveWorldWithContext.AddWeakLambda(this,
-		[this](UWorld*, FObjectPreSaveContext) { RememberToolBeforeSave(); });
-	PostSaveHandle = FEditorDelegates::PostSaveWorldWithContext.AddWeakLambda(this,
-		[this](UWorld*, FObjectPostSaveContext) { RestoreToolAfterSave(); });
+	if (UEditorInteractiveToolsContext* Context = GetInteractiveToolsContext(EToolsContextScope::Editor))
+	{
+		bContextEndedToolsOnSave = Context->GetDeactivateToolsOnSaveWorld();
+		Context->SetDeactivateToolsOnSaveWorld(false);
+	}
 
 	if (FSlateApplication::IsInitialized())
 	{
@@ -296,11 +304,10 @@ void UHutongLayoutEdMode::Exit()
 	USelection::SelectionChangedEvent.Remove(SelectionHandle);
 	SelectionHandle.Reset();
 	bFollowSelectionQueued = false;
-	FEditorDelegates::PreSaveWorldWithContext.Remove(PreSaveHandle);
-	FEditorDelegates::PostSaveWorldWithContext.Remove(PostSaveHandle);
-	PreSaveHandle.Reset();
-	PostSaveHandle.Reset();
-	ToolBeforeSave.Reset();
+	if (UEditorInteractiveToolsContext* Context = GetInteractiveToolsContext(EToolsContextScope::Editor))
+	{
+		Context->SetDeactivateToolsOnSaveWorld(bContextEndedToolsOnSave);
+	}
 
 	if (InputProcessor.IsValid() && FSlateApplication::IsInitialized())
 	{
@@ -358,33 +365,6 @@ bool UHutongLayoutEdMode::StartTool(const TCHAR* ToolIdentifier)
 	if (!ToolManager) return false;
 	ToolManager->SelectActiveToolType(EToolSide::Left, ToolIdentifier);
 	return ToolManager->ActivateTool(EToolSide::Left);
-}
-
-void UHutongLayoutEdMode::RememberToolBeforeSave()
-{
-	// Captured before the save: afterwards the tool manager has forgotten the tool. Empty when
-	// none was up, so a save never opens one.
-	UInteractiveToolManager* ToolManager = GetToolManager();
-	ToolBeforeSave = ToolManager ? ToolManager->GetActiveToolName(EToolSide::Left) : FString();
-}
-
-void UHutongLayoutEdMode::RestoreToolAfterSave()
-{
-	const FString Wanted = MoveTemp(ToolBeforeSave);
-	ToolBeforeSave.Reset();
-	if (Wanted.IsEmpty() || !GEditor) return;
-
-	// Next tick: not inside the save's broadcast, and the context has just shut a tool down.
-	GEditor->GetTimerManager()->SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this,
-		[this, Wanted]()
-		{
-			UInteractiveToolManager* ToolManager = GetToolManager();
-			if (!ToolManager) return;
-			// Not if the user picked another tool during the save.
-			if (!ToolManager->GetActiveToolName(EToolSide::Left).IsEmpty()) return;
-			ToolManager->SelectActiveToolType(EToolSide::Left, Wanted);
-			ToolManager->ActivateTool(EToolSide::Left);
-		}));
 }
 
 bool UHutongLayoutEdMode::IsToolOnPalette(const FString& ToolIdentifier, FName PaletteName) const
@@ -477,6 +457,8 @@ void UHutongLayoutEdMode::FollowSelection()
 	const UHutongBuildingComponent* Building = Actor ? Actor->FindComponentByClass<UHutongBuildingComponent>() : nullptr;
 	const FString Wanted = ToolIdentifierFor(Building);
 	if (Wanted.IsEmpty()) return;
+	// On the Scene tab a selection is what the Selection settings act on: no tool, no tab change.
+	if (Toolkit.IsValid() && Toolkit->GetCurrentPalette() == FName(TEXT("Scene"))) return;
 	// An active tool stays: every tool edits any selected building, and a stray house click while
 	// drawing walls must not drop the wall tool. Only an empty hand gets a tool.
 	if (!ToolManager->GetActiveToolName(EToolSide::Left).IsEmpty()) return;

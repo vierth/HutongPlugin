@@ -15,15 +15,15 @@ namespace HutongPlanColours
 	inline const FLinearColor Selected(1.00f, 1.00f, 1.00f, 1.0f);
 
 	// Buildings.
-	inline const FLinearColor House(1.00f, 0.85f, 0.20f, 1.0f);      // 正房 and its family
+	inline const FLinearColor House(0.05f, 0.12f, 0.45f, 1.0f);      // 正房 and its family: dark blue, reads on the paper
 	inline const FLinearColor Shopfront(1.00f, 0.70f, 0.30f, 1.0f);  // 鋪面房
 	// Shopfront hue, warmer: on a plan the two are the same rectangle.
 	inline const FLinearColor Storey(1.00f, 0.55f, 0.15f, 1.0f);     // 樓
 	inline const FLinearColor Hall(0.78f, 0.55f, 1.00f, 1.0f);       // 殿
 	inline const FLinearColor Pavilion(0.62f, 0.68f, 1.00f, 1.0f);   // 亭
-	// House yellow toward bare timber.
+	// Bare timber.
 	inline const FLinearColor Frame(0.80f, 0.62f, 0.40f, 1.0f);      // 構架
-	// House yellow toward the passage's green.
+	// Yellow toward the passage's green.
 	inline const FLinearColor EarPassage(0.88f, 0.90f, 0.35f, 1.0f); // 耳房過道
 
 	// Gates and screens.
@@ -46,6 +46,24 @@ namespace HutongPlanColours
 
 	// Fallback for a type with no colour.
 	inline const FLinearColor Building(1.00f, 0.85f, 0.20f, 1.0f);
+
+	// Drawing layer per type, bottom first: plans of two types on one spot are drawn apart in height,
+	// so depth decides, not the engine's draw order. Like types share a colour, a tie there is not seen.
+	// Ground first, then buildings large to small, enclosure and garden on top.
+	inline const FLinearColor* const Layers[] = {
+		&Path, &Hall, &House, &Storey, &Shopfront, &Frame, &Pavilion, &Corridor, &EarPassage, &Passage,
+		&Gate, &InnerGate, &Paifang, &Screen, &Wall, &CourtWall, &FlowerBed, &WaterJar, &Building };
+	inline constexpr int32 LayerCount = UE_ARRAY_COUNT(Layers);
+
+	// A colour on no list draws on top.
+	inline int32 LayerOf(const FLinearColor& Colour)
+	{
+		for (int32 i = 0; i < LayerCount; ++i)
+		{
+			if (*Layers[i] == Colour) return i;
+		}
+		return LayerCount;
+	}
 }
 
 // Bay boundaries along the bay axis in footprint coords, both ends included (bays = boundaries - 1).
@@ -55,11 +73,8 @@ struct FHutongPlanBays
 	TArray<double> Boundaries;
 	// The bay the front door is in, as an index into the spans between boundaries.
 	int32 DoorBay = INDEX_NONE;
-	// Column rows across the depth, footprint coords; a column at every boundary on each. Empty = none drawn.
-	TArray<double> ColumnRows;
+	// Column radius: the end-bay skew seam stops at the first inner column's face.
 	double ColumnRadius = 0.0;
-	// 柱頂石: the side of the square base stone under each column.
-	double FootingSize = 0.0;
 };
 
 namespace HutongGen::PlanBays
@@ -73,11 +88,6 @@ namespace HutongGen::PlanBays
 		{
 			const FVector3d V = BaySide::RotateVertex(Side, FVector3d(T, 0.0, 0.0), SizeX, SizeY);
 			T = bAlongX ? V.X : V.Y;
-		}
-		for (double& R : Bays.ColumnRows)
-		{
-			const FVector3d V = BaySide::RotateVertex(Side, FVector3d(0.0, R, 0.0), SizeX, SizeY);
-			R = bAlongX ? V.Y : V.X;
 		}
 		if (Bays.Boundaries.Num() >= 2 && Bays.Boundaries[0] > Bays.Boundaries.Last())
 		{
@@ -100,6 +110,10 @@ namespace HutongPlanOutline
 
 	// Called once at module startup; the cvar defaults to on.
 	void LoadVisibilityFromConfig();
+
+	// Off (default): plans draw in the world's depth, so a built building hides those behind it.
+	bool ArePlansOverBuildings();
+	void SetPlansOverBuildings(bool bOver);
 }
 
 // The drawing of a building that has been laid out but not built.
@@ -141,15 +155,6 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Which bay carries the front door; -1 where the type has none."))
 	int32 DoorBay = INDEX_NONE;
 
-	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Column lines across the depth, in cm; a column stands at every bay boundary on each."))
-	TArray<double> ColumnRows;
-
-	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Radius of the columns drawn on the plan, in cm."))
-	double ColumnRadius = 0.0;
-
-	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Side of the square base stone (柱頂石) under each column, in cm."))
-	double FootingSize = 0.0;
-
 	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Colour the outline is drawn in."))
 	FLinearColor Colour = HutongPlanColours::Building;
 
@@ -160,4 +165,22 @@ public:
 
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+
+	// This plan's footprint in world space, corners in order.
+	void GetWorldQuad(FVector OutCorners[4]) const;
+	// Drawing height step: the type's layer (HutongPlanColours::Layers).
+	int32 GetStackLevel() const;
+	// Neighbours' edges that win over this plan's where they coincide: two plans drawing one edge
+	// leave the winner to the engine's draw order, which reshuffles now and then (the edge flickers).
+	TArray<TPair<FVector, FVector>> CollectWinningNeighbourEdges() const;
+
+protected:
+	virtual void OnRegister() override;
+	virtual void OnUnregister() override;
+	virtual void OnUpdateTransform(EUpdateTransformFlags UpdateTransformFlags, ETeleportType Teleport) override;
+
+private:
+	// Plans touching Box redraw, so a shared edge is handed over when this one appears, moves or goes.
+	void DirtyNeighbours(const FBox& Box) const;
+	FBox LastDrawnBox = FBox(ForceInit);
 };

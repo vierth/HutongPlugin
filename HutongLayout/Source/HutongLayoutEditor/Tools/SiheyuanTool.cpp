@@ -310,22 +310,8 @@ void UHutongSiheyuanTool::Render(IToolsContextRenderAPI* RenderAPI)
 	const int32 N = ComputeBayCountForSide(BaySide);
 	if (N <= 0) return;
 
-	const FLinearColor TickColor(0.25f, 1.0f, 0.45f, 1.0f);
-	const float TickThickness = 5.0f;
-	const double TickLen = FMath::Max(30.0, 0.04 * FMath::Max(SizeX, SizeY));
-	// Ticks cross the facade edge.
-	const double TickInset = 0.4 * TickLen;
 	const double ColR = FMath::Max(
 		0.5 * (Settings ? GetResolvedParams().GetColumnDiameter() : 30.0), 1.0);
-
-	const FRotator Rot(0.0, PlacementYawDeg, 0.0);
-	auto DrawTick = [&](double LocalX, double LocalY, const FVector2D& OutDirLocal)
-	{
-		const FVector Base = LocalRectToWorld(LocalX, LocalY);
-		const FVector OutDir = Rot.RotateVector(FVector(OutDirLocal.X, OutDirLocal.Y, 0.0));
-		DrawPreviewLine(PDI, Base - OutDir * TickInset, Base + OutDir * TickLen,
-			TickColor, TickThickness);
-	};
 
 	const HutongGen::BaySide::FEdge Edge = HutongGen::BaySide::GetEdge(BaySide, MinX, MinY, MaxX, MaxY);
 	const double Span = Edge.bAlongX ? SizeX : SizeY;
@@ -341,12 +327,7 @@ void UHutongSiheyuanTool::Render(IToolsContextRenderAPI* RenderAPI)
 	HutongGen::PlanBays::OntoFacade(Bays, BaySide, SizeX, SizeY);
 	auto BoundaryAt = [&](int32 i) { return SpanMin + Bays.Boundaries[FMath::Clamp(i, 0, N)]; };
 
-	for (int32 i = 0; i <= N; ++i)
-	{
-		const double T = BoundaryAt(i);
-		if (Edge.bAlongX) DrawTick(T, Edge.FixedCoord, Edge.OutDir);
-		else              DrawTick(Edge.FixedCoord, T, Edge.OutDir);
-	}
+	DrawRectBaysAndFacing(PDI, BaySide, MinX, MinY, MaxX, MaxY, Bays.Boundaries, Bays.DoorBay);
 
 	// 前廊: columns on the footprint edge, wall set back behind them.
 	const double VerandaDepth = GetEffectiveVerandaDepth();
@@ -361,18 +342,6 @@ void UHutongSiheyuanTool::Render(IToolsContextRenderAPI* RenderAPI)
 		const FVector B = Edge.bAlongX ? LocalRectToWorld(BoundaryAt(N), WallCoord)
 									   : LocalRectToWorld(WallCoord, BoundaryAt(N));
 		DrawDashedPreviewLine(PDI, A, B, FLinearColor(0.45f, 0.8f, 1.0f), 3.0f);
-	}
-
-	// Door bay mark on the facade edge.
-	if (Bays.DoorBay != INDEX_NONE)
-	{
-		const double T0 = BoundaryAt(Bays.DoorBay);
-		const double T1 = BoundaryAt(Bays.DoorBay + 1);
-		const FVector A = Edge.bAlongX ? LocalRectToWorld(T0, Edge.FixedCoord)
-		                               : LocalRectToWorld(Edge.FixedCoord, T0);
-		const FVector B = Edge.bAlongX ? LocalRectToWorld(T1, Edge.FixedCoord)
-		                               : LocalRectToWorld(Edge.FixedCoord, T1);
-		DrawPreviewLine(PDI, A, B, FLinearColor(1.0f, 0.45f, 0.1f), 7.0f);
 	}
 }
 

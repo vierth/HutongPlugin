@@ -101,6 +101,21 @@ bool FHutongPresetPickerCacheTest::RunTest(const FString& Parameters)
 	if (!TestNotNull(TEXT("street row has a preset picker"), RowPicker)) return false;
 	TestEqual(TEXT("street row opens on its own default, not the house's choice"), RowPicker->Preset, HutongPresets::DefaultStreetRowHouseName());
 
+	// Row Position picks the houses' preset: rear row loads 後罩房, front row 倒座房 again.
+	UHutongStreetRowToolProperties* RowSettings = nullptr;
+	for (UObject* Set : Row->GetToolProperties(false)) if (!RowSettings) RowSettings = Cast<UHutongStreetRowToolProperties>(Set);
+	if (TestNotNull(TEXT("street row has its settings"), RowSettings))
+	{
+		FProperty* PositionProp = UHutongStreetRowToolProperties::StaticClass()->FindPropertyByName(
+			GET_MEMBER_NAME_CHECKED(UHutongStreetRowToolProperties, Position));
+		RowSettings->Position = EHutongStreetRowPosition::Rear;
+		Row->OnPropertyModified(RowSettings, PositionProp);
+		TestEqual(TEXT("rear row loads the rear-row preset"), RowPicker->Preset, FString(TEXT("Rear Row (後罩房)")));
+		RowSettings->Position = EHutongStreetRowPosition::Front;
+		Row->OnPropertyModified(RowSettings, PositionProp);
+		TestEqual(TEXT("front row loads the front-row preset"), RowPicker->Preset, HutongPresets::DefaultStreetRowHouseName());
+	}
+
 	RowPicker->Preset = TEXT("Front Row (倒座房)");
 	Row->Shutdown(EToolShutdownType::Completed);
 

@@ -64,7 +64,10 @@ void FHutongLayoutEdModeToolkit::OnSelectionChanged(UObject* Object)
 {
 	// Actor selection only: the component selection raises this too.
 	if (GEditor && Object != GEditor->GetSelectedActors()) return;
+	if (UHutongLayoutModeSettings* Settings = UHutongLayoutEdMode::GetActiveSettings()) Settings->SyncToSelection();
 	RefreshSelectedBuilding();
+	// The Selection section shows only with something selected; the layout is built once per refresh.
+	if (ModeDetailsView.IsValid()) ModeDetailsView->ForceRefresh();
 }
 
 void FHutongLayoutEdModeToolkit::RefreshSelectedBuilding()
@@ -662,7 +665,7 @@ TSharedPtr<SWidget> FHutongLayoutEdModeToolkit::GetInlineContent() const
 			]
 		]
 
-		// Actions on placed buildings (promote, rebuild, export, import, count), on their own open tab.
+		// Actions on placed buildings (geometry, selection, export, import, housekeeping, information), on their own tab.
 		+ SVerticalBox::Slot()
 		[
 			SNew(SVerticalBox)
@@ -673,7 +676,7 @@ TSharedPtr<SWidget> FHutongLayoutEdModeToolkit::GetInlineContent() const
 			.Padding(4.0f, 4.0f, 4.0f, 6.0f)
 			[
 				SNew(STextBlock)
-				.Text(LOCTEXT("SceneHeader", "What is already placed: promote, rebuild, export and import."))
+				.Text(LOCTEXT("SceneHeader", "What is already placed. Select buildings, change a Selection setting, then press its Apply."))
 				.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
 				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
 				.AutoWrapText(true)

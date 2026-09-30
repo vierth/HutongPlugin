@@ -337,13 +337,13 @@ bool FHutongPlanBaysTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanColumnsTest,
-	"HutongLayout.Detail.PlanColumns",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanBayLinesTest,
+	"HutongLayout.Detail.PlanBayLines",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FHutongPlanColumnsTest::RunTest(const FString& Parameters)
+bool FHutongPlanBayLinesTest::RunTest(const FString& Parameters)
 {
-	// A frame and its house on one footprint put column footings in the same plan places: Full House
+	// A frame and its house on one footprint put their bay lines in the same plan places: Full House
 	// stamps one beside the other.
 	for (const HutongCanon::House::FHouse& Canon : { HutongCanon::House::MainHall,
 			HutongCanon::House::MainHallSmall, HutongCanon::House::MainHallFiveBay })
@@ -353,7 +353,7 @@ bool FHutongPlanColumnsTest::RunTest(const FString& Parameters)
 		UHutongSiheyuanBuildingComponent* House = NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
 		Frame->Params = FrameParams;
 		House->Params = FrameParams.House;
-		const FString Label = FString::Printf(TEXT("%.0f cm, %d rows expected"), Canon.FrontageCm, Canon.bRearVeranda ? 4 : 3);
+		const FString Label = FString::Printf(TEXT("%.0f cm"), Canon.FrontageCm);
 
 		for (int32 s = 0; s < 4; ++s)
 		{
@@ -370,21 +370,13 @@ bool FHutongPlanColumnsTest::RunTest(const FString& Parameters)
 			House->GetPlanBays(H);
 			const FString Name = Label + TEXT(" · ") + StaticEnum<EHutongBaySide>()->GetNameStringByValue(s);
 
-			TestEqual(*(Name + TEXT(": frame rows")), F.ColumnRows.Num(), Canon.bRearVeranda ? 4 : 3);
-			TestEqual(*(Name + TEXT(": house rows")), H.ColumnRows.Num(), F.ColumnRows.Num());
 			TestEqual(*(Name + TEXT(": boundaries")), H.Boundaries.Num(), F.Boundaries.Num());
-			if (F.ColumnRows.Num() != H.ColumnRows.Num() || F.Boundaries.Num() != H.Boundaries.Num()) continue;
-			for (int32 i = 0; i < F.ColumnRows.Num(); ++i)
-			{
-				TestTrue(*FString::Printf(TEXT("%s: row %d where the frame's is (%.1f vs %.1f)"), *Name, i, H.ColumnRows[i], F.ColumnRows[i]),
-					FMath::Abs(H.ColumnRows[i] - F.ColumnRows[i]) < 0.5);
-			}
+			if (F.Boundaries.Num() != H.Boundaries.Num()) continue;
 			for (int32 i = 0; i < F.Boundaries.Num(); ++i)
 			{
 				TestTrue(*FString::Printf(TEXT("%s: column line %d where the frame's is"), *Name, i),
 					FMath::Abs(H.Boundaries[i] - F.Boundaries[i]) < 0.5);
 			}
-			TestTrue(*(Name + TEXT(": footings drawn")), F.FootingSize > 2.0 * F.ColumnRadius && H.FootingSize > 0.0);
 		}
 		if (Canon.FrontageCm > 1500.0)
 		{
