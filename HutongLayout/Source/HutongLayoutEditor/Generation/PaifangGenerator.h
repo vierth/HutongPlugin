@@ -85,7 +85,7 @@ struct FHutongPaifangParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Eave Fascia Depth", EditCondition="bHasRoofs", UIMin="0", UIMax="30", Units="cm", ToolTip="Vertical depth of the fascia board along each eave, in cm."))
 	double EaveFasciaDepth = 9.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Tile Courses (壟)", EditCondition="bHasRoofs", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Tile Courses (壟)", EditCondition="bHasRoofs", ToolTip="Models each tile course as geometry instead of texture."))
 	bool bHasTileRuns = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(DisplayName="Rafter End Section (椽頭)", EditCondition="bHasRoofs", UIMin="0", UIMax="15", ClampMin="0", Units="cm", ToolTip="Size of the rafter ends under the eave, in cm; zero omits them."))

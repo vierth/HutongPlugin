@@ -92,6 +92,7 @@ FHutongFrameParams HutongPresets::MakeFrame(const HutongCanon::House::FHouse& Ho
 namespace
 {
 	TArray<FString> RegisteredSiheyuanNames;
+	TArray<FString> RegisteredEarRoomNames;
 
 	void Add(const FString& Name, const HutongCanon::House::FHouse& House)
 	{
@@ -119,9 +120,6 @@ void HutongPresets::RegisterBuiltInPresets()
 	// 後罩房: row behind the 正房, closing the plot.
 	Add(TEXT("Rear Row (後罩房)"), HutongCanon::House::RearRow);
 	Add(TEXT("Rear Row, Blank Back Wall (後罩房 無後窗)"), HutongCanon::House::RearRowBlankBack);
-
-	// 耳房: low ear rooms against the 正房 flanks.
-	Add(TEXT("Ear Room (耳房)"), HutongCanon::House::EarRoom);
 
 	// 構架: the 正房's frame alone, each form.
 	for (const TPair<const TCHAR*, HutongCanon::House::FHouse>& Frame : {
@@ -152,25 +150,50 @@ void HutongPresets::RegisterBuiltInPresets()
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Pavilion"), TEXT("Round Pavilion (六柱圓亭)"), FHutongPavilionParams::StaticStruct(), &Round);
 	}
 
-	// 殿: the 則例 卷二 大式 hall; the small temple stays the struct's defaults.
+	// 殿: the small lane temple at the struct's defaults, and the 則例 卷二 大式 hall. The small one was
+	// left unregistered, so the picker offered the grand hall alone.
 	{
+		const FHutongHallParams Small;
+		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Hall"), TEXT("Small Temple (小式 歇山殿)"), FHutongHallParams::StaticStruct(), &Small);
 		FHutongHallParams Grand;
 		Grand.Style = EHutongHallStyle::Grand;
 		Grand.RoofTile = EHutongRoofTile::Tong;
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Hall"), TEXT("Grand Hall (大式 九檁歇山殿)"), FHutongHallParams::StaticStruct(), &Grand);
 	}
 
-	// 耳房 with the compound's 過道: one built-in at struct defaults, so the picker has a name and tuned copies a target.
+	// 耳房: low ear rooms against the 正房 flanks, on their own tool. Plain with a front door; with the
+	// compound's 過道 (struct defaults); shut to the court, entered from the hall beside it.
 	{
-		const FHutongEarPassageParams P;
-		UHutongPresetLibrary::RegisterBuiltIn(
-			TEXT("EarPassage"), TEXT("Ear Room With Passage (耳房過道)"), FHutongEarPassageParams::StaticStruct(), &P);
+		FHutongEarPassageParams Plain;
+		Plain.Passageway = EHutongEarPassage::None;
+		FHutongEarPassageParams WithPassage;
+		FHutongEarPassageParams Shut = Plain;
+		Shut.Room.bHasFrontDoorCenter = false;
+		for (const TPair<FString, const FHutongEarPassageParams*>& Ear : {
+				TPair<FString, const FHutongEarPassageParams*>(TEXT("Ear Room (耳房)"), &Plain),
+				TPair<FString, const FHutongEarPassageParams*>(TEXT("Ear Room With Passage (耳房過道)"), &WithPassage),
+				TPair<FString, const FHutongEarPassageParams*>(TEXT("Ear Room, No Front Door (耳房 無門)"), &Shut) })
+		{
+			UHutongPresetLibrary::RegisterBuiltIn(TEXT("EarPassage"), Ear.Key, FHutongEarPassageParams::StaticStruct(), Ear.Value);
+			RegisteredEarRoomNames.AddUnique(Ear.Key);
+		}
 	}
 }
 
 const TArray<FString>& HutongPresets::BuiltInSiheyuanNames()
 {
 	return RegisteredSiheyuanNames;
+}
+
+const TArray<FString>& HutongPresets::BuiltInEarRoomNames()
+{
+	return RegisteredEarRoomNames;
+}
+
+const FString& HutongPresets::DefaultEarRoomName()
+{
+	static const FString Name = TEXT("Ear Room (耳房)");
+	return Name;
 }
 
 const FString& HutongPresets::DefaultSiheyuanName()

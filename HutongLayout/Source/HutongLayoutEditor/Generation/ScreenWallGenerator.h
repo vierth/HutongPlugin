@@ -24,7 +24,7 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen", meta=(DisplayName="Plinth Projection", EditCondition="PlinthHeight > 0", UIMin="2", UIMax="30", ClampMin="0", Units="cm", ToolTip="How far the plinth stands out from the wall face on each side, in cm."))
 	double PlinthProjection = HutongCanon::Screen::PlinthProjectionCm;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen", meta=(DisplayName="Base Course Height (下鹼)", UIMin="0", UIMax="150", ClampMin="0", Units="cm", ToolTip="Height of the base course (下鹼) above the plinth, in cm; zero derives it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen", meta=(DisplayName="Base Course Height (下鹼)", UIMin="0", UIMax="150", ClampMin="0", Units="cm", ToolTip="Height of the base course (下鹼) above the plinth, in cm; 0 for automatic."))
 	double BaseCourseHeight = 0.0;
 
 	double GetBaseCourseHeight() const
@@ -84,7 +84,7 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="14", ClampMin="0", Units="cm", ToolTip="Section size of each exposed rafter end (椽頭), in cm; zero omits them."))
 	double RafterEndSection = 5.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Models each tile course as geometry instead of texture."))
 	bool bHasTileRuns = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="8", UIMax="40", ClampMin="4", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))

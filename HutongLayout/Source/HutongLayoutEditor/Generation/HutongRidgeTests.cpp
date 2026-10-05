@@ -107,6 +107,18 @@ bool FHutongRidgeEstimatesTest::RunTest(const FString& Parameters)
 			[P](FDynamicMesh3& M, EHutongDetail L) { UHutongEarPassageBuildingComponent::BuildEarPassageMesh(P, EHutongBaySide::MinusY, 760.0, 340.0, M, L); } });
 	}
 	{
+		FHutongEarPassageParams P;
+		P.Passageway = EHutongEarPassage::None;
+		Cases.Add({ TEXT("ear room"), HutongGen::Ridge::EarPassage(P, 600.0, 340.0), 600.0, 340.0,
+			[P](FDynamicMesh3& M, EHutongDetail L) { UHutongEarPassageBuildingComponent::BuildEarPassageMesh(P, EHutongBaySide::MinusY, 600.0, 340.0, M, L); } });
+	}
+	{
+		FHutongEarPassageParams P;
+		P.Passageway = EHutongEarPassage::Whole;
+		Cases.Add({ TEXT("ear room, whole frontage a passage"), HutongGen::Ridge::EarPassage(P, 320.0, 340.0), 320.0, 340.0,
+			[P](FDynamicMesh3& M, EHutongDetail L) { UHutongEarPassageBuildingComponent::BuildEarPassageMesh(P, EHutongBaySide::MinusY, 320.0, 340.0, M, L); } });
+	}
+	{
 		FHutongPaifangParams P;
 		Cases.Add({ TEXT("paifang"), HutongGen::Ridge::Paifang(P), 900.0, 200.0,
 			[P](FDynamicMesh3& M, EHutongDetail L) { UHutongPaifangBuildingComponent::BuildPaifangMesh(P, 900.0, 200.0, false, M, L); } });

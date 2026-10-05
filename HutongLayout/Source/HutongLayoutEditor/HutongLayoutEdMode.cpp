@@ -70,6 +70,22 @@ public:
 		if (!Tool || IsTyping(SlateApp)) return false;
 
 		const FKey Key = InKeyEvent.GetKey();
+		const bool bIdle = !Tool->IsPlacingActive() && !Tool->IsEditingPlan();
+		if (Key == EKeys::Escape && bIdle && Tool->CancelSelectedCycle()) return true;
+		if (Key == EKeys::P || Key == EKeys::T)
+		{
+			// Selection's preset / type, chosen but not applied; Ctrl+P and the like stay the editor's,
+			// and with no building selected the viewport keeps the key.
+			const FModifierKeysState& Mods = InKeyEvent.GetModifierKeys();
+			if (!bIdle || InKeyEvent.IsRepeat() || Mods.IsControlDown() || Mods.IsCommandDown() || Mods.IsAltDown()) return false;
+			// Plain: a menu at the cursor to pick from; Shift: the next one along, Enter applies.
+			if (Mods.IsShiftDown()) return Key == EKeys::P ? Tool->CycleSelectedPreset(1) : Tool->CycleSelectedType(1);
+			return Tool->OpenSelectedMenu(Key == EKeys::T, SlateApp.GetCursorPos());
+		}
+		if (Key == EKeys::Enter)
+		{
+			return bIdle && !InKeyEvent.IsRepeat() && Tool->ConfirmSelectedCycle();
+		}
 		if (Key == EKeys::Escape)
 		{
 			// Cancel what is in hand first (half-drawn rect or plan edit); with nothing in hand, put the

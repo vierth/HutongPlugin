@@ -287,8 +287,7 @@ FText UHutongStreetRowTool::GetStagePromptText() const
 			"Move to the side the buildings face (green ticks), then click to set it.");
 	default:
 		return LOCTEXT("PromptGateBays",
-			"Click a bay to make it a gate, click it again to take the gate away. [ and ] slide the gates, "
-			"F turns them to face the other way (orange ticks). Click off the row to build.");
+			"Click a bay to toggle a gate. [ and ] slide the gates, F flips them (orange ticks). Click off the row to build.");
 	}
 }
 
@@ -317,7 +316,7 @@ TArray<FText> UHutongStreetRowTool::GetToolHelpLines() const
 	Lines.Insert(LOCTEXT("HelpRow",
 		"After the footprint, move toward the street side, then click the bays that are gates. F turns the gates round."), 1);
 	Lines.Insert(LOCTEXT("HelpBays",
-		"[ and ] change the bay count, then slide the gates once picked. Every house, shop and gate is its own building."), 2);
+		"[ and ] change the bay count, then slide the gates once picked."), 2);
 	return Lines;
 }
 

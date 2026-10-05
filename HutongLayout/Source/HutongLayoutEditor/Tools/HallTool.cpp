@@ -214,7 +214,7 @@ TArray<FText> UHutongHallTool::GetToolHelpLines() const
 	Lines[0] = NSLOCTEXT("HutongHallTool", "HelpDrag",
 		"Click to anchor, move, click to fix the footprint, move toward the front, click to place.");
 	Lines.Insert(NSLOCTEXT("HutongHallTool", "HelpGrand",
-		"Style Grand builds the nine-purlin hall of the Qing building regulations (則例) at the size you drag, five bays with bracket sets (斗栱); the footprint keeps its proportion."), 1);
+		"Style Grand builds the nine-purlin hall of the Qing building regulations (則例): five bays with bracket sets (斗栱), at the dragged size."), 1);
 	Lines.Insert(NSLOCTEXT("HutongHallTool", "HelpRoof",
 		"Roof Type: hip-and-gable (歇山) is usual, hipped (廡殿) for a grander hall, pyramidal (攢尖) for a near-square plan."), 1);
 	return Lines;

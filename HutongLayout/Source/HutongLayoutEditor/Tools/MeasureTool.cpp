@@ -106,15 +106,14 @@ FText UHutongMeasureTool::GetStagePromptText() const
 	if (bIsDragging && !bRectCommitted)
 	{
 		return LOCTEXT("PromptSecond",
-			"Click the far end of the span. Nothing is placed — this only measures.");
+			"Click the far end of the span.");
 	}
 	if (bIsDragging && bRectCommitted)
 	{
 		return LOCTEXT("PromptFrozen",
-			"Reading frozen. To calibrate: type the span's true length into Known Real Distance, "
-			"select the map actor, then Apply Scale To Selected. Click again to measure something else.");
+			"To calibrate: enter Known Real Distance, select the map, then Apply Scale To Selected. Click to measure again.");
 	}
-	return LOCTEXT("PromptFirst", "Click one end of the span you want to measure.");
+	return LOCTEXT("PromptFirst", "Click one end of the span.");
 }
 
 void UHutongMeasureTool::Render(IToolsContextRenderAPI* RenderAPI)
@@ -149,7 +148,7 @@ TArray<FText> UHutongMeasureTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines;
 	Lines.Add(LOCTEXT("HelpDrag",
-		"Click, move, click to measure a span. Nothing is ever placed by this tool."));
+		"Click, move, click to measure a span."));
 	Lines.Add(LOCTEXT("HelpRead",
 		"Reads metres and paces (步): a lane (胡同) is 6 paces, a minor street (小街) 12, an avenue (大街) 24."));
 	Lines.Add(LOCTEXT("HelpCalibrate",

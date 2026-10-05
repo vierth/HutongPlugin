@@ -82,7 +82,7 @@ namespace
 				]
 				+ SHorizontalBox::Slot().AutoWidth().Padding(2.0f, 0.0f)
 				[
-					Button(LOCTEXT("Remove", "Remove Selected"), LOCTEXT("RemoveTip", "Takes the selected buildings out of this court (a wall keeps any other court)."),
+					Button(LOCTEXT("Remove", "Remove Selected"), LOCTEXT("RemoveTip", "Takes the selected buildings out of this court."),
 						[this, Name]() { Tool->RemoveSelectedFrom(Name); }, [this, Name]() { return Tool.IsValid() && Tool->IsSelectionIn(Name); })
 				]
 				+ SHorizontalBox::Slot().AutoWidth().Padding(2.0f, 0.0f)
@@ -141,7 +141,7 @@ namespace
 							SNew(SButton)
 							.ButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("PrimaryButton"))
 							.Text(LOCTEXT("Assign", "Assign To Selection"))
-							.ToolTipText(LOCTEXT("AssignTip", "Puts the selected buildings in the court named here and files them in the Outliner."))
+							.ToolTipText(LOCTEXT("AssignTip", "Puts the selected buildings in the named court."))
 							.IsEnabled_Lambda([this]() { return Tool.IsValid() && Tool->GetSelectedCount() > 0; })
 							.OnClicked_Lambda([this]() { if (Tool.IsValid()) Tool->AssignNew(); return FReply::Handled(); })
 						]
@@ -186,7 +186,7 @@ namespace
 						[
 							SNew(STextBlock).AutoWrapText(true).Font(FAppStyle::GetFontStyle("SmallFont"))
 							.ColorAndOpacity(FSlateColor::UseSubduedForeground())
-							.Text(LOCTEXT("Folders", "Courts are filed in the Outliner under Courts / map tile / court; a wall shared by two courts under the tile's Shared walls."))
+							.Text(LOCTEXT("Folders", "Courts are filed in the Outliner under Courts / map tile / court; shared walls under the tile's Shared walls."))
 						]
 						+ SHorizontalBox::Slot().AutoWidth().Padding(8.0f, 0.0f, 0.0f, 0.0f)
 						[

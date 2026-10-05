@@ -27,7 +27,7 @@ struct FHutongPavilionParams
 	EHutongPavilionPlan Plan = EHutongPavilionPlan::Square;
 
 	// Off: the fields below the switch are used as set. The raw defaults are the figure's at its own 面闊.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Pavilion", meta=(DisplayName="Proportions From the Qing Regulations (則例)", ToolTip="Sizes every part from the column spacing (面闊) as the square pavilion (方亭) of the Qing building regulations (則例) does."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Pavilion", meta=(DisplayName="Proportions From the Qing Regulations (則例)", ToolTip="Sizes every part from the column spacing (面闊), per the Qing building regulations (則例)."))
 	bool bDeriveProportions = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Pavilion", meta=(EditCondition="!bDeriveProportions", UIMin="220", UIMax="400", ClampMin="120", Units="cm", ToolTip="Height of the column tops above the ground, in cm."))
@@ -106,7 +106,7 @@ struct FHutongPavilionParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(EditCondition="!bDeriveProportions", UIMin="30", UIMax="150", ClampMin="0", Units="cm", ToolTip="How far the eave projects past the column line, in cm."))
 	double RoofOverhang = 76.8;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(UIMin="0", UIMax="250", ClampMin="0", Units="cm", ToolTip="Height of the ridge above the eave, in cm; zero derives it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(UIMin="0", UIMax="250", ClampMin="0", Units="cm", ToolTip="Height of the ridge above the eave, in cm; 0 for automatic."))
 	double RoofRise = 0.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Slope Steps (舉架)", ToolTip="Number of roof pitch steps (舉架) between the eave and the apex."))
@@ -121,7 +121,7 @@ struct FHutongPavilionParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Depth", UIMin="0", UIMax="25", ClampMin="0", Units="cm", ToolTip="Depth of the fascia board along the eave, in cm."))
 	double EaveFasciaDepth = 9.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Models each tile course down the roof instead of drawing it in the texture."))
 	bool bHasTileRuns = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", EditCondition="!bDeriveProportions", UIMin="0", UIMax="15", ClampMin="0", Units="cm", ToolTip="Size of the rafter ends under the eave, in cm; zero omits them."))
@@ -145,7 +145,7 @@ struct FHutongPavilionParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Finial Width", EditCondition="bHasFinial && !bDeriveProportions && (Plan == EHutongPavilionPlan::Round || RoofType == EHutongRoofType::Cuanjian)", UIMin="10", UIMax="120", ClampMin="4", Units="cm", ToolTip="Width of the roof finial (寶頂) at its widest, in cm."))
 	double FinialWidth = 86.4;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Exposed Frame (徹上明造)", EditCondition="Plan == EHutongPavilionPlan::Round || RoofType == EHutongRoofType::Cuanjian", ToolTip="No ceiling: the roof is a shell on rafters carried by the roof frame (梁架): corner beams (抹角梁), purlins (金桁), hip rafters (由戧) and the king post (雷公柱), open to view from below."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Exposed Frame (徹上明造)", EditCondition="Plan == EHutongPavilionPlan::Round || RoofType == EHutongRoofType::Cuanjian", ToolTip="No ceiling: shows the roof frame (梁架) open to view from below."))
 	bool bExposedFrame = true;
 
 	// Set by the tool from the drag rect: the columns' outer faces.

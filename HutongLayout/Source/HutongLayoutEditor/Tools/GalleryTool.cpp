@@ -194,10 +194,12 @@ namespace
 				{
 					UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(P, Facing, 0, SX, SY, M, D);
 				};
+				// The preset is named, so the piece reads as that preset and not as customized.
 				It.Attach = MakeAttach<UHutongSiheyuanBuildingComponent>(Palette,
-					[P, SX, SY](UHutongSiheyuanBuildingComponent* C)
+					[P, SX, SY, Name](UHutongSiheyuanBuildingComponent* C)
 					{
 						C->Params = P;
+						C->Preset = Name;
 						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
 					});
 				Add(MoveTemp(It));
@@ -545,26 +547,38 @@ namespace
 			}
 		}
 
-		// --- 耳房 with its 過道 ---
+		// --- 耳房, alone and with its 過道 --- from the ear room tool's shipped presets.
 		Cat = EHutongGalleryCategory::Houses;
 		{
 			Cluster = HouseCluster(TEXT("Ear Room"));
-			FHutongEarPassageParams P;
-			const double SX = 760.0, SY = 340.0;
-			FGalleryItem It;
-			It.Label = TEXT("Ear Room With Passage (耳房過道)");
-			It.Footprint = FVector2D(SX, SY);
-			It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
+			for (const FString& Name : HutongPresets::BuiltInEarRoomNames())
 			{
-				UHutongEarPassageBuildingComponent::BuildEarPassageMesh(P, Facing, SX, SY, M, D);
-			};
-			It.Attach = MakeAttach<UHutongEarPassageBuildingComponent>(Palette,
-				[P, SX, SY](UHutongEarPassageBuildingComponent* C)
+				FHutongEarPassageParams P;
+				if (!UHutongPresetLibrary::Get()->LoadPreset(
+						TEXT("EarPassage"), Name, FHutongEarPassageParams::StaticStruct(), &P))
 				{
-					C->Params = P;
-					C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
-				});
-			Add(MoveTemp(It));
+					continue;
+				}
+				// Without variants, the one the compound builds.
+				if (!bVar && P.Passageway != EHutongEarPassage::AtEnd) continue;
+				const double SX = P.GetSuggestedWidth() > 0.0 ? P.GetSuggestedWidth() : 760.0;
+				const double SY = P.Room.GetSuggestedDepth() > 0.0 ? P.Room.GetSuggestedDepth() : 340.0;
+				FGalleryItem It;
+				It.Label = Name;
+				It.Footprint = FVector2D(SX, SY);
+				It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
+				{
+					UHutongEarPassageBuildingComponent::BuildEarPassageMesh(P, Facing, SX, SY, M, D);
+				};
+				It.Attach = MakeAttach<UHutongEarPassageBuildingComponent>(Palette,
+					[P, SX, SY, Name](UHutongEarPassageBuildingComponent* C)
+					{
+						C->Params = P;
+						C->Preset = Name;
+						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+					});
+				Add(MoveTemp(It));
+			}
 
 			// 過道: the roofed slot between a gable and the wall beside it, as the compound builds it.
 			{
@@ -1198,7 +1212,7 @@ TArray<FText> UHutongGalleryTool::GetToolHelpLines() const
 		: FText::Format(NSLOCTEXT("HutongGalleryTool", "HelpDragCategory", "Click to anchor, move to turn, click to place every kind of {0}."),
 			FText::FromString(HutongGallery::CategoryName(Category)));
 	Lines.Insert(NSLOCTEXT("HutongGalleryTool", "HelpFolder",
-		"Each piece is its own actor, filed by category and cluster under the HutongGallery outliner folder; delete the folder to clear it."), 1);
+		"Each piece is its own actor under the HutongGallery Outliner folder; delete the folder to clear it."), 1);
 	Lines.Insert(NSLOCTEXT("HutongGalleryTool", "HelpFacing",
 		"Turn off Include Variants for just one of each type."), 2);
 	return Lines;

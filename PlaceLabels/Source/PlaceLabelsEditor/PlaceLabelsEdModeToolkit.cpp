@@ -7,6 +7,9 @@
 #include "InteractiveToolManager.h"
 #include "Tools/UEdMode.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/Text/STextBlock.h"
+#include "Styling/AppStyle.h"
+#include "PlaceLabelsPluginStamp.h"
 
 #define LOCTEXT_NAMESPACE "PlaceLabelsEdModeToolkit"
 
@@ -58,7 +61,26 @@ TSharedPtr<SWidget> FPlaceLabelsEdModeToolkit::GetInlineContent() const
 		+ SVerticalBox::Slot()
 		[
 			DetailsView.ToSharedRef()
+		]
+
+		// The last commit to change this plugin, written into the source by .githooks/pre-commit.
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(4.0f, 6.0f, 4.0f, 4.0f)
+		[
+			SNew(STextBlock)
+			.Text(PluginUpdatedText())
+			.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
+			.ColorAndOpacity(FSlateColor::UseSubduedForeground())
 		];
+}
+
+FText FPlaceLabelsEdModeToolkit::PluginUpdatedText()
+{
+	const FDateTime Utc = FDateTime::FromUnixTimestamp(PLACELABELS_PLUGIN_UPDATED_UTC);
+	// Shown in the machine's own time.
+	const FText When = FText::FromString((Utc + (FDateTime::Now() - FDateTime::UtcNow())).ToString(TEXT("%Y-%m-%d %H:%M")));
+	return FText::Format(LOCTEXT("Version", "Plugin last updated {0}"), When);
 }
 
 #undef LOCTEXT_NAMESPACE

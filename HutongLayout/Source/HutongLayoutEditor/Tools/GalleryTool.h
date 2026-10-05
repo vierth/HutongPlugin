@@ -30,7 +30,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Gallery", meta=(DisplayName="Spacing", UIMin="200", UIMax="1500", ClampMin="50", Units="cm", ToolTip="Clear ground between one footprint and the next in a cluster, in cm. Clusters stand twice this apart, categories three times."))
 	double Spacing = 700.0;
 
-	UPROPERTY(EditAnywhere, Category="Gallery", meta=(DisplayName="Pieces Per Row", UIMin="2", UIMax="10", ClampMin="1", ClampMax="16", ToolTip="Most pieces on one row. Small clusters share a row up to this; a larger cluster wraps onto rows of its own."))
+	UPROPERTY(EditAnywhere, Category="Gallery", meta=(DisplayName="Pieces Per Row", UIMin="2", UIMax="10", ClampMin="1", ClampMax="16", ToolTip="Most pieces on one row; a larger cluster wraps onto its own rows."))
 	int32 Columns = 6;
 
 	// Set by the tool's builder: one category, or All for the whole gallery. Never saved with the settings.

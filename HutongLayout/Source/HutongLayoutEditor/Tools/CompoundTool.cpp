@@ -299,14 +299,14 @@ FText UHutongCompoundTool::GetStagePromptText() const
 		if (!Plan.IsEmpty()) return Plan;
 		return bStamped
 			? LOCTEXT("PromptSECornerStamped",
-				"Click the ground to set the southeast corner (巽位), where the gate goes. The plot is stamped at the chosen size; pick Custom to drag one.")
+				"Click to set the southeast corner (巽位), where the gate goes. Pick Custom to drag the size.")
 			: LOCTEXT("PromptSECorner",
-				"Click the ground to set the southeast corner (巽位), where the gate goes. The plan shown is the ordinary plot.");
+				"Click to set the southeast corner (巽位), where the gate goes.");
 	}
 	return bStamped
-		? LOCTEXT("PromptStamped", "Click to lay the plot out at its stamped size. Hold R to turn it, Esc to cancel.")
+		? LOCTEXT("PromptStamped", "Click to place the plot. Hold R to turn it, Esc to cancel.")
 		: LOCTEXT("PromptSize",
-			"Move northwest to size the plot, then click to lay it out. It will not go below the smallest plot these settings can be spaced on. Esc to cancel.");
+			"Move northwest to size the plot, then click to place. Esc to cancel.");
 }
 
 TArray<FText> UHutongCompoundTool::GetStageNames() const
@@ -1157,11 +1157,11 @@ TArray<FText> UHutongCompoundTool::GetToolHelpLines() const
 	Lines[0] = NSLOCTEXT("HutongCompoundTool", "HelpDrag",
 		"Click to set the plot's southeast corner, move northwest to size it, click to lay it out. The orange edge is the street.");
 	Lines.Insert(NSLOCTEXT("HutongCompoundTool", "HelpNorth",
-		"The plan faces south by the compass, so R does nothing; set North Direction if north is not -X."), 1);
+		"R does nothing: the plan faces south. Set North Direction if north is not -X."), 1);
 	Lines.Insert(NSLOCTEXT("HutongCompoundTool", "HelpMin",
-		"The plot stops at the smallest size the settings allow; corridors or a deeper main hall (正房) raise it."), 1);
+		"The plot has a minimum size; corridors or a deeper main hall (正房) raise it."), 1);
 	Lines.Insert(NSLOCTEXT("HutongCompoundTool", "HelpWhat",
-		"Places a dozen separate, editable buildings on an ideal plan: for comparing types, not tracing a real plot."), 1);
+		"Places a dozen separate, editable buildings on an ideal plan."), 1);
 	return Lines;
 }
 

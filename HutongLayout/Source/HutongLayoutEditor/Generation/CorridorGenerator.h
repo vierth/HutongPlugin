@@ -16,10 +16,10 @@ struct FHutongCorridorParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(UIMin="200", UIMax="400", ClampMin="120", Units="cm", ToolTip="Height of the eave above the ground, in cm."))
 	double EaveHeight = 265.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Min Walk Width", UIMin="80", UIMax="160", ClampMin="70", Units="cm", ToolTip="Smallest clear walk width the dragged footprint may set, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Min Walk Width", UIMin="80", UIMax="160", ClampMin="70", Units="cm", ToolTip="Smallest clear walk width, in cm."))
 	double WalkWidthMin = 95.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Max Walk Width", UIMin="160", UIMax="500", ClampMin="90", Units="cm", ToolTip="Largest clear walk width the dragged footprint may set, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Max Walk Width", UIMin="160", UIMax="500", ClampMin="90", Units="cm", ToolTip="Largest clear walk width, in cm."))
 	double WalkWidthMax = 300.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Bay Spacing", UIMin="120", UIMax="300", ClampMin="80", Units="cm", ToolTip="Spacing between posts along the run, in cm."))
@@ -63,7 +63,7 @@ struct FHutongCorridorParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(HutongBasic, DisplayName="Has Bench Seat", ToolTip="Lays a bench seat on the lattice rail along each open side."))
 	bool bHasBench = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(HutongBasic, DisplayName="Lattice Rail (坐凳楣子)", ToolTip="Fills each bay of the open side with a low lattice panel, under the bench seat if there is one."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(HutongBasic, DisplayName="Lattice Rail (坐凳楣子)", ToolTip="Fills each open bay with a low lattice panel."))
 	bool bHasBenchLattice = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(DisplayName="Bench Height", EditCondition="bHasBench", UIMin="30", UIMax="70", ClampMin="15", Units="cm", ToolTip="Height of the bench seat above the floor, in cm."))
@@ -94,7 +94,7 @@ struct FHutongCorridorParams
 	double GetRoofRise() const { return FMath::Max(RoofRise, 5.0); }
 
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Rounding of the roof apex into a rolled ridge (捲棚); 0 keeps the fold. Never wider than the top step (頂步) between the two top purlins."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Apex Roll (捲棚)", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Rounding of the roof apex into a rolled ridge (捲棚); 0 keeps the fold."))
 	double RoofApexRoll = 0.45;
 
 	// The roll as built: a 四檁卷棚's crown spans only its 頂步, a fifth of the depth between the two 頂檁
@@ -115,10 +115,10 @@ struct FHutongCorridorParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="14", ClampMin="0", Units="cm", ToolTip="Section size of the rafter ends (椽頭), in cm; 0 omits them."))
 	double RafterEndSection = 5.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Models each tile course as geometry instead of texture."))
 	bool bHasTileRuns = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Exposed Frame (徹上明造)", ToolTip="No ceiling: the roof is a shell on rafters carried by the roof frame (梁架: beams, posts and purlins), open to view from below."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Exposed Frame (徹上明造)", ToolTip="Leaves the roof frame (梁架) open to view from below, with no ceiling."))
 	bool bExposedFrame = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="8", UIMax="40", ClampMin="4", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))

@@ -1,4 +1,5 @@
 #include "HutongLayoutEdModeToolkit.h"
+#include "Tools/HutongPanelCustomizations.h"
 #include "HutongLayoutCommands.h"
 #include "Tools/RectDragToolBase.h"
 #include "Tools/HutongPanelFilter.h"
@@ -46,6 +47,7 @@ void FHutongLayoutEdModeToolkit::Init(const TSharedPtr<IToolkitHost>& InitToolki
 	Args.bHideSelectionTip = true;
 	Args.bShowOptions = false;
 	Args.NameAreaSettings = FDetailsViewArgs::HideNameArea;
+	Args.ColumnWidth = NameColumnShare;
 	SelectedBuildingView = PropertyEditor.CreateDetailView(Args);
 
 	// Simple view: the tool panel and selected building show only what a student decides.
@@ -247,7 +249,7 @@ FText FHutongLayoutEdModeToolkit::GetPlacementPromptText() const
 {
 	const URectDragToolBase* Tool = GetActiveRectTool();
 	return Tool ? Tool->GetStagePromptText()
-		: LOCTEXT("NoToolPrompt", "Pick a tool above to start placing.");
+		: LOCTEXT("NoToolPrompt", "Pick a tool above.");
 }
 
 FSlateColor FHutongLayoutEdModeToolkit::GetPlacementPromptColor() const
@@ -268,8 +270,8 @@ FText FHutongLayoutEdModeToolkit::GetHoverHeaderText() const
 {
 	const URectDragToolBase* Tool = GetActiveRectTool();
 	return Tool && Tool->IsHoverUnderCursor()
-		? LOCTEXT("HoverHeader", "Under the cursor (already placed)")
-		: LOCTEXT("SelectedHeader", "Selected (already placed)");
+		? LOCTEXT("HoverHeader", "Under the cursor")
+		: LOCTEXT("SelectedHeader", "Selected");
 }
 
 EVisibility FHutongLayoutEdModeToolkit::GetHoverVisibility() const
@@ -303,13 +305,6 @@ void FHutongLayoutEdModeToolkit::OnShowAdvancedChanged(ECheckBoxState State)
 	// The filter is asked at row build, so rebuild the views.
 	if (DetailsView.IsValid()) DetailsView->ForceRefresh();
 	if (SelectedBuildingView.IsValid()) SelectedBuildingView->ForceRefresh();
-}
-
-FText FHutongLayoutEdModeToolkit::GetAdvancedHintText() const
-{
-	return GetShowAdvancedState() == ECheckBoxState::Checked
-		? LOCTEXT("AdvancedOn", "Every setting is showing.")
-		: LOCTEXT("AdvancedOff", "Showing the main choices. Proportions, structure and detailing are under advanced.");
 }
 
 EVisibility FHutongLayoutEdModeToolkit::GetHelpVisibility() const
@@ -454,11 +449,10 @@ TSharedRef<SWidget> FHutongLayoutEdModeToolkit::MakePlanRow() const
 				SNew(SCheckBox)
 				.IsChecked(this, &FHutongLayoutEdModeToolkit::GetPlanOnlyState)
 				.OnCheckStateChanged(Self, &FHutongLayoutEdModeToolkit::OnPlanOnlyChanged)
-				.ToolTipText(LOCTEXT("PlanOnlyTip",
-					"Places new buildings as footprint outlines with no geometry."))
+				.ToolTipText(LOCTEXT("PlanOnlyTip", "New buildings are placed as outlines only."))
 				[
 					SNew(STextBlock)
-					.Text(LOCTEXT("PlanOnly", "Layout only (outlines, no geometry)"))
+					.Text(LOCTEXT("PlanOnly", "Layout only (no geometry)"))
 					.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
 					.AutoWrapText(true)
 				]
@@ -469,8 +463,7 @@ TSharedRef<SWidget> FHutongLayoutEdModeToolkit::MakePlanRow() const
 				SNew(SCheckBox)
 				.IsChecked(this, &FHutongLayoutEdModeToolkit::GetShowPlansState)
 				.OnCheckStateChanged(Self, &FHutongLayoutEdModeToolkit::OnShowPlansChanged)
-				.ToolTipText(LOCTEXT("ShowPlansTip",
-					"Draws the footprint outline of every laid-out building."))
+				.ToolTipText(LOCTEXT("ShowPlansTip", "Show every building's footprint outline."))
 				[
 					SNew(STextBlock)
 					.Text(LOCTEXT("ShowPlans", "Show plan outlines"))
@@ -521,19 +514,11 @@ TSharedPtr<SWidget> FHutongLayoutEdModeToolkit::GetInlineContent() const
 						.AutoWidth()
 						.Padding(0.0f, 0.0f, 8.0f, 0.0f)
 						[
+							// What it places on hover: beside the title it wrapped down the panel.
 							SNew(STextBlock)
 							.Text(this, &FHutongLayoutEdModeToolkit::GetToolTitleText)
+							.ToolTipText(this, &FHutongLayoutEdModeToolkit::GetToolDescriptionText)
 							.Font(FAppStyle::Get().GetFontStyle("DetailsView.CategoryFontStyle"))
-						]
-						+ SHorizontalBox::Slot()
-						.FillWidth(1.0f)
-						.VAlign(VAlign_Center)
-						[
-							SNew(STextBlock)
-							.Text(this, &FHutongLayoutEdModeToolkit::GetToolDescriptionText)
-							.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
-							.ColorAndOpacity(FSlateColor::UseSubduedForeground())
-							.AutoWrapText(true)
 						]
 					]
 
@@ -641,21 +626,12 @@ TSharedPtr<SWidget> FHutongLayoutEdModeToolkit::GetInlineContent() const
 					SNew(SCheckBox)
 					.IsChecked(this, &FHutongLayoutEdModeToolkit::GetShowAdvancedState)
 					.OnCheckStateChanged(const_cast<FHutongLayoutEdModeToolkit*>(this), &FHutongLayoutEdModeToolkit::OnShowAdvancedChanged)
-					.ToolTipText(LOCTEXT("AdvancedTip", "Shows every setting of the tool, not just the main choices."))
+					.ToolTipText(LOCTEXT("AdvancedTip", "Show every setting, not just the main ones."))
 					[
 						SNew(STextBlock)
 						.Text(LOCTEXT("ShowAdvanced", "Show advanced settings"))
 						.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
 					]
-				]
-				+ SVerticalBox::Slot()
-				.AutoHeight()
-				[
-					SNew(STextBlock)
-					.Text(this, &FHutongLayoutEdModeToolkit::GetAdvancedHintText)
-					.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
-					.ColorAndOpacity(FSlateColor::UseSubduedForeground())
-					.AutoWrapText(true)
 				]
 			]
 
@@ -670,17 +646,6 @@ TSharedPtr<SWidget> FHutongLayoutEdModeToolkit::GetInlineContent() const
 		[
 			SNew(SVerticalBox)
 			.Visibility(this, &FHutongLayoutEdModeToolkit::GetScenePanelVisibility)
-
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(4.0f, 4.0f, 4.0f, 6.0f)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("SceneHeader", "What is already placed. Select buildings, change a Selection setting, then press its Apply."))
-				.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
-				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
-				.AutoWrapText(true)
-			]
 
 			+ SVerticalBox::Slot()
 			[
@@ -705,6 +670,18 @@ TSharedPtr<SWidget> FHutongLayoutEdModeToolkit::GetInlineContent() const
 				[
 					SelectedBuildingView.ToSharedRef()
 				]
+			]
+
+			// Which build is running, under everything: inside the settings list the selected
+			// building's view covered it.
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4.0f, 6.0f, 4.0f, 4.0f)
+			[
+				SNew(STextBlock)
+				.Text(HutongPanelCustomizations::PluginUpdatedText())
+				.Font(FAppStyle::Get().GetFontStyle("SmallFont"))
+				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
 			]
 		];
 }

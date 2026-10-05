@@ -1,4 +1,5 @@
 #include "PlaceLabelsExchange.h"
+#include "PlaceLabelsEdModeToolkit.h"
 #include "PlaceRegionActor.h"
 #include "PlaceRegionComponent.h"
 
@@ -114,6 +115,17 @@ bool FPlaceLabelsExchangeMetadataTest::RunTest(const FString& Parameters)
 		Guessed->Confidence == EPlaceConfidence::Probable);
 
 	World->DestroyWorld(/*bInformEngineOfWorld*/ false);
+	return true;
+}
+
+// The panel's foot names the last commit to change this plugin, its own stamp and not HutongLayout's.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPlaceLabelsPluginUpdatedTest,
+	"PlaceLabels.Panel.PluginUpdated",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPlaceLabelsPluginUpdatedTest::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("names a time"), FPlaceLabelsEdModeToolkit::PluginUpdatedText().ToString().StartsWith(TEXT("Plugin last updated 20")));
 	return true;
 }
 

@@ -1,4 +1,5 @@
 #include "Tools/EarPassageTool.h"
+#include "Tools/HutongPresetDefaults.h"
 #include "Generation/HutongBuildingComponent.h"
 #include "Generation/HutongPlanOutlineComponent.h"
 #include "Engine/StaticMeshActor.h"
@@ -29,10 +30,11 @@ void UHutongEarPassageTool::GetEffectiveRectBounds(
 	const FHutongEarPassageParams& P = Settings->Params;
 	if (!P.Room.bSnapToSuggested) return;
 
-	// Suggested frontage = room + passage strip; depth = room's.
+	// Suggested frontage = room + passage strip (or the passage alone); depth = room's.
+	const double Extra = P.HasRoom() ? P.GetStripWidth() : P.GetSuggestedWidth() - P.Room.SuggestedFrontage;
 	auto SnapSide = [&](double& Lo, double& Hi)
 	{
-		const double Want = P.Room.SnapExtent(FMath::Abs(Hi - Lo), P.GetStripWidth());
+		const double Want = P.Room.SnapExtent(FMath::Abs(Hi - Lo), Extra);
 		if (Hi > 0.0) Hi = Lo + Want;
 		else          Lo = Hi - Want;
 	};
@@ -44,19 +46,23 @@ void UHutongEarPassageTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongEarPassageToolProperties>(this);
 
-	RegisterSettings(Settings);
-
-	// Presets after params, as on every tool but the house.
+	// Registration order is panel order; presets before params, as on the house tool (the three kinds
+	// of ear room are a preset pick).
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("EarPassage"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongEarPassageToolProperties, Params));
 	Presets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
 	RegisterSettings(Presets);
+
+	RegisterSettings(Settings);
+
+	ApplyDefaultPreset(Presets, HutongPresets::DefaultEarRoomName());
 }
 
 FHutongEarPassageParams UHutongEarPassageTool::GetResolvedParams() const
 {
 	FHutongEarPassageParams P = Settings ? Settings->Params : FHutongEarPassageParams();
+	P.BayCountOverride = BayCountOverride;
 	if (bIsDragging)
 	{
 		double MinX, MinY, MaxX, MaxY;
@@ -65,9 +71,9 @@ FHutongEarPassageParams UHutongEarPassageTool::GetResolvedParams() const
 		P.Width = FMath::Max(bAlongX ? MaxX - MinX : MaxY - MinY, 1.0);
 		P.Depth = FMath::Max(bAlongX ? MaxY - MinY : MaxX - MinX, 1.0);
 	}
-	else if (P.Room.SuggestedFrontage > 0.0)
+	else if (P.GetSuggestedWidth() > 0.0)
 	{
-		P.Width = P.Room.SuggestedFrontage + P.GetStripWidth();
+		P.Width = P.GetSuggestedWidth();
 		P.Depth = FMath::Max(P.Room.GetSuggestedDepth(), 1.0);
 	}
 	P.Width = P.GetWidth();
@@ -78,27 +84,53 @@ FString UHutongEarPassageTool::GetPlacementDetail() const
 {
 	const FHutongEarPassageParams P = GetResolvedParams();
 	const FHutongSiheyuanParams R = P.RoomParams();
-	return FString::Printf(TEXT("room %d bays @ %.0f cm · passage (過道) %.0f cm clear at the %s end"),
-		R.GetBayCount(), R.Width / FMath::Max(R.GetBayCount(), 1), P.GetClearWidth(),
-		P.bPassageAtFarEnd ? TEXT("far") : TEXT("origin"));
+	const TCHAR* End = P.bPassageAtFarEnd ? TEXT("far") : TEXT("origin");
+	switch (P.Passageway)
+	{
+	case EHutongEarPassage::None:
+		return FString::Printf(TEXT("room %d bays @ %.0f cm%s"), R.GetBayCount(), R.Width / FMath::Max(R.GetBayCount(), 1),
+			R.bHasFrontDoorCenter ? TEXT("") : TEXT(" · no front door"));
+	case EHutongEarPassage::Whole:
+		return FString::Printf(TEXT("one-bay passage (過道) %.0f cm clear · outer wall at the %s end"), P.GetClearWidth(), End);
+	default:
+		return FString::Printf(TEXT("room %d bays @ %.0f cm · passage (過道) %.0f cm clear at the %s end"),
+			R.GetBayCount(), R.Width / FMath::Max(R.GetBayCount(), 1), P.GetClearWidth(), End);
+	}
 }
 
 FText UHutongEarPassageTool::GetKeyHintText() const
 {
-	return FText::Format(NSLOCTEXT("EarPassageTool", "KeyHint", "[ ] passage end · {0}"), Super::GetKeyHintText());
+	if (!Settings || !IsPlacingActive()) return Super::GetKeyHintText();
+	return Settings->Params.HasPassage()
+		? FText::Format(NSLOCTEXT("EarPassageTool", "KeyHint", "[ ] bays · Shift+[ ] passage end · {0}"), Super::GetKeyHintText())
+		: FText::Format(NSLOCTEXT("EarPassageTool", "KeyHintRoom", "[ ] bays · {0}"), Super::GetKeyHintText());
 }
 
 TArray<FText> UHutongEarPassageTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines.Insert(NSLOCTEXT("EarPassageTool", "HelpFacade",
-		"After the footprint, move toward the facade side, then click to place. [ and ] swap the passage end."), 1);
+		"Move toward the facade side, then click to place. [ and ] set one or two bays; Shift+[ and ] swap the passage end."), 1);
 	return Lines;
 }
 
-void UHutongEarPassageTool::AdjustBracketValue(int32 /*Delta*/, bool, bool)
+void UHutongEarPassageTool::AdjustBracketValue(int32 Delta, bool bShift, bool)
 {
-	if (Settings) Settings->Params.bPassageAtFarEnd = !Settings->Params.bPassageAtFarEnd;
+	if (!Settings) return;
+	// Shift: the passage's end. Plain: the room's bays, stepping off what the drag derives.
+	if (bShift)
+	{
+		if (Settings->Params.HasPassage()) Settings->Params.bPassageAtFarEnd = !Settings->Params.bPassageAtFarEnd;
+		return;
+	}
+	const int32 Current = GetResolvedParams().RoomParams().GetBayCount();
+	BayCountOverride = FMath::Clamp(Current + Delta, 1, FHutongEarPassageParams::MaxRoomBays);
+}
+
+void UHutongEarPassageTool::CancelPlacement()
+{
+	BayCountOverride = 0;
+	Super::CancelPlacement();
 }
 
 void UHutongEarPassageTool::AdjustHeight(double DeltaCm)
@@ -120,6 +152,7 @@ double UHutongEarPassageTool::GetPreviewHeight() const
 
 void UHutongEarPassageTool::OnPlacementStarted(const FVector& HitWorld)
 {
+	BayCountOverride = 0;
 	BaySide = ComputeDefaultBaySide();
 }
 
@@ -144,10 +177,14 @@ TArray<FText> UHutongEarPassageTool::GetStageNames() const
 
 FText UHutongEarPassageTool::GetStagePromptText() const
 {
+	if (bIsDragging && bRectCommitted && !bRotateModeActive && Settings && !Settings->Params.HasPassage())
+	{
+		return NSLOCTEXT("EarPassageTool", "PromptFacadeRoom", "Move to pick the side that gets the facade (green ticks), then click to place.");
+	}
 	if (bIsDragging && bRectCommitted && !bRotateModeActive)
 	{
 		return NSLOCTEXT("EarPassageTool", "PromptBaySide",
-			"Move to pick the side that gets the facade and the passage's doorway (green ticks), [ and ] swap the passage's end, then click to place.");
+			"Move to pick the facade and doorway side (green ticks), then click to place. [ ] bays, Shift+[ ] passage end.");
 	}
 	if (!bIsDragging && Presets && !Presets->Preset.IsEmpty() && GetPlanEditPromptText().IsEmpty())
 	{
@@ -195,11 +232,13 @@ void UHutongEarPassageTool::Render(IToolsContextRenderAPI* RenderAPI)
 	HutongGen::PlanBays::OntoFacade(Bays, BaySide, SizeX, SizeY);
 	DrawRectBaysAndFacing(PDI, BaySide, MinX, MinY, MaxX, MaxY, Bays.Boundaries, Bays.DoorBay);
 
+	if (!P.HasPassage()) return;
+
 	// Passage strip and clear way, dashed across the depth.
 	const double ClearA = Facade(P.GetClearX0());
 	const double ClearB = Facade(P.GetClearX0() + P.GetClearWidth());
-	const double StripA = Facade(P.bPassageAtFarEnd ? P.GetWidth() - P.GetStripWidth() : 0.0);
-	const double StripB = Facade(P.bPassageAtFarEnd ? P.GetWidth() : P.GetStripWidth());
+	const double StripA = Facade(P.GetStripX0());
+	const double StripB = Facade(P.GetStripX0() + P.GetStripWidth());
 	for (const double T : { StripA, StripB, ClearA, ClearB })
 	{
 		DrawDashedPreviewLine(PDI, At(T, DepthMin), At(T, DepthMax), StripColor, 2.5f, 28.0);
@@ -216,8 +255,9 @@ void UHutongEarPassageTool::Render(IToolsContextRenderAPI* RenderAPI)
 
 void UHutongEarPassageTool::BuildMeshForRect(double SizeX, double SizeY, FDynamicMesh3& OutMesh, EHutongDetail Level)
 {
-	UHutongEarPassageBuildingComponent::BuildEarPassageMesh(
-		Settings ? Settings->Params : FHutongEarPassageParams(), BaySide, SizeX, SizeY, OutMesh, Level);
+	FHutongEarPassageParams P = Settings ? Settings->Params : FHutongEarPassageParams();
+	P.BayCountOverride = BayCountOverride;
+	UHutongEarPassageBuildingComponent::BuildEarPassageMesh(P, BaySide, SizeX, SizeY, OutMesh, Level);
 }
 
 void UHutongEarPassageTool::AttachBuildingComponent(AStaticMeshActor* Actor, double SizeX, double SizeY)
@@ -228,6 +268,7 @@ void UHutongEarPassageTool::AttachBuildingComponent(AStaticMeshActor* Actor, dou
 	Building->FootprintX = SizeX;
 	Building->FootprintY = SizeY;
 	Building->BaySide = BaySide;
+	Building->BayCountOverride = BayCountOverride;
 	if (Appearance) Building->Palette = Appearance->Palette;
 	StampDetail(Building);
 	Actor->AddInstanceComponent(Building);

@@ -180,8 +180,16 @@ void UHutongLayoutModeSettings::ApplyDetailLevel()
 
 bool UHutongLayoutModeSettings::CanApplyConvert() const
 {
-	return bConvertPending && HutongDetailOps::FindConvertTarget(ConvertTo).IsValid()
-		&& HutongDetailOps::CollectSelected().Num() > 0;
+	// As Detail Level: lit while any selected building is not already the chosen type and preset, so a
+	// newly selected building can take the same choice without picking it again.
+	const TArray<HutongDetailOps::FConvertTarget>& Targets = HutongDetailOps::ConvertTargets();
+	const int32 Index = Targets.IndexOfByPredicate([this](const HutongDetailOps::FConvertTarget& T) { return T.Label == ConvertTo; });
+	if (Index == INDEX_NONE) return false;
+	// Exactly what Convert acts on: another type, or this type with another named preset.
+	return HutongDetailOps::CollectSelected().ContainsByPredicate([&](const UHutongBuildingComponent* B)
+	{
+		return HutongDetailOps::FindConvertTargetIndex(B) != Index || (!ConvertPreset.IsEmpty() && B->Preset != ConvertPreset);
+	});
 }
 
 void UHutongLayoutModeSettings::ApplyConvert()
@@ -190,7 +198,6 @@ void UHutongLayoutModeSettings::ApplyConvert()
 	if (!Target.IsValid()) return;
 	const int32 Changed = HutongDetailOps::Convert(HutongDetailOps::CollectSelected(), Target, ConvertPreset);
 	UE_LOG(LogTemp, Display, TEXT("Hutong: %d building(s) converted to %s."), Changed, *Target.Label);
-	bConvertPending = false;
 	RefreshCounts();
 }
 
@@ -429,10 +436,5 @@ void UHutongLayoutModeSettings::PostEditChangeProperty(FPropertyChangedEvent& Ev
 	if (Event.GetPropertyName() == GET_MEMBER_NAME_CHECKED(UHutongLayoutModeSettings, bPlansOverBuildings))
 	{
 		HutongPlanOutline::SetPlansOverBuildings(bPlansOverBuildings);
-	}
-	if (Event.GetPropertyName() == GET_MEMBER_NAME_CHECKED(UHutongLayoutModeSettings, ConvertTo)
-		|| Event.GetPropertyName() == GET_MEMBER_NAME_CHECKED(UHutongLayoutModeSettings, ConvertPreset))
-	{
-		bConvertPending = true;
 	}
 }

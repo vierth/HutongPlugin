@@ -14,7 +14,7 @@ struct FHutongPassageParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Eave Height", UIMin="180", UIMax="320", ClampMin="120", Units="cm", ToolTip="Height of the underside of the roof above the ground, in cm."))
 	double EaveHeight = 240.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Roof Rise", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="Rise of the ridge above the eave, in cm; zero derives it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Roof Rise", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="Rise of the ridge above the eave, in cm; zero for automatic."))
 	double RoofRise = 0.0;
 
 	double GetEaveHeight() const { return FMath::Max(EaveHeight, 60.0); }
@@ -29,7 +29,7 @@ struct FHutongPassageParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Bearing", UIMin="2", UIMax="30", ClampMin="1", Units="cm", ToolTip="How far the roof runs into the wall at each side, in cm."))
 	double Bearing = 8.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Tile Courses (壟)", ToolTip="Models each tile course on the roof as geometry."))
 	bool bHasTileRuns = true;
 
 	// Set by the layout. Width = clear way, wall face to wall face.

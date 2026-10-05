@@ -48,13 +48,13 @@ class UHutongCompoundToolProperties : public UInteractiveToolPropertySet
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="North Direction (yaw)", UIMin="-180", UIMax="180", ClampMin="-360", ClampMax="360", Units="deg", ToolTip="World yaw that is north, in degrees; zero is +X, 180 (the default) is -X."))
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="North Direction (yaw)", UIMin="-180", UIMax="180", ClampMin="-360", ClampMax="360", Units="deg", ToolTip="World yaw that faces north, in degrees; 0 is +X, 180 is -X."))
 	double NorthYawDeg = 180.0;
 
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Plot Size (院落尺度)", ToolTip="Stamps the plot at one of the three ordinary widths, sizing its buildings with it; Custom sizes the plot by dragging."))
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Plot Size (院落尺度)", ToolTip="Plot width: a standard size, or Custom to size by dragging."))
 	EHutongCompoundSize PlotSize = EHutongCompoundSize::Standard;
 
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(ToolTip="Number of courtyards the compound is laid out with."))
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(ToolTip="Number of courtyards."))
 	EHutongCompoundPlan Plan = EHutongCompoundPlan::ThreeCourtyards;
 
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Gate At East End", ToolTip="Puts the main gate (大門) at the east end of the street row."))
@@ -69,7 +69,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Court Walk", ToolTip="What shelters the inner court."))
 	EHutongCourtWalk CourtWalk = EHutongCourtWalk::WingVerandas;
 
-	UPROPERTY(EditAnywhere, Category="Plan", meta=(HutongAdvanced, DisplayName="Covered Corridor (遊廊) Walk Width", EditCondition="CourtWalk == EHutongCourtWalk::Corridor || CourtWalk == EHutongCourtWalk::Linked", UIMin="95", UIMax="300", ClampMin="60", Units="cm", ToolTip="Clear walk width the covered corridor (遊廊) ring is built at, in cm."))
+	UPROPERTY(EditAnywhere, Category="Plan", meta=(HutongAdvanced, DisplayName="Covered Corridor (遊廊) Walk Width", EditCondition="CourtWalk == EHutongCourtWalk::Corridor || CourtWalk == EHutongCourtWalk::Linked", UIMin="95", UIMax="300", ClampMin="60", Units="cm", ToolTip="Clear walk width of the covered corridor (遊廊) ring, in cm."))
 	double CorridorWalkWidth = HutongCanon::Compound::CorridorWalkWidthCm;
 
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Paved Path (甬路)", ToolTip="Lays a paved path (甬路) from the gate to the main hall (正房)."))
@@ -78,7 +78,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Water Jar (魚缸) and Flower Beds (花池)", ToolTip="Places a water jar (魚缸) and flower beds (花池) in the court."))
 	bool bHasCourtyardFurnishing = true;
 
-	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(HutongAdvanced, DisplayName="Main Gate (大門) Ridge Above Row", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="Height of the main gate's ridge above the street row's, in cm; zero leaves it."))
+	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(HutongAdvanced, DisplayName="Main Gate (大門) Ridge Above Row", UIMin="0", UIMax="120", ClampMin="0", Units="cm", ToolTip="Height of the main gate's ridge above the street row's, in cm; 0 keeps the gate's own height."))
 	double GateRidgeClearance = HutongCanon::Gate::RidgeAboveRowCm;
 
 	UPROPERTY(EditAnywhere, Category="Plan", meta=(DisplayName="Include Screen Wall (影壁) and the Gate Court", ToolTip="Adds a screen wall (影壁) and gate court inside the gate."))
@@ -113,7 +113,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(HutongAdvanced, DisplayName="Ordinary Rear Court (後院) Depth", UIMin="300", UIMax="1200", ClampMin="0", Units="cm", ToolTip="Depth of the rear court (後院) on an ordinary plot, in cm."))
 	double TypicalRearCourtDepth = HutongCanon::Compound::TypicalRearCourtDepthCm;
 
-	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(HutongAdvanced, DisplayName="Base Course Top (下鹼)", UIMin="60", UIMax="180", ClampMin="30", Units="cm", ToolTip="Height the base course (下鹼) tops out at round the perimeter, in cm."))
+	UPROPERTY(EditAnywhere, Category="Dimensions", meta=(HutongAdvanced, DisplayName="Base Course Top (下鹼)", UIMin="60", UIMax="180", ClampMin="30", Units="cm", ToolTip="Height of the base course (下鹼) round the perimeter, in cm."))
 	double BaseCourseTop = 110.0;
 
 	// Own setting: the params' Length is a hidden drag field, which left the 影壁 at 400.
@@ -132,10 +132,10 @@ public:
 	UPROPERTY(EditAnywhere, Category="Courtyard|Water Jar (魚缸)", meta=(HutongAdvanced, ShowOnlyInnerProperties, ToolTip="Parameters of the water jar (魚缸)."))
 	FHutongWaterJarParams WaterJar;
 
-	UPROPERTY(EditAnywhere, Category="Buildings|Main Hall (正房)", meta=(HutongAdvanced, ToolTip="Parameters of the main hall (正房), seven purlins with front and rear verandas (七檁前後廊), built wherever the plot is big enough for it."))
+	UPROPERTY(EditAnywhere, Category="Buildings|Main Hall (正房)", meta=(HutongAdvanced, ToolTip="Parameters of the main hall (正房) with front and rear verandas (七檁前後廊)."))
 	FHutongSiheyuanParams MainHall;
 
-	UPROPERTY(EditAnywhere, Category="Buildings|Main Hall, Small Court (正房 前廊後無廊)", meta=(HutongAdvanced, ToolTip="Parameters of the smaller main hall (正房), front veranda only (前廊後無廊), built when the plot is too small for the one with front and rear verandas."))
+	UPROPERTY(EditAnywhere, Category="Buildings|Main Hall, Small Court (正房 前廊後無廊)", meta=(HutongAdvanced, ToolTip="Parameters of the smaller main hall (正房) with a front veranda only (前廊後無廊), for small plots."))
 	FHutongSiheyuanParams SmallMainHall;
 
 	UPROPERTY(EditAnywhere, Category="Buildings|Ear Rooms (耳房)", meta=(HutongAdvanced, ToolTip="Parameters of the ear rooms (耳房) and wing ear rooms (廂耳房)."))

@@ -41,7 +41,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Heights", meta=(DisplayName="Keep Proportions", ToolTip="Editing one New Eave scales every other row by the same factor."))
 	bool bKeepProportions = false;
 
-	UPROPERTY(EditAnywhere, Category="Heights", meta=(DisplayName="Court Name", ToolTip="Name Assign Court gives the selection; suggested from the map tile under it."))
+	UPROPERTY(EditAnywhere, Category="Heights", meta=(DisplayName="Court Name", ToolTip="Court name Assign gives the selection."))
 	FString CourtName;
 
 	UPROPERTY(meta=(TransientToolProperty))

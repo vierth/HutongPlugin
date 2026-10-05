@@ -10,10 +10,10 @@ struct FHutongPathParams
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Path", meta=(DisplayName="Min Width", UIMin="60", UIMax="150", ClampMin="40", Units="cm", ToolTip="Smallest clear paving width the drag can set, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Path", meta=(DisplayName="Min Width", UIMin="60", UIMax="150", ClampMin="40", Units="cm", ToolTip="Smallest clear paving width, in cm."))
 	double WidthMin = 90.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Path", meta=(DisplayName="Max Width", UIMin="120", UIMax="400", ClampMin="60", Units="cm", ToolTip="Largest clear paving width the drag can set, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Path", meta=(DisplayName="Max Width", UIMin="120", UIMax="400", ClampMin="60", Units="cm", ToolTip="Largest clear paving width, in cm."))
 	double WidthMax = 220.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Path", meta=(DisplayName="Rise", UIMin="2", UIMax="30", ClampMin="0", Units="cm", ToolTip="Height of the paving above the surrounding ground, in cm."))

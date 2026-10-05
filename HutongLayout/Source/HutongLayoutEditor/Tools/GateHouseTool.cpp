@@ -225,9 +225,9 @@ TArray<FText> UHutongGateHouseTool::GetToolHelpLines() const
 	Lines.Insert(NSLOCTEXT("HutongGateHouseTool", "HelpSide",
 		"After the footprint, move toward the side the gate faces, then click to place."), 1);
 	Lines.Insert(NSLOCTEXT("HutongGateHouseTool", "HelpStyle",
-		"Style picks the gate type: how deep the door sits behind the columns."), 2);
+		"Style picks the gate type: how deep the door sits."), 2);
 	Lines.Insert(NSLOCTEXT("HutongGateHouseTool", "HelpRow",
-		"Start snapped to a row with Match Neighbouring Row on, and the gate takes the row's depth."), 3);
+		"With Match Neighbouring Row on, snap the first click to a row to take its depth."), 3);
 	return Lines;
 }
 
@@ -306,8 +306,7 @@ FText UHutongGateHouseTool::GetStagePromptText() const
 	if (bIsDragging && bRectCommitted && !bRotateModeActive)
 	{
 		return NSLOCTEXT("HutongGateHouseTool", "PromptSide",
-			"Move to the front or the back to pick which way the gate faces (green ticks), "
-			"then click to place. The two ends are gable walls and take no doorway.");
+			"Move to the front or back to pick which way the gate faces (green ticks), then click to place.");
 	}
 	return Super::GetStagePromptText();
 }

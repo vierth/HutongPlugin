@@ -13,14 +13,14 @@ class UHutongEarPassageToolProperties : public UInteractiveToolPropertySet
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, Category="Ear Room With Passage", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the ear room and the covered passage beside it."))
+	UPROPERTY(EditAnywhere, Category="Ear Room", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the ear room (耳房) and any covered passage (過道) beside or through it."))
 	FHutongEarPassageParams Params;
 
 	// Clamps contradictory room values as the house tool does.
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 };
 
-// 耳房 with a 過道 beside it, placed like a house: footprint, then the facade side.
+// 耳房, alone or with a 過道 beside or through it, placed like a house: footprint, then the facade side.
 UCLASS()
 class UHutongEarPassageTool : public URectDragToolBase
 {
@@ -32,6 +32,7 @@ public:
 	virtual void AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse) override;
 	virtual void AdjustHeight(double DeltaCm) override;
 	virtual double GetPreviewHeight() const override;
+	virtual void CancelPlacement() override;
 
 protected:
 	virtual void GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const override;
@@ -58,6 +59,9 @@ protected:
 	TObjectPtr<UHutongPresetProperties> Presets;
 
 	HutongGen::EBaySide BaySide = HutongGen::EBaySide::MinusY;
+
+	// Room bays set with [ and ] during the placement; zero derives (held at two).
+	int32 BayCountOverride = 0;
 };
 
 UCLASS()

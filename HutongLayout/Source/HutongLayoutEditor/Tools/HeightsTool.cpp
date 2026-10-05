@@ -28,7 +28,7 @@ void UHutongHeightsToolProperties::OpenWindow() { if (Tool.IsValid()) Tool->Open
 
 namespace
 {
-	void Notify(const FText& Text)
+	void NotifyHeights(const FText& Text)
 	{
 		FNotificationInfo Info(Text);
 		Info.ExpireDuration = 4.0f;
@@ -343,7 +343,7 @@ void UHutongHeightsTool::Apply()
 	}
 	if (Work.Num() == 0)
 	{
-		Notify(LOCTEXT("NothingToApply", "No height, preset or role differs from what is built."));
+		NotifyHeights(LOCTEXT("NothingToApply", "No height, preset or role differs from what is built."));
 		return;
 	}
 
@@ -385,7 +385,7 @@ void UHutongHeightsTool::Apply()
 
 	FString Message = FString::Printf(TEXT("Rebuilt %d building%s."), Set, Set == 1 ? TEXT("") : TEXT("s"));
 	if (Held.Num() > 0) Message += TEXT(" Held up to keep the doorway passable: ") + FString::Join(Held, TEXT("; ")) + TEXT(".");
-	Notify(FText::FromString(Message));
+	NotifyHeights(FText::FromString(Message));
 	RefreshRows(true);
 }
 
@@ -404,9 +404,9 @@ void UHutongHeightsTool::AssignCourt()
 	const FString Name = Settings->CourtName.TrimStartAndEnd();
 	const int32 Count = HutongCourts::Assign(Selected, Name);
 	if (Count == 0) return;
-	Notify(Name.IsEmpty()
+	NotifyHeights(Name.IsEmpty()
 		? FText::Format(LOCTEXT("CourtCleared", "Cleared the court of {0} building(s)."), Count)
-		: FText::Format(LOCTEXT("CourtAssigned", "{0} building(s) now in court {1}, filed under Courts in the Outliner (walls keep any other court they stand between)."), Count, FText::FromString(Name)));
+		: FText::Format(LOCTEXT("CourtAssigned", "{0} building(s) now in court {1}."), Count, FText::FromString(Name)));
 	RefreshRows(true);
 }
 
@@ -415,7 +415,7 @@ void UHutongHeightsTool::SelectCourt()
 	const TSet<FString> Courts = HutongCourts::CourtsOf(HutongDetailOps::CollectSelected());
 	if (Courts.Num() == 0)
 	{
-		Notify(LOCTEXT("NoCourt", "No selected building belongs to a court: name one with Assign."));
+		NotifyHeights(LOCTEXT("NoCourt", "No selected building belongs to a court: name one with Assign."));
 		return;
 	}
 	HutongCourts::SelectCourts(GetToolManager()->GetContextQueriesAPI()->GetCurrentEditingWorld(), Courts, /*bAdd*/ true);
@@ -438,17 +438,17 @@ TArray<FText> UHutongHeightsTool::GetToolHelpLines() const
 	Two.SetMaximumFractionalDigits(2);
 	TArray<FText> Lines;
 	Lines.Add(LOCTEXT("HelpSelect",
-		"Select buildings: click one, Shift+click to add more, or drag a box. The Eave Heights window lists them: type a New Eave, then Apply (one Ctrl+Z undoes it)."));
+		"Select buildings, type a New Eave in the Eave Heights window, then Apply."));
 	Lines.Add(FText::Format(LOCTEXT("HelpRank",
-		"Ranking in a court, from the house table: the Main Hall (正房) highest; Side House (廂房) {0} of its eave; Front Row (倒座房) {1}; Rear Row (後罩房) {2}; Ear Room (耳房) {3}."),
+		"Ranking: Main Hall (正房) highest; Side House (廂房) {0} of its eave; Front Row (倒座房) {1}; Rear Row (後罩房) {2}; Ear Room (耳房) {3}."),
 		FText::AsNumber(EaveRatio(EHutongCourtRole::SideHouse), &Two), FText::AsNumber(EaveRatio(EHutongCourtRole::FrontRow), &Two),
 		FText::AsNumber(EaveRatio(EHutongCourtRole::RearRow), &Two), FText::AsNumber(EaveRatio(EHutongCourtRole::EarRoom), &Two)));
 	Lines.Add(LOCTEXT("HelpKeep",
-		"Keep Proportions: change one row and every other row scales with it, so raising the Main Hall (正房) raises the whole court."));
+		"Keep Proportions: changing one row scales every other row."));
 	Lines.Add(LOCTEXT("HelpCourt",
-		"Courtyard units (院落): the name is suggested from the map tile under the selection (3M6_Courtyard_1, …); Assign stores it, Select Whole Court picks the unit up again. A building belongs to one court; a wall may be shared, and assigning adds the court to those it already has."));
+		"Courtyard units (院落): Assign stores the name on the selection; Select Whole Court selects the unit again."));
 	Lines.Add(FText::Format(LOCTEXT("HelpLimits",
-		"A gate house (大門) is suggested so its ridge stands {0} cm over the building beside it (select that row too); pick its rank in the Preset column. Walls are ranked by their top: lane walls (院牆) near the side houses, court walls (隔牆) lower. An eave too low for a walkable doorway is held at the lowest that passes."),
+		"A gate house (大門) is suggested {0} cm above its neighbour's ridge; pick its rank in the Preset column."),
 		FText::AsNumber(HutongCanon::Gate::RidgeAboveRowCm)));
 	Lines.Add(LOCTEXT("HelpEsc", "Esc puts the tool down and closes the window."));
 	return Lines;

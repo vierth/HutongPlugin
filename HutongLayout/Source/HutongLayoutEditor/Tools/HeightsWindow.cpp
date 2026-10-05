@@ -227,7 +227,7 @@ namespace
 			Two.SetMaximumFractionalDigits(2);
 			using namespace HutongPresets;
 			const FText Ranking = FText::Format(LOCTEXT("Ranking",
-				"Height is the eave (檐柱 top), or a wall's top. Ranking from the house table (judgement until a source gives relative heights): Main Hall (正房) 1 · Side House (廂房) {0} · Front Row (倒座房) {1} · Rear Row (後罩房) {2} · Ear Room (耳房) {3} · Lane Wall (院牆) {4} · Court Wall (隔牆) {5}. A gate house (大門) is suggested so its ridge stands {6} cm over the row beside it."),
+				"Height is the eave (檐柱 top), or a wall's top. Ranking: Main Hall (正房) 1 · Side House (廂房) {0} · Front Row (倒座房) {1} · Rear Row (後罩房) {2} · Ear Room (耳房) {3} · Lane Wall (院牆) {4} · Court Wall (隔牆) {5}. Gate house (大門) ridge: {6} cm over the row beside it."),
 				FText::AsNumber(EaveRatio(EHutongCourtRole::SideHouse), &Two), FText::AsNumber(EaveRatio(EHutongCourtRole::FrontRow), &Two),
 				FText::AsNumber(EaveRatio(EHutongCourtRole::RearRow), &Two), FText::AsNumber(EaveRatio(EHutongCourtRole::EarRoom), &Two),
 				FText::AsNumber(EaveRatio(EHutongCourtRole::LaneWall), &Two), FText::AsNumber(EaveRatio(EHutongCourtRole::CourtWall), &Two),
@@ -295,7 +295,7 @@ namespace
 						+ SHorizontalBox::Slot().AutoWidth().Padding(4.0f, 0.0f)
 						[
 							SNew(SButton).Text(LOCTEXT("Assign", "Assign To Selection"))
-							.ToolTipText(LOCTEXT("AssignTip", "Stores the name on every selected building; a wall adds it to the courts it already stands between. Empty clears."))
+							.ToolTipText(LOCTEXT("AssignTip", "Stores the name on every selected building; a wall adds it to its courts. Empty clears."))
 							.OnClicked_Lambda([this]() { if (Tool.IsValid()) Tool->AssignCourt(); return FReply::Handled(); })
 						]
 						+ SHorizontalBox::Slot().AutoWidth().Padding(4.0f, 0.0f)

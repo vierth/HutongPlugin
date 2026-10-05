@@ -22,7 +22,7 @@ namespace HutongGen
 	void BuildEarPassage(FDynamicMesh3& Mesh, const FHutongEarPassageParams& P, EHutongDetail Detail)
 	{
 		const double D = FMath::Max(P.Depth, 1.0);
-		const double Tw = P.GetOuterWallThickness();
+		const double Tw = P.OuterWall.GetThickness();
 		const double ClearX0 = P.GetClearX0();
 		const bool bBlock = Detail::IsMassing(Detail);
 
@@ -38,6 +38,7 @@ namespace HutongGen
 		}
 
 		// Room, at its own end of the frontage.
+		if (P.HasRoom())
 		{
 			FHutongSiheyuanParams R = P.RoomParams();
 			Detail::Apply(Detail, R);
@@ -46,9 +47,10 @@ namespace HutongGen
 			else BuildSiheyuan(Mesh, R);
 			HutongMeshUtils::TransformVerticesFrom(Mesh, V0, FTransform(FVector(P.GetRoomX0(), 0.0, 0.0)));
 		}
+		if (!P.HasPassage()) return;
 
-		// Outer wall along the passage, full depth.
-		if (P.bHasOuterWall)
+		// Walls along the passage, full depth: the outer one, and over the whole frontage the inner one.
+		auto AppendSideWall = [&](double WallX0)
 		{
 			FHutongWallParams Wp = P.OuterWall;
 			if (P.bRoofOverPassage)
@@ -65,10 +67,12 @@ namespace HutongGen
 			Detail::Apply(Detail, Wp);
 			const int32 V0 = Mesh.MaxVertexID();
 			BuildWall(Mesh, Wp);
-			// Built along X; yawed onto Y it lands at x in [-T, 0], then slid to the outer edge.
+			// Built along X; yawed onto Y it lands at x in [-T, 0], then slid to its edge.
 			HutongMeshUtils::YawVerticesFrom(Mesh, V0, FVector2d::ZeroVector, 90.0);
-			HutongMeshUtils::TransformVerticesFrom(Mesh, V0, FTransform(FVector(P.GetOuterWallX0() + Tw, 0.0, 0.0)));
-		}
+			HutongMeshUtils::TransformVerticesFrom(Mesh, V0, FTransform(FVector(WallX0 + Tw, 0.0, 0.0)));
+		};
+		if (P.bHasOuterWall) AppendSideWall(P.GetOuterWallX0());
+		if (P.GetInnerWallThickness() > 0.0) AppendSideWall(P.GetInnerWallX0());
 
 		// 隔牆 across the front of the way, with its doorway.
 		if (P.bHasClosingWall)
@@ -87,9 +91,15 @@ namespace HutongGen
 			Detail::Apply(Detail, R);
 			const double Pitch = FMath::Max(R.TileRowSpacing, 4.0);
 			const double RoomX0 = P.GetRoomX0();
+			const double SX0 = P.GetStripX0();
+			if (!P.HasRoom())
+			{
+				// The passage is the whole building: closed at both gables, a row on the middle.
+				AppendHouseRoofRun(Mesh, R, SX0, SX0 + P.GetStripWidth(), false, false, SX0 + 0.5 * P.GetStripWidth());
+				return;
+			}
 			// The room lays rows from its closed gable; the passage continues from there.
 			const double Phase = P.bPassageAtFarEnd ? RoomX0 + 0.5 * Pitch : RoomX0 + P.GetRoomWidth() - 0.5 * Pitch;
-			const double SX0 = P.GetStripX0();
 			AppendHouseRoofRun(Mesh, R, SX0, SX0 + P.GetStripWidth(),
 				/*bOpenLow*/ P.bPassageAtFarEnd, /*bOpenHigh*/ !P.bPassageAtFarEnd, Phase);
 			return;

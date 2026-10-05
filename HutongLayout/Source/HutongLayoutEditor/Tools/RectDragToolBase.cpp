@@ -1,4 +1,7 @@
 #include "Tools/RectDragToolBase.h"
+#include "Tools/HutongContextMenu.h"
+#include "EngineUtils.h"
+#include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Engine/StaticMeshActor.h"
 #include "Tools/HutongWallRun.h"
 #include "HutongLayoutEdMode.h"
@@ -391,12 +394,13 @@ TArray<FText> URectDragToolBase::GetToolHelpLines() const
 	TArray<FText> Lines = {
 		LOCTEXT("HelpAnchor", "Click the ground to anchor a corner, move, then click to set the footprint."),
 		LOCTEXT("HelpCancel", "Esc cancels the placement; Esc again puts the tool down. Ctrl+Z undoes the last placement."),
-		LOCTEXT("HelpHeight", "- and = raise or lower the height (Shift finer, Ctrl coarser). The corner posts show it."),
-		FText::Format(LOCTEXT("HelpSnap", "Placements snap to the buildings already down. Tap and release {0} before clicking to place one freely."), SnapKeyName()),
+		LOCTEXT("HelpHeight", "- and = raise or lower the height (Shift finer, Ctrl coarser)."),
+		FText::Format(LOCTEXT("HelpSnap", "Placements snap to placed buildings. Tap {0} before clicking to place freely."), SnapKeyName()),
 		LOCTEXT("HelpEdge", "Click on a footprint's edge to start a new one against it; Ctrl+click to place inside it."),
 		LOCTEXT("HelpSelect", "Drag a box on open ground to select buildings (Shift adds). Drag a selected footprint to move it, its handles to resize, its ring to rotate."),
-		LOCTEXT("HelpFacade", "With buildings selected and nothing being placed: [ and ] one bay fewer or more, Shift+[ and ] turn the facade, F flips it, G puts a gate in a wall or takes it out."),
-		LOCTEXT("HelpScene", "Generate, change detail, convert, export and import what is already placed on the Scene tab."),
+		LOCTEXT("HelpFacade", "With buildings selected: [ and ] remove or add a bay, Shift+[ and ] turn the facade, F flips it, G toggles a wall's gate."),
+		LOCTEXT("HelpCycle", "With buildings selected: P opens a preset menu, T a type menu. Shift+P and Shift+T step to the next; Enter applies."),
+		LOCTEXT("HelpScene", "The Scene tab generates, converts, exports, imports and changes the detail of placed buildings."),
 	};
 	if (HasRotateKey())
 	{
@@ -405,8 +409,8 @@ TArray<FText> URectDragToolBase::GetToolHelpLines() const
 	const UHutongLayoutModeSettings* Settings = UHutongLayoutEdMode::GetActiveSettings();
 	if (Settings && Settings->bShowAdvancedSettings)
 	{
-		Lines.Add(LOCTEXT("HelpDetail", "Detail Level sets how much of the next placement is built: Block (塊) a massing block, Far (遠) no ornament, Near (近) the full building."));
-		Lines.Add(LOCTEXT("HelpAngle", "Adopt Neighbour Angle (under Snapping) turns a snapped placement onto its neighbour's line."));
+		Lines.Add(LOCTEXT("HelpDetail", "Detail Level: Block (塊) massing only, Far (遠) no ornament, Near (近) full building."));
+		Lines.Add(LOCTEXT("HelpAngle", "Adopt Neighbour Angle turns a snapped placement onto its neighbour's line."));
 	}
 	return Lines;
 }
@@ -419,6 +423,10 @@ FText URectDragToolBase::GetKeyHintText() const
 	if (IsPlacingActive() || IsEditingPlan())
 	{
 		return FText::Format(LOCTEXT("KeyHintPlacing", "- = height · R rotate · {0} · Esc cancel"), SnapHint);
+	}
+	if (HutongDetailOps::CollectSelected().Num() > 0)
+	{
+		return FText::Format(LOCTEXT("KeyHintIdleSelected", "- = height · {0} · P preset · T type · Esc put the tool down"), SnapHint);
 	}
 	return FText::Format(LOCTEXT("KeyHintIdle", "- = height · {0} · Esc put the tool down"), SnapHint);
 }
@@ -450,34 +458,34 @@ FText URectDragToolBase::GetPlanEditPromptText() const
 	case EPlanEdit::Move:
 		return FText::Format(LOCTEXT("PromptPlanMove", "Moving: release to drop.{0} Esc puts it back."), Free);
 	case EPlanEdit::Resize:
-		return FText::Format(LOCTEXT("PromptPlanResize", "Resizing: release to set. The far edge stays put.{0} Esc puts it back."), Free);
+		return FText::Format(LOCTEXT("PromptPlanResize", "Resizing: release to set.{0} Esc puts it back."), Free);
 	case EPlanEdit::Rotate:
 		// The key's clause is about position snapping; nothing is positioned here.
-		return LOCTEXT("PromptPlanRotate", "Rotating about the centre: release to set. Shift snaps to 5°. Esc puts it back.");
+		return LOCTEXT("PromptPlanRotate", "Rotating: release to set. Shift snaps to 5°. Esc puts it back.");
 	case EPlanEdit::Opening:
-		return LOCTEXT("PromptPlanOpening", "Sliding the doorway along the wall: release to set. A built wall rebuilds on release. Esc puts it back.");
+		return LOCTEXT("PromptPlanOpening", "Sliding the doorway: release to set. Esc puts it back.");
 	case EPlanEdit::Marquee:
-		return LOCTEXT("PromptPlanMarquee", "Selecting: release to select the buildings the box touches. Shift adds them to the selection.");
+		return LOCTEXT("PromptPlanMarquee", "Selecting: release to select. Shift adds.");
 	case EPlanEdit::RunVertex:
-		return FText::Format(LOCTEXT("PromptPlanRunVertex", "Moving the end of the wall: it slides along a neighbour's face when it snaps to one, and every leg meeting here follows and stays melded. Shift keeps the leg's bearing. Release to set, a built wall rebuilds on release.{0} Esc puts it back."), Free);
+		return FText::Format(LOCTEXT("PromptPlanRunVertex", "Moving the wall end: release to set. Shift keeps the leg's bearing.{0} Esc puts it back."), Free);
 	case EPlanEdit::Skew:
 	{
 		const UHutongBuildingComponent* B = EditedPlan.Get();
 		const bool bEnds = !B || B->FootprintSkew.Mode == EHutongSkewMode::Ends;
 		return bEnds
-			? FText::Format(LOCTEXT("PromptPlanSkewEnds", "Moving the corner (端斜): it goes along the run or across it, whichever way you first pull, one way per drag; the body stays put. Release to set, rebuilds on release.{0} Esc puts it back. Whole-footprint mode is in the Details panel under Corner Offsets."), Free)
-			: FText::Format(LOCTEXT("PromptPlanSkewWhole", "Angling the corner (斜角): release to set. The other three corners stay put; a built building rebuilds on release.{0} Esc puts it back."), Free);
+			? FText::Format(LOCTEXT("PromptPlanSkewEnds", "Moving the corner (端斜) along or across the run: release to set.{0} Esc puts it back."), Free)
+			: FText::Format(LOCTEXT("PromptPlanSkewWhole", "Angling the corner (斜角): release to set.{0} Esc puts it back."), Free);
 	}
 	default:
 		break;
 	}
 	if (HoverPlanHandle >= PlanHandleBay)
 	{
-		return LOCTEXT("PromptDivideMarker", "Click to divide the building at this bay line (分間): the bays before it stay, the rest become a second building on the same line, each with its own gable and door.");
+		return LOCTEXT("PromptDivideMarker", "Click to divide the building at this bay line (分間).");
 	}
 	if (HoverPlanHandle == PlanHandleFuseStart || HoverPlanHandle == PlanHandleFuseEnd)
 	{
-		return LOCTEXT("PromptFuseMarker", "Click to fuse this building with the one standing end to end on this line (合併): one building, the bays summed, the wall between them gone.");
+		return LOCTEXT("PromptFuseMarker", "Click to fuse with the building end to end on this line (合併).");
 	}
 	if (const UHutongBuildingComponent* Selected = GetSelectedBuilding())
 	{
@@ -485,16 +493,16 @@ FText URectDragToolBase::GetPlanEditPromptText() const
 		Selected->GetPlanOpenings(Openings);
 		if (!Selected->bPlanOnly && Openings.Num() > 0)
 		{
-			return LOCTEXT("PromptWallSelected", "Wall selected: drag the doorway marker to slide it along the run; Shift-drag a corner to cut the end on the bias (斜角). G toggles the gate. Click open ground to place.");
+			return LOCTEXT("PromptWallSelected", "Wall selected: drag the doorway marker to slide it, Shift-drag a corner to cut the end (斜角), G toggles the gate. Click open ground to place.");
 		}
 		if (!Selected->bPlanOnly)
 		{
-			return LOCTEXT("PromptBuiltSelected", "Building selected: Shift-drag a corner to angle the footprint (斜角); it rebuilds on release. [ and ] change the bays, Shift+[ ] turns the facade. Click open ground to place.");
+			return LOCTEXT("PromptBuiltSelected", "Building selected: Shift-drag a corner to angle it (斜角), [ ] change bays, Shift+[ ] turns the facade. Click open ground to place.");
 		}
 	}
 	if (GetSelectedPlanBuilding())
 	{
-		return LOCTEXT("PromptPlanSelectedSkew", "Laid-out building selected: drag a handle to resize (an edge shared with a laid-out neighbour slides the join; hold Ctrl while dragging to move this one alone), Shift-drag a corner to angle it (斜角), the ring to rotate, the inside to move, a doorway marker to slide it; [ and ] change the bays, Shift+[ ] turns the facade, G a wall's gate. Click open ground to place another.");
+		return LOCTEXT("PromptPlanSelectedSkew", "Building selected: drag a handle to resize (Ctrl moves this one alone), Shift-drag a corner to angle it (斜角), the ring to rotate, the inside to move, a doorway marker to slide it; [ ] change bays, Shift+[ ] turns the facade, G toggles a wall's gate. Click open ground to place.");
 	}
 	return FText::GetEmpty();
 }
@@ -509,7 +517,7 @@ FText URectDragToolBase::GetStagePromptText() const
 	}
 	if (bRotateModeActive)
 	{
-		return LOCTEXT("PromptRotate", "Rotating: move the mouse to swing the footprint, Shift snaps to 5°. Release R to keep the angle.");
+		return LOCTEXT("PromptRotate", "Rotating: move the mouse to turn the footprint, Shift snaps to 5°. Release R to keep it.");
 	}
 	if (!bRectCommitted)
 	{
@@ -520,9 +528,12 @@ FText URectDragToolBase::GetStagePromptText() const
 
 void URectDragToolBase::DrawHUD(FCanvas* Canvas, IToolsContextRenderAPI* RenderAPI)
 {
+	// Under every readout drawn after it.
+	DrawBuildingLabels(Canvas, RenderAPI);
 	if (!bIsDragging)
 	{
 		DrawHoverInspectionHUD(Canvas, RenderAPI);
+		DrawPendingCycleBanner(Canvas);
 		return;
 	}
 	if (Canvas == nullptr || RenderAPI == nullptr) return;
@@ -1218,13 +1229,16 @@ void URectDragToolBase::UpdateHoverInspectionFromViewport()
 	}
 }
 
-FText URectDragToolBase::GetHoverSummaryText() const
+FText URectDragToolBase::GetHoverSummaryText(bool bWithPending) const
 {
 	// Hovered, else selected: the readout stays when the cursor moves onto a handle.
 	const UHutongBuildingComponent* Building = HudBuilding.Get();
 	if (Building == nullptr) Building = GetSelectedBuilding();
 	const AActor* Actor = Building ? Building->GetOwner() : nullptr;
 	if (Actor == nullptr) return FText::GetEmpty();
+	// A pending P / T change heads the readout, so the panel and HUD both carry it.
+	const FText PendingText = bWithPending ? GetPendingCycleText() : FText::GetEmpty();
+	const FString PendingLine = PendingText.IsEmpty() ? FString() : PendingText.ToString() + TEXT("\n");
 
 	const FVector2D Size = Building->GetFootprintSize();
 	const FVector Loc = Actor->GetActorLocation();
@@ -1267,8 +1281,8 @@ FText URectDragToolBase::GetHoverSummaryText() const
 	const FString SkewText = Building->HasFootprintSkew() ? FString(TEXT("  ·  skewed (斜角)")) : FString();
 
 	return FText::FromString(FString::Printf(
-		TEXT("%s\n%.0f x %.0f cm%s%s  ·  %.0f°\n%s  ·  %s  ·  %s\n%s%s\nat %.0f, %.0f, %.0f cm"),
-		*What, Size.X, Size.Y, *BayText, *SkewText, Actor->GetActorRotation().Yaw,
+		TEXT("%s%s\n%.0f x %.0f cm%s%s  ·  %.0f°\n%s  ·  %s  ·  %s\n%s%s\nat %.0f, %.0f, %.0f cm"),
+		*PendingLine, *What, Size.X, Size.Y, *BayText, *SkewText, Actor->GetActorRotation().Yaw,
 		*Built, *DetailText, *Actor->GetActorLabel(),
 		*Confidence, *NoteLine,
 		Loc.X, Loc.Y, Loc.Z));
@@ -1357,7 +1371,7 @@ void URectDragToolBase::DrawHoverInspectionHUD(FCanvas* Canvas, IToolsContextRen
 
 	// Same text as the mode panel (headless-testable), split into lines; written once.
 	TArray<FString> Lines;
-	GetHoverSummaryText().ToString().ParseIntoArray(Lines, TEXT("\n"));
+	GetHoverSummaryText(/*bWithPending*/ false).ToString().ParseIntoArray(Lines, TEXT("\n"));
 	if (Lines.Num() == 0) return;
 
 	// Slate font, not GetMediumFont: the bitmap medium font has no CJK glyphs.
@@ -1567,120 +1581,375 @@ namespace
 
 bool URectDragToolBase::TurnSelectedFacing(int32 Delta)
 {
-	if (Delta == 0) return false;
-	// Sides in turning order (−Y, +X, +Y, −X): a step is an addition.
-	return SetSelectedFacing(LOCTEXT("TurnFacing", "Turn Building Facade"),
-		[Delta](const UHutongBuildingComponent& B, EHutongBaySide Side)
-		{
-			return (EHutongBaySide)((((int32)Side + Delta * B.FacadeTurnStep()) % 4 + 4) % 4);
-		});
+	return HutongDetailOps::TurnFacing(HutongDetailOps::CollectSelected(), Delta);
 }
 
 bool URectDragToolBase::FlipSelectedFacing()
 {
-	return SetSelectedFacing(LOCTEXT("FlipFacing", "Flip Building Facade"),
-		[](const UHutongBuildingComponent&, EHutongBaySide Side) { return HutongGen::BaySide::Opposite(Side); });
-}
-
-namespace
-{
-	TArray<UHutongBuildingComponent*> SelectedBuildings()
-	{
-		TArray<UHutongBuildingComponent*> Out;
-		USelection* Selected = GEditor ? GEditor->GetSelectedActors() : nullptr;
-		for (int32 i = 0; Selected && i < Selected->Num(); ++i)
-		{
-			AActor* Actor = Cast<AActor>(Selected->GetSelectedObject(i));
-			if (UHutongBuildingComponent* B = Actor ? Actor->FindComponentByClass<UHutongBuildingComponent>() : nullptr) Out.Add(B);
-		}
-		return Out;
-	}
-
-	// Same seam as a panel edit: built re-bakes, laid-out redraws.
-	void RebuildEdited(UHutongBuildingComponent* B)
-	{
-		B->Rebuild();
-		B->ApplyPlacementAttachments();
-	}
+	return HutongDetailOps::FlipFacing(HutongDetailOps::CollectSelected());
 }
 
 bool URectDragToolBase::AdjustSelectedBays(int32 Delta)
 {
-	TArray<UHutongBuildingComponent*> Work = SelectedBuildings();
-	Work.RemoveAll([](const UHutongBuildingComponent* B) { return HutongDetailOps::GetBayCountOverride(B) == INDEX_NONE; });
-	if (Work.Num() == 0 || Delta == 0) return false;
-
-	const FScopedTransaction Transaction(LOCTEXT("AdjustBays", "Change Bay Count"));
-	for (UHutongBuildingComponent* B : Work)
-	{
-		// A derived count is seeded from the bays drawn, so the first press steps from what is seen.
-		FHutongPlanBays Bays;
-		B->GetPlanBays(Bays);
-		const int32 Forced = HutongDetailOps::GetBayCountOverride(B);
-		const int32 Current = Forced > 0 ? Forced : FMath::Max(1, Bays.Boundaries.Num() - 1);
-		const int32 Next = FMath::Max(1, Current + Delta);
-		if (Next == Current) continue;
-		if (B->GetOwner()) B->GetOwner()->Modify();
-		B->Modify();
-		HutongDetailOps::SetBayCountOverride(B, Next);
-		RebuildEdited(B);
-	}
-	return true;
+	return HutongDetailOps::AdjustBays(HutongDetailOps::CollectSelected(), Delta);
 }
 
 bool URectDragToolBase::ToggleSelectedGate()
 {
-	TArray<UHutongWallBuildingComponent*> Walls;
-	for (UHutongBuildingComponent* B : SelectedBuildings())
-	{
-		if (UHutongWallBuildingComponent* W = Cast<UHutongWallBuildingComponent>(B)) Walls.Add(W);
-	}
-	if (Walls.Num() == 0) return false;
+	return HutongDetailOps::ToggleGate(HutongDetailOps::CollectSelected());
+}
 
-	const FScopedTransaction Transaction(LOCTEXT("ToggleGate", "Toggle Wall Gate"));
-	for (UHutongWallBuildingComponent* W : Walls)
+bool URectDragToolBase::IsPendingFor(const TArray<UHutongBuildingComponent*>& Selected) const
+{
+	if (Selected.Num() == 0 || Selected.Num() != Pending.Buildings.Num()) return false;
+	return !Selected.ContainsByPredicate([this](const UHutongBuildingComponent* B) { return !Pending.Buildings.Contains(B); });
+}
+
+void URectDragToolBase::HoldPendingFor(const TArray<UHutongBuildingComponent*>& Selected)
+{
+	if (IsPendingFor(Selected)) return;
+	Pending = FPendingCycle();
+	for (UHutongBuildingComponent* B : Selected) Pending.Buildings.Add(B);
+}
+
+TArray<UHutongBuildingComponent*> URectDragToolBase::PendingWork(const TArray<UHutongBuildingComponent*>& Selected) const
+{
+	return HutongDetailOps::NeedingChange(Selected, Pending.TypeIndex, Pending.Preset);
+}
+
+bool URectDragToolBase::CycleSelectedPreset(int32 Delta)
+{
+	const TArray<UHutongBuildingComponent*> Selected = HutongDetailOps::CollectSelected();
+	if (Selected.Num() == 0 || Delta == 0) return false;
+	HoldPendingFor(Selected);
+	Pending.bArmed = false;
+	Pending.Note = FText::GetEmpty();
+
+	// Presets of the chosen type, else of the selection's own, which must then be one type.
+	FName Key = NAME_None;
+	if (Pending.TypeIndex != INDEX_NONE)
 	{
-		if (W->GetOwner()) W->GetOwner()->Modify();
-		W->Modify();
-		// Any opening off; none, a gate (牆垣門) on.
-		const bool bOpen = W->Params.bHasGate || W->Params.Doorway != EHutongWallDoorway::None;
-		W->Params.bHasGate = !bOpen;
-		if (bOpen) W->Params.Doorway = EHutongWallDoorway::None;
-		RebuildEdited(W);
+		Key = HutongDetailOps::PresetKeyOf(HutongDetailOps::ConvertTargets()[Pending.TypeIndex]);
 	}
+	else
+	{
+		Key = Selected[0]->GetPresetKey();
+		if (Selected.ContainsByPredicate([Key](const UHutongBuildingComponent* B) { return B->GetPresetKey() != Key; }))
+		{
+			Pending.Note = LOCTEXT("CycleMixed", "The selection mixes building types: press T to pick one type first.");
+			return true;
+		}
+	}
+	const TArray<FString> Names = UHutongPresetLibrary::Get()->GetPresetNames(Key);
+	if (Names.Num() == 0)
+	{
+		Pending.Note = LOCTEXT("CycleNoPresets", "This building type has no presets.");
+		return true;
+	}
+	const FString& Current = Pending.bChosen ? Pending.Preset : Selected[0]->Preset;
+	const int32 Index = Names.IndexOfByKey(Current);
+	const int32 Next = Index == INDEX_NONE ? (Delta > 0 ? 0 : Names.Num() - 1) : ((Index + Delta) % Names.Num() + Names.Num()) % Names.Num();
+	Pending.Preset = Names[Next];
+	Pending.bChosen = true;
 	return true;
+}
+
+bool URectDragToolBase::CycleSelectedType(int32 Delta)
+{
+	const TArray<UHutongBuildingComponent*> Selected = HutongDetailOps::CollectSelected();
+	const TArray<HutongDetailOps::FConvertTarget>& Targets = HutongDetailOps::ConvertTargets();
+	if (Selected.Num() == 0 || Delta == 0 || Targets.Num() == 0) return false;
+	HoldPendingFor(Selected);
+	Pending.bArmed = false;
+	Pending.Note = FText::GetEmpty();
+
+	const int32 Own = HutongDetailOps::FindConvertTargetIndex(Selected[0]);
+	if (Own == INDEX_NONE) return true;
+	// Only a type every selected building may become, as the menu offers.
+	if (!HutongDetailOps::CanAllBecome(Selected, Targets[Own]))
+	{
+		Pending.Note = LOCTEXT("CycleNoCommonType", "The selected buildings cannot become one type.");
+		return true;
+	}
+	int32 Next = Pending.TypeIndex != INDEX_NONE ? Pending.TypeIndex : Own;
+	do { Next = ((Next + Delta) % Targets.Num() + Targets.Num()) % Targets.Num(); }
+	while (Next != Own && !HutongDetailOps::CanAllBecome(Selected, Targets[Next]));
+	Pending.TypeIndex = Next;
+	Pending.bChosen = true;
+	// Back on its own type: its own preset. Else the type's first, so P steps on from there.
+	if (Pending.TypeIndex == Own)
+	{
+		Pending.Preset = Selected[0]->Preset;
+		return true;
+	}
+	const TArray<FString> Names = UHutongPresetLibrary::Get()->GetPresetNames(HutongDetailOps::PresetKeyOf(Targets[Pending.TypeIndex]));
+	Pending.Preset = Names.Num() > 0 ? Names[0] : FString();
+	return true;
+}
+
+void URectDragToolBase::ChooseForSelection(int32 TypeIndex, const FString& Preset)
+{
+	const TArray<UHutongBuildingComponent*> Selected = HutongDetailOps::CollectSelected();
+	if (Selected.Num() == 0) return;
+	Pending = FPendingCycle();
+	for (UHutongBuildingComponent* B : Selected) Pending.Buildings.Add(B);
+	Pending.TypeIndex = TypeIndex;
+	Pending.Preset = Preset;
+	Pending.bChosen = true;
+	// Applies now, or holds the warning in the banner for Enter.
+	ConfirmSelectedCycle();
+}
+
+bool URectDragToolBase::OpenSelectedMenu(bool bTypes, const FVector2D& ScreenPosition)
+{
+	const TArray<UHutongBuildingComponent*> Selected = HutongDetailOps::CollectSelected();
+	if (Selected.Num() == 0 || !FSlateApplication::IsInitialized()) return false;
+	const TSharedPtr<SWindow> Window = FSlateApplication::Get().GetActiveTopLevelWindow();
+	if (!Window.IsValid()) return false;
+	CancelSelectedCycle();
+
+	const TWeakObjectPtr<URectDragToolBase> WeakThis(this);
+	auto OnPick = [WeakThis](int32 TypeIndex, const FString& Preset)
+	{
+		if (WeakThis.IsValid()) WeakThis->ChooseForSelection(TypeIndex, Preset);
+	};
+	// Not searchable: the P / T that opened it would arrive as the first letter of a search.
+	FMenuBuilder Menu(/*bShouldCloseWindowAfterMenuSelection*/ true, nullptr, nullptr, /*bCloseSelfOnly*/ false,
+		&FCoreStyle::Get(), /*bSearchable*/ false, NAME_None, /*bRecursivelySearchable*/ false);
+	if (bTypes) HutongContextMenu::FillTypeMenu(Menu, Selected, OnPick);
+	else HutongContextMenu::FillPresetMenu(Menu, Selected, OnPick);
+
+	FSlateApplication::Get().PushMenu(Window.ToSharedRef(), FWidgetPath(), Menu.MakeWidget(), ScreenPosition,
+		FPopupTransitionEffect(FPopupTransitionEffect::ContextMenu));
+	return true;
+}
+
+bool URectDragToolBase::ConfirmSelectedCycle()
+{
+	const TArray<UHutongBuildingComponent*> Selected = HutongDetailOps::CollectSelected();
+	if (!IsPendingFor(Selected) || !Pending.bChosen) return false;
+	const TArray<UHutongBuildingComponent*> Work = PendingWork(Selected);
+	if (Work.Num() == 0)
+	{
+		Pending = FPendingCycle();
+		return true;
+	}
+
+	// First Enter: what would be lost. Each building against its own preset, so generated values on a
+	// building placed without one count too.
+	if (!Pending.bArmed)
+	{
+		Pending.Customized = HutongDetailOps::CustomizedAcross(Work);
+		if (Pending.Customized.Num() > 0)
+		{
+			Pending.bArmed = true;
+			return true;
+		}
+	}
+
+	HutongDetailOps::ChangeTypeOrPreset(Work, Pending.TypeIndex, Pending.Preset);
+	Pending = FPendingCycle();
+	return true;
+}
+
+bool URectDragToolBase::CancelSelectedCycle()
+{
+	const bool bHeld = IsPendingFor(HutongDetailOps::CollectSelected()) && (Pending.bChosen || !Pending.Note.IsEmpty());
+	Pending = FPendingCycle();
+	return bHeld;
+}
+
+bool URectDragToolBase::GetPendingCycleLines(FText& OutTitle, TArray<FText>& OutDetails, bool& bOutWarning) const
+{
+	OutDetails.Reset();
+	bOutWarning = false;
+	const TArray<UHutongBuildingComponent*> Selected = HutongDetailOps::CollectSelected();
+	if (!IsPendingFor(Selected)) return false;
+	if (!Pending.Note.IsEmpty())
+	{
+		OutTitle = Pending.Note;
+		OutDetails.Add(LOCTEXT("CycleNoteKeys", "Esc dismisses"));
+		return true;
+	}
+	if (!Pending.bChosen) return false;
+
+	const FText Type = Pending.TypeIndex != INDEX_NONE
+		? FText::FromString(HutongDetailOps::ConvertTargets()[Pending.TypeIndex].Label)
+		: Selected[0]->GetTypeLabel();
+	const FText Preset = Pending.Preset.IsEmpty()
+		? LOCTEXT("CycleNoPreset", "type defaults, no preset") : FText::FromString(Pending.Preset);
+	OutTitle = FText::Format(LOCTEXT("CycleTitle", "{0}  ·  {1}"), Type, Preset);
+	if (!Pending.bArmed)
+	{
+		OutDetails.Add(LOCTEXT("CycleKeys", "Enter applies  ·  Esc drops it  ·  Shift+P next preset  ·  Shift+T next type"));
+		return true;
+	}
+	bOutWarning = true;
+	constexpr int32 Shown = 4;
+	TArray<FString> Names(Pending.Customized.GetData(), FMath::Min(Pending.Customized.Num(), Shown));
+	FString List = FString::Join(Names, TEXT(", "));
+	if (Pending.Customized.Num() > Shown) List += FString::Printf(TEXT(" and %d more"), Pending.Customized.Num() - Shown);
+	OutDetails.Add(FText::Format(LOCTEXT("CycleWarnCount",
+		"Warning: replaces {0} adjusted value(s): {1}"),
+		FText::AsNumber(Pending.Customized.Num()), FText::FromString(List)));
+	OutDetails.Add(LOCTEXT("CycleWarnKeys", "Enter again applies  ·  Esc keeps the building as it is"));
+	return true;
+}
+
+FText URectDragToolBase::GetPendingCycleText() const
+{
+	FText Title;
+	TArray<FText> Details;
+	bool bWarning = false;
+	if (!GetPendingCycleLines(Title, Details, bWarning)) return FText::GetEmpty();
+	FString Out = FString::Printf(TEXT("Change to: %s"), *Title.ToString());
+	for (const FText& Line : Details) Out += TEXT("\n") + Line.ToString();
+	return FText::FromString(Out);
+}
+
+void URectDragToolBase::DrawBuildingLabels(FCanvas* Canvas, IToolsContextRenderAPI* RenderAPI) const
+{
+	const UHutongLayoutModeSettings* Settings = UHutongLayoutEdMode::GetActiveSettings();
+	if (Canvas == nullptr || RenderAPI == nullptr || (Settings && !Settings->bShowBuildingLabels)) return;
+	const FSceneView* View = RenderAPI->GetSceneView();
+	UWorld* World = GetWorld();
+	const UFont* Font = UEngine::GetMediumFont();
+	if (View == nullptr || World == nullptr || Font == nullptr) return;
+	const float DPIScale = FMath::Max(Canvas->GetDPIScale(), UE_KINDA_SMALL_NUMBER);
+	// Written once the footprint's narrower side spans this much of the screen: close zoom only.
+	constexpr double MinSpanPixels = 70.0;
+	const double LineHeight = Font->GetMaxCharHeight() + 2.0;
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		const UHutongBuildingComponent* B = It->FindComponentByClass<UHutongBuildingComponent>();
+		if (B == nullptr) continue;
+		FVector2D Quad[4];
+		B->GetFootprintCorners(Quad);
+		const FTransform Xform = It->GetActorTransform();
+		FVector2D Pixel[4];
+		bool bOnScreen = true;
+		for (int32 i = 0; i < 4 && bOnScreen; ++i)
+		{
+			bOnScreen = View->WorldToPixel(Xform.TransformPosition(FVector(Quad[i].X, Quad[i].Y, 0.0)), Pixel[i]);
+			Pixel[i] /= DPIScale;
+		}
+		if (!bOnScreen) continue;
+		// Narrower span of the projected quad: its two pairs of opposite edge midpoints.
+		const double SpanA = FVector2D::Distance(0.5 * (Pixel[0] + Pixel[1]), 0.5 * (Pixel[2] + Pixel[3]));
+		const double SpanB = FVector2D::Distance(0.5 * (Pixel[1] + Pixel[2]), 0.5 * (Pixel[3] + Pixel[0]));
+		const double Span = FMath::Min(SpanA, SpanB);
+		if (Span < MinSpanPixels) continue;
+
+		TArray<FString> Lines = { AsciiForBitmapFont(B->GetTypeLabel().ToString()) };
+		if (!B->Preset.IsEmpty()) Lines.Add(AsciiForBitmapFont(B->Preset));
+		const FVector2D Centre = 0.25 * (Pixel[0] + Pixel[1] + Pixel[2] + Pixel[3]);
+		const double Top = Centre.Y - 0.5 * Lines.Num() * LineHeight;
+		for (int32 i = 0; i < Lines.Num(); ++i)
+		{
+			// The bitmap font draws wider than it measures.
+			const double W = Font->GetStringSize(*Lines[i]) * 1.15;
+			FCanvasTextItem Item(FVector2D(Centre.X - 0.5 * W, Top + i * LineHeight), FText::FromString(Lines[i]), Font,
+				i == 0 ? FLinearColor::White : FLinearColor(1.0f, 0.9f, 0.55f));
+			Item.EnableShadow(FLinearColor::Black);
+			Canvas->DrawItem(Item);
+		}
+	}
+}
+
+void URectDragToolBase::DrawPendingCycleBanner(FCanvas* Canvas) const
+{
+	if (Canvas == nullptr) return;
+	FText Title;
+	TArray<FText> Details;
+	bool bWarning = false;
+	if (!GetPendingCycleLines(Title, Details, bWarning)) return;
+
+	// The engine's bitmap fonts, scaled: a Slate-font text item draws nothing in this pass (the tile
+	// drew, the text did not). They have no CJK glyphs, so names keep their English.
+	const UFont* TitleFont = UEngine::GetLargeFont();
+	const UFont* DetailFont = UEngine::GetMediumFont();
+	if (TitleFont == nullptr || DetailFont == nullptr) return;
+	constexpr double TitleScale = 1.6;
+	constexpr double DetailScale = 1.3;
+	// The bitmap font draws wider than it measures.
+	constexpr double Overdraw = 1.15;
+	const double MaxWidth = 0.9 * ViewportWidth(Canvas) - 48.0;
+
+	struct FRow { FString Text; const UFont* Font; double Scale; FLinearColor Colour; };
+	TArray<FRow> Rows;
+	auto AddWrapped = [&](const FText& Text, const UFont* Font, double Scale, const FLinearColor& Colour)
+	{
+		for (const FString& Line : WrapToWidth(AsciiForBitmapFont(Text.ToString()), Font, MaxWidth / (Scale * Overdraw)))
+		{
+			Rows.Add({ Line, Font, Scale, Colour });
+		}
+	};
+	AddWrapped(Title, TitleFont, TitleScale, bWarning ? FLinearColor(1.0f, 0.45f, 0.15f) : FLinearColor(1.0f, 0.9f, 0.15f));
+	for (int32 i = 0; i < Details.Num(); ++i)
+	{
+		AddWrapped(Details[i], DetailFont, DetailScale,
+			(bWarning && i == 0) ? FLinearColor(1.0f, 0.7f, 0.5f) : FLinearColor(0.85f, 0.85f, 0.85f));
+	}
+
+	auto RowWidth = [&](const FRow& R) { return R.Font->GetStringSize(*R.Text) * R.Scale * Overdraw; };
+	auto RowHeight = [](const FRow& R) { return R.Font->GetMaxCharHeight() * R.Scale + 6.0; };
+	double Widest = 0.0, Height = 0.0;
+	for (const FRow& R : Rows)
+	{
+		Widest = FMath::Max(Widest, RowWidth(R));
+		Height += RowHeight(R);
+	}
+	// Centred across the top, clear of the viewport toolbar.
+	const double Pad = 18.0;
+	const FVector2D At(FMath::Max(0.5 * (ViewportWidth(Canvas) - Widest) - Pad, 8.0), 56.0);
+	FCanvasTileItem Backing(At, FVector2D(Widest + 2.0 * Pad, Height + 2.0 * Pad),
+		bWarning ? FLinearColor(0.25f, 0.04f, 0.0f, 0.8f) : FLinearColor(0.0f, 0.0f, 0.0f, 0.7f));
+	Backing.BlendMode = SE_BLEND_Translucent;
+	Canvas->DrawItem(Backing);
+
+	double Y = At.Y + Pad;
+	for (const FRow& R : Rows)
+	{
+		FCanvasTextItem Item(FVector2D(At.X + Pad + 0.5 * (Widest - RowWidth(R)), Y), FText::FromString(R.Text), R.Font, R.Colour);
+		Item.Scale = FVector2D(R.Scale, R.Scale);
+		Item.EnableShadow(FLinearColor::Black);
+		Canvas->DrawItem(Item);
+		Y += RowHeight(R);
+	}
+}
+
+FString URectDragToolBase::AsciiForBitmapFont(const FString& Text)
+{
+	// "Side House (廂房)" -> "Side House": a group of CJK in brackets goes whole, a stray glyph alone.
+	auto IsWide = [](TCHAR C) { return C >= 0x2E80; };
+	FString Out;
+	for (int32 i = 0; i < Text.Len(); ++i)
+	{
+		const TCHAR C = Text[i];
+		if (C == TEXT('('))
+		{
+			const int32 Close = Text.Find(TEXT(")"), ESearchCase::CaseSensitive, ESearchDir::FromStart, i);
+			bool bAllWide = Close != INDEX_NONE;
+			for (int32 k = i + 1; bAllWide && k < Close; ++k) bAllWide = IsWide(Text[k]) || Text[k] == TEXT(' ') || Text[k] == TEXT(',');
+			if (bAllWide)
+			{
+				i = Close;
+				continue;
+			}
+		}
+		if (C == 0x00B7) Out += TEXT("-");
+		else if (!IsWide(C)) Out.AppendChar(C);
+	}
+	while (Out.ReplaceInline(TEXT("  "), TEXT(" ")) > 0) {}
+	Out.ReplaceInline(TEXT(" )"), TEXT(")"));
+	return Out.TrimStartAndEnd();
 }
 
 bool URectDragToolBase::SetSelectedFacing(const FText& Title,
 	TFunctionRef<EHutongBaySide(const UHutongBuildingComponent&, EHutongBaySide)> NextSide)
 {
-	if (GEditor == nullptr) return false;
-	USelection* Selected = GEditor->GetSelectedActors();
-	if (!Selected) return false;
-
-	TArray<UHutongBuildingComponent*> Work;
-	for (int32 i = 0; i < Selected->Num(); ++i)
-	{
-		AActor* Actor = Cast<AActor>(Selected->GetSelectedObject(i));
-		UHutongBuildingComponent* B = Actor ? Actor->FindComponentByClass<UHutongBuildingComponent>() : nullptr;
-		EHutongBaySide Side;
-		if (B && B->GetFacade(Side)) Work.Add(B);
-	}
-	if (Work.Num() == 0) return false;
-
-	const FScopedTransaction Transaction(Title);
-	for (UHutongBuildingComponent* B : Work)
-	{
-		EHutongBaySide Side = EHutongBaySide::MinusY;
-		B->GetFacade(Side);
-		if (B->GetOwner()) B->GetOwner()->Modify();
-		B->Modify();
-		if (!B->SetFacade(NextSide(*B, Side))) continue;
-		// Same seam as a panel edit: built re-bakes, laid-out redraws its hatching.
-		B->Rebuild();
-		B->ApplyPlacementAttachments();
-	}
-	return true;
+	return HutongDetailOps::SetFacing(HutongDetailOps::CollectSelected(), Title, NextSide);
 }
 
 UHutongBuildingComponent* URectDragToolBase::GetSelectedBuilding() const

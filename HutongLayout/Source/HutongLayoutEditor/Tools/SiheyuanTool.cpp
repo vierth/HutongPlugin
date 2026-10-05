@@ -163,13 +163,13 @@ TArray<FText> UHutongSiheyuanTool::GetToolHelpLines() const
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines.Insert({
 		NSLOCTEXT("HutongSiheyuanTool", "HelpPreset",
-		"Choose the house under Type / Preset: main hall (正房), side house (廂房), front row (倒座房), ear room (耳房)… each has its own size and details."),
+		"Type / Preset picks the house: main hall (正房), side house (廂房), front row (倒座房), ear room (耳房)…"),
 		NSLOCTEXT("HutongSiheyuanTool", "HelpSize",
-			"The footprint settles on the house's usual frontage and depth (dashed outline) while snapping is on."),
+			"With snapping on, the footprint settles on the house's usual frontage and depth (dashed outline)."),
 		NSLOCTEXT("HutongSiheyuanTool", "HelpFacadeSide",
 			"After the footprint, move toward the side that gets the doors and windows (green ticks), then click to place."),
 		NSLOCTEXT("HutongSiheyuanTool", "HelpBays",
-			"The bays (間) follow from the frontage; [ and ] add or remove one while placing."),
+			"Bays (間) follow the frontage; [ and ] add or remove one."),
 	}, 1);
 	return Lines;
 }

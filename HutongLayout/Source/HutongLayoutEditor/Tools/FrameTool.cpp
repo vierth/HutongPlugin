@@ -169,11 +169,11 @@ FText UHutongFrameTool::GetStagePromptText() const
 	if (!bIsDragging)
 	{
 		return NSLOCTEXT("HutongFrameTool", "PromptPosition",
-			"Click where the frame stands (the centre of its footprint). The size is the preset's; pick another preset for a smaller one.");
+			"Click to set the frame's centre.");
 	}
 	if (bRotateModeActive) return Super::GetStagePromptText();
 	return NSLOCTEXT("HutongFrameTool", "PromptFront",
-		"Move toward the side that is the front (green), then click to place. Hold R to rotate, Esc to cancel.");
+		"Move toward the front (green), then click to place. Hold R to rotate, Esc to cancel.");
 }
 
 void UHutongFrameTool::DrawFront(FPrimitiveDrawInterface* PDI, const FVector& Origin, EHutongBaySide Side) const
@@ -222,8 +222,8 @@ TArray<FText> UHutongFrameTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongFrameTool", "HelpStamp",
-		"Click where the frame stands, move toward its front, click to place. The size comes from the preset.");
+		"Click where the frame stands, move toward its front, click to place; the preset sets the size.");
 	Lines.Insert(NSLOCTEXT("HutongFrameTool", "HelpWhat",
-		"The bare timber frame (構架) of a main hall (正房) on its platform (臺明), without walls or roof. Full House builds the finished house instead."), 1);
+		"The bare timber frame (構架) of a main hall (正房) on its platform (臺明). Full House builds the whole house."), 1);
 	return Lines;
 }

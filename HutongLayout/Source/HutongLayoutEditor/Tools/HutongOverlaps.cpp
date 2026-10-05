@@ -309,8 +309,7 @@ void OpenWindow(const TArray<FPair>& Pairs)
 				SNew(STextBlock)
 				.AutoWrapText(true)
 				.Text(FText::Format(LOCTEXT("Intro",
-					"{0} pair(s) of buildings stand mostly on one footprint (over {1}% of the smaller one) under different ids. "
-					"Choose which to keep; Apply removes the other. One undo step."),
+					"{0} pair(s) of buildings overlap by over {1}% of the smaller footprint. Choose which to keep; Apply removes the other."),
 					FText::AsNumber(Pairs.Num()), FText::AsNumber(FMath::RoundToInt32(100.0 * OfferShare))))
 			]
 			+ SVerticalBox::Slot().FillHeight(1.0f)

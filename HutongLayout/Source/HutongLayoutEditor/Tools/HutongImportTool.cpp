@@ -207,13 +207,13 @@ TArray<FText> UHutongImportTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = LOCTEXT("HelpImport",
-		"Browse for a scene file below, then click to anchor and click to place; blue outlines preview it.");
+		"Browse for a scene file below, then click to anchor and click to place.");
 	Lines.Insert(LOCTEXT("HelpImportSet",
 		"The drag moves and turns the set; its size comes from the file."), 1);
 	Lines.Insert(LOCTEXT("HelpImportSync",
 		"Update Matching Placements reshapes buildings the file names instead of adding copies; it never deletes."), 2);
 	Lines.Insert(LOCTEXT("HelpImportRecorded",
-		"Place At Recorded Coordinates puts the set back where it was exported: right only in its own level."), 3);
+		"Place At Recorded Coordinates puts the set where it was exported; use it only in that level."), 3);
 	return Lines;
 }
 

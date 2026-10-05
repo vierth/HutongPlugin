@@ -3,6 +3,7 @@
 #include "HutongLayoutStyle.h"
 #include "Tools/HutongPresetDefaults.h"
 #include "Tools/HutongPanelCustomizations.h"
+#include "Tools/HutongContextMenu.h"
 #include "Generation/HutongPlanOutlineComponent.h"
 #include "Modules/ModuleManager.h"
 
@@ -17,6 +18,8 @@ void FHutongLayoutEditorModule::StartupModule()
 	HutongPresets::RegisterBuiltInPresets();
 
 	HutongPanelCustomizations::Register();
+	// A Hutong section in the level editor's right-click menu on selected buildings.
+	HutongContextMenu::Register();
 
 	// Plans draw whether or not the mode is active, so load their visibility before anyone enters it.
 	HutongPlanOutline::LoadVisibilityFromConfig();
@@ -24,6 +27,7 @@ void FHutongLayoutEditorModule::StartupModule()
 
 void FHutongLayoutEditorModule::ShutdownModule()
 {
+	HutongContextMenu::Unregister();
 	HutongPanelCustomizations::Unregister();
 	FHutongLayoutCommands::Unregister();
 	FHutongLayoutStyle::Unregister();

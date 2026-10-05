@@ -92,6 +92,14 @@ void UHutongBuildingComponent::Rebuild()
 	ApplyPlanOutline();
 }
 
+void UHutongBuildingComponent::ApplyDragDerived(const UHutongBuildingComponent& Placed)
+{
+	// Another type takes its own line; within one, the line it was snapped to (or set by hand) stays.
+	if (Placed.GetClass() != GetClass()) return;
+	const double Top = Placed.GetBaseCourseTop();
+	if (Top > 0.0 && GetBaseCourseTop() > 0.0 && !FMath::IsNearlyEqual(Top, GetBaseCourseTop(), 0.5)) SetBaseCourseTop(Top);
+}
+
 bool UHutongBuildingComponent::ApplyPresetParams(const FString& Name)
 {
 	if (Name.IsEmpty()) return false;
@@ -326,7 +334,9 @@ void UHutongEarPassageBuildingComponent::BuildEarPassageMesh(const FHutongEarPas
 
 void UHutongEarPassageBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDetail Level) const
 {
-	BuildEarPassageMesh(Params, BaySide, FootprintX, FootprintY, OutMesh, Level);
+	FHutongEarPassageParams P = Params;
+	P.BayCountOverride = BayCountOverride;
+	BuildEarPassageMesh(P, BaySide, FootprintX, FootprintY, OutMesh, Level);
 }
 
 void UHutongGateHouseBuildingComponent::BuildGateHouseMesh(

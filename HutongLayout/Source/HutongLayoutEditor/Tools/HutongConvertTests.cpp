@@ -1,6 +1,7 @@
 #include "Misc/AutomationTest.h"
 #include "Tools/HutongOverlaps.h"
 #include "Tools/HutongDetailOps.h"
+#include "Tools/HutongPresets.h"
 #include "Generation/HutongBuildingComponent.h"
 #include "Generation/HutongPlanOutlineComponent.h"
 #include "Generation/HutongActorSpawn.h"
@@ -51,11 +52,11 @@ bool FHutongConvertAcrossTypesTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("every building type is offered"), Targets.Num() >= 15);
 
 	const HutongDetailOps::FConvertTarget House =
-		HutongDetailOps::FindConvertTarget(TEXT("house (房)"));
+		HutongDetailOps::FindConvertTarget(TEXT("House (房)"));
 	const HutongDetailOps::FConvertTarget LaneWall =
-		HutongDetailOps::FindConvertTarget(TEXT("lane wall (院牆)"));
+		HutongDetailOps::FindConvertTarget(TEXT("Lane Wall (院牆)"));
 	const HutongDetailOps::FConvertTarget CourtWall =
-		HutongDetailOps::FindConvertTarget(TEXT("court wall (隔牆)"));
+		HutongDetailOps::FindConvertTarget(TEXT("Court Wall (隔牆)"));
 	if (!TestTrue(TEXT("the house is a target"), House.IsValid())) return false;
 	if (!TestTrue(TEXT("both walls are targets"), LaneWall.IsValid() && CourtWall.IsValid())) return false;
 	TestEqual(TEXT("the two walls are one class"), LaneWall.Class, CourtWall.Class);
@@ -112,7 +113,7 @@ bool FHutongConvertAcrossTypesTest::RunTest(const FString& Parameters)
 		UHutongBuildingComponent* Court = HutongDetailOps::ConvertBuilding(Wall, CourtWall, FString());
 		if (!TestNotNull(TEXT("the wall converts"), Court)) { World->DestroyWorld(false); return false; }
 		TestEqual(TEXT("it is a 隔牆 now"), Court->GetTypeVariant(), CourtWall.Variant);
-		TestEqual(TEXT("and says so"), Court->GetTypeLabel().ToString(), FString(TEXT("court wall (隔牆)")));
+		TestEqual(TEXT("and says so"), Court->GetTypeLabel().ToString(), FString(TEXT("Court Wall (隔牆)")));
 		TestEqual(TEXT("along the run it was drawn on"), Court->GetFootprintSize().X, 1400.0, 0.01);
 	}
 
@@ -133,7 +134,7 @@ bool FHutongConvertUndoTest::RunTest(const FString& Parameters)
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
 	const HutongDetailOps::FConvertTarget House =
-		HutongDetailOps::FindConvertTarget(TEXT("house (房)"));
+		HutongDetailOps::FindConvertTarget(TEXT("House (房)"));
 	if (!TestTrue(TEXT("the house is a target"), House.IsValid())) { World->DestroyWorld(false); return false; }
 
 	for (int32 Pass = 0; Pass < 2; ++Pass)
@@ -302,6 +303,154 @@ bool FHutongRevertToPlanTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("with a mesh"), HasMesh(Built));
 	TestEqual(TEXT("and no outline"), OutlineCount(Built), 0);
 
+	World->DestroyWorld(false);
+	return true;
+}
+
+// What P / T would throw away: nothing on a building as its preset laid it, the field a student
+// moved once they move it, and every type found again by its own label.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongConvertCustomizedTest,
+	"HutongLayout.Convert.Customized",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongConvertCustomizedTest::RunTest(const FString& Parameters)
+{
+	const TArray<HutongDetailOps::FConvertTarget>& Targets = HutongDetailOps::ConvertTargets();
+	// Kin side by side for T: house, ear room, shop in a row at the head.
+	auto At = [&](UClass* C) { return Targets.IndexOfByPredicate([C](const HutongDetailOps::FConvertTarget& T) { return T.Class == C; }); };
+	TestEqual(TEXT("the house heads the types"), At(UHutongSiheyuanBuildingComponent::StaticClass()), 0);
+	TestEqual(TEXT("the ear room next"), At(UHutongEarPassageBuildingComponent::StaticClass()), 1);
+	TestEqual(TEXT("then the shop"), At(UHutongShopfrontBuildingComponent::StaticClass()), 2);
+	auto CanSwap = [&](UClass* A, UClass* B) { return HutongDetailOps::CanExchange(Targets[At(A)], Targets[At(B)]); };
+	TestTrue(TEXT("a house may become a gate"), CanSwap(UHutongSiheyuanBuildingComponent::StaticClass(), UHutongGateHouseBuildingComponent::StaticClass()));
+	TestTrue(TEXT("a shop may become a pavilion"), CanSwap(UHutongShopfrontBuildingComponent::StaticClass(), UHutongPavilionBuildingComponent::StaticClass()));
+	TestTrue(TEXT("a temple may become a house"), CanSwap(UHutongHallBuildingComponent::StaticClass(), UHutongSiheyuanBuildingComponent::StaticClass()));
+	TestTrue(TEXT("a wall may become a screen wall"), CanSwap(UHutongWallBuildingComponent::StaticClass(), UHutongScreenWallBuildingComponent::StaticClass()));
+	TestTrue(TEXT("a corridor may become a path"), CanSwap(UHutongCorridorBuildingComponent::StaticClass(), UHutongPathBuildingComponent::StaticClass()));
+	TestTrue(TEXT("a flower bed may become a jar"), CanSwap(UHutongFlowerBedBuildingComponent::StaticClass(), UHutongWaterJarBuildingComponent::StaticClass()));
+	TestFalse(TEXT("a house may not become a wall"), CanSwap(UHutongSiheyuanBuildingComponent::StaticClass(), UHutongWallBuildingComponent::StaticClass()));
+	TestFalse(TEXT("a wall may not become a path"), CanSwap(UHutongWallBuildingComponent::StaticClass(), UHutongPathBuildingComponent::StaticClass()));
+	TestFalse(TEXT("a path may not become a jar"), CanSwap(UHutongPathBuildingComponent::StaticClass(), UHutongWaterJarBuildingComponent::StaticClass()));
+	TestFalse(TEXT("every type has a family"), Targets.ContainsByPredicate([](const HutongDetailOps::FConvertTarget& T) { return T.Family == INDEX_NONE; }));
+	TestFalse(TEXT("every type has a group"), Targets.ContainsByPredicate([](const HutongDetailOps::FConvertTarget& T) { return T.Group == INDEX_NONE; }));
+	for (int32 i = 0; i < Targets.Num(); ++i)
+	{
+		const HutongDetailOps::FConvertTarget& T = Targets[i];
+		UHutongBuildingComponent* Fresh = NewObject<UHutongBuildingComponent>(GetTransientPackage(), T.Class, NAME_None, RF_Transient);
+		if (!T.Variant.IsNone()) Fresh->SetTypeVariant(T.Variant);
+		TestEqual(FString::Printf(TEXT("%s found by its own label"), *T.Label), HutongDetailOps::FindConvertTargetIndex(Fresh), i);
+		if (!T.Variant.IsNone()) continue;
+		TestEqual(FString::Printf(TEXT("%s: type defaults are not customized"), *T.Label), HutongDetailOps::CustomizedFields(Fresh).Num(), 0);
+		for (const FString& Name : UHutongPresetLibrary::Get()->GetPresetNames(HutongDetailOps::PresetKeyOf(T)))
+		{
+			UHutongBuildingComponent* B = NewObject<UHutongBuildingComponent>(GetTransientPackage(), T.Class, NAME_None, RF_Transient);
+			if (!B->ApplyPresetParams(Name)) continue;
+			B->Preset = Name;
+			const TArray<FString> Fields = HutongDetailOps::CustomizedFields(B);
+			TestEqual(FString::Printf(TEXT("%s · %s as loaded is not customized (%s)"), *T.Label, *Name, *FString::Join(Fields, TEXT(", "))), Fields.Num(), 0);
+		}
+	}
+
+	// A moved field is named, inside nested params too.
+	{
+		UHutongSiheyuanBuildingComponent* House = NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
+		House->Preset = TEXT("Main Hall (正房)");
+		House->ApplyPresetParams(House->Preset);
+		House->Params.bHasFrontDoorCenter = !House->Params.bHasFrontDoorCenter;
+		TestEqual(TEXT("one field moved, one named"), HutongDetailOps::CustomizedFields(House),
+			TArray<FString>{ TEXT("Has Front Door") });
+		// A preset that no longer exists measures against the type's defaults.
+		House->Preset = TEXT("No Such Preset");
+		TestTrue(TEXT("a vanished preset leaves the values standing as customized"), HutongDetailOps::CustomizedFields(House).Num() > 1);
+	}
+	{
+		UHutongEarPassageBuildingComponent* Ear = NewObject<UHutongEarPassageBuildingComponent>(GetTransientPackage());
+		Ear->Params.Room.EaveHeight += 20.0;
+		const TArray<FString> Fields = HutongDetailOps::CustomizedFields(Ear);
+		TestTrue(TEXT("a nested field is named under its group"), Fields.Num() == 1 && Fields[0].Contains(TEXT(" › ")));
+	}
+
+	// What the drag wrote is not a customization: a corridor's walk, a jar's belly, a snapped 下鹼.
+	{
+		UHutongCorridorBuildingComponent* Corridor = NewObject<UHutongCorridorBuildingComponent>(GetTransientPackage());
+		Corridor->Params.Width = Corridor->Params.WalkWidthFromFootprint(190.0);
+		Corridor->Width = Corridor->Params.Width;
+		Corridor->Length = 900.0;
+		TestEqual(TEXT("a dragged corridor walk is not customized"), HutongDetailOps::CustomizedFields(Corridor).Num(), 0);
+		UHutongWaterJarBuildingComponent* Jar = NewObject<UHutongWaterJarBuildingComponent>(GetTransientPackage());
+		Jar->Params.BellyDiameter = 97.0;
+		TestEqual(TEXT("a dragged jar belly is not customized"), HutongDetailOps::CustomizedFields(Jar).Num(), 0);
+		UHutongSiheyuanBuildingComponent* House = NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
+		House->Preset = TEXT("Main Hall (正房)");
+		House->ApplyPresetParams(House->Preset);
+		House->SetBaseCourseTop(House->GetBaseCourseTop() + 12.0);
+		TestEqual(TEXT("a neighbour's base course line is not customized"), HutongDetailOps::CustomizedFields(House).Num(), 0);
+
+		// Another preset lands as if drawn: the line kept, nothing reads as customized after.
+		const double Top = House->GetBaseCourseTop();
+		TestTrue(TEXT("the side house preset applies"), HutongDetailOps::ApplyPresetAsDrawn(House, TEXT("Side House (廂房)")));
+		TestEqual(TEXT("the building now names it"), House->Preset, FString(TEXT("Side House (廂房)")));
+		TestNearlyEqual(TEXT("the base course line stays"), House->GetBaseCourseTop(), Top, 0.5);
+		TestEqual(TEXT("as drawn, nothing customized"), HutongDetailOps::CustomizedFields(House).Num(), 0);
+
+		// A house turned corridor takes the walk its footprint leaves, as the tool would.
+		House->FootprintX = 900.0;
+		House->FootprintY = 230.0;
+		const UHutongBuildingComponent* AsCorridor = HutongDetailOps::MakeAsDrawn(*House, UHutongCorridorBuildingComponent::StaticClass(), NAME_None, FString());
+		const UHutongCorridorBuildingComponent* C = Cast<UHutongCorridorBuildingComponent>(AsCorridor);
+		TestTrue(TEXT("walk from the footprint's depth"), C && FMath::IsNearlyEqual(C->Params.Width, C->Params.WalkWidthFromFootprint(230.0)));
+	}
+	return true;
+}
+
+// The bays are what the map attests: P and T keep the count drawn, forced or not.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongConvertBayCountTest, "HutongLayout.Convert.BayCount",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongConvertBayCountTest::RunTest(const FString& Parameters)
+{
+	auto Count = [](const UHutongBuildingComponent* B)
+	{
+		FHutongPlanBays Bays;
+		B->GetPlanBays(Bays);
+		return Bays.Boundaries.Num() - 1;
+	};
+
+	// Another preset: a forced count stays forced; a derived one is held where the new limits differ.
+	for (const int32 Forced : { 0, 5 })
+	{
+		UHutongSiheyuanBuildingComponent* House = NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
+		House->Preset = TEXT("Main Hall (正房)");
+		House->ApplyPresetParams(House->Preset);
+		House->SetFootprintSize(FVector2D(1060.0, 702.0));
+		House->BayCountOverride = Forced;
+		const int32 Before = Count(House);
+		for (const FString& Name : UHutongPresetLibrary::Get()->GetPresetNames(House->GetPresetKey()))
+		{
+			TestTrue(*FString::Printf(TEXT("%s applies"), *Name), HutongDetailOps::ApplyPresetAsDrawn(House, Name));
+			TestEqual(*FString::Printf(TEXT("%s keeps %d bays (forced %d)"), *Name, Before, Forced), Count(House), Before);
+			if (Forced > 0) TestEqual(TEXT("forced stays forced"), House->BayCountOverride, Forced);
+		}
+	}
+
+	// Another type: the count carries across generators.
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
+	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
+	{
+		UHutongBuildingComponent* House = PlaceNamed(World, UHutongSiheyuanBuildingComponent::StaticClass(),
+			FVector2D(1400.0, 600.0), FTransform::Identity, TEXT("Bays"));
+		if (House)
+		{
+			HutongDetailOps::SetBayCountOverride(House, 4);
+			const HutongDetailOps::FConvertTarget Shop = HutongDetailOps::FindConvertTarget(
+				Cast<UHutongBuildingComponent>(UHutongShopfrontBuildingComponent::StaticClass()->GetDefaultObject())->GetTypeLabel().ToString());
+			const UHutongBuildingComponent* New = HutongDetailOps::ConvertBuilding(House, Shop, FString());
+			TestTrue(TEXT("a four-bay house is a four-bay shop"), New && Count(New) == 4);
+			const HutongDetailOps::FConvertTarget Back = HutongDetailOps::FindConvertTarget(TEXT("House (房)"));
+			const UHutongBuildingComponent* Again = New ? HutongDetailOps::ConvertBuilding(const_cast<UHutongBuildingComponent*>(New), Back, TEXT("Side House (廂房)")) : nullptr;
+			TestTrue(TEXT("and a four-bay side house again"), Again && Count(Again) == 4);
+		}
+	}
 	World->DestroyWorld(false);
 	return true;
 }

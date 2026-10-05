@@ -11,11 +11,11 @@ enum class EHutongDetail : uint8
 {
 	Massing UMETA(DisplayName = "Block (塊)", ToolTip="Platform, one block to the eave and the plain roof, with no ornament."),
 
-	Far     UMETA(DisplayName = "Far (遠)", ToolTip="The full generator with ornament off."),
+	Far     UMETA(DisplayName = "Far (遠)", ToolTip="The full building without ornament."),
 
 	Near    UMETA(DisplayName = "Near (近)", ToolTip="The full building at standard detail."),
 
-	Hero    UMETA(DisplayName = "Fine (精)", ToolTip="Near detail with the roof segment counts raised."),
+	Hero    UMETA(DisplayName = "Fine (精)", ToolTip="Near detail with smoother roof curves."),
 };
 
 struct FHutongWallParams;

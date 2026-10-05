@@ -30,7 +30,7 @@ struct FHutongFrameParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frame", meta=(DisplayName="Ridge Braces (角背)", ToolTip="Adds the braces either side of the ridge post."))
 	bool bHasRidgeBraces = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Building", meta=(DisplayName="House (房)", ToolTip="The house whose frame this is; its bays, column heights and roof section set every member."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Building", meta=(DisplayName="House (房)", ToolTip="The house whose frame is shown."))
 	FHutongSiheyuanParams House;
 };
 

@@ -133,11 +133,11 @@ TArray<FText> UHutongPavilionTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongPavilionTool", "HelpDrag",
-		"Click to anchor, move, click to place. A pavilion (亭) has no front; the plan stays roughly square.");
+		"Click to anchor, move, click to place; the plan stays roughly square.");
 	Lines.Insert(NSLOCTEXT("HutongPavilionTool", "HelpSides",
-		"Plan picks the Qing regulations' (則例) square pavilion (方亭) or round six-column pavilion (六柱圓亭); every size follows the column spacing, - and = set the height by hand."), 1);
+		"Plan: square (方亭) or round six-column (六柱圓亭) pavilion of the Qing regulations (則例); - and = set the height."), 1);
 	Lines.Insert(NSLOCTEXT("HutongPavilionTool", "HelpRound",
-		"A round pavilion draws as a circle; its steps show in orange with an arrow walking in. Hold R while placing to turn them."), 2);
+		"Steps show in orange with an arrow; hold R while placing to turn them."), 2);
 	return Lines;
 }
 

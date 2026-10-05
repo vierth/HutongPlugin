@@ -47,7 +47,7 @@ class UHutongBuildingComponent : public UActorComponent
 public:
 	// Picking another replaces the parameters in place; footprint, facing and position stay, so a
 	// 正房 becomes a 廂房 without redrawing. Empty = tuned away from any preset.
-	UPROPERTY(EditAnywhere, Category="Preset", meta=(DisplayName="Type / Preset", GetOptions="GetPresetOptions", ToolTip="Preset this building's parameters come from; changing it rebuilds in place."))
+	UPROPERTY(EditAnywhere, Category="Preset", meta=(DisplayName="Type / Preset", GetOptions="GetPresetOptions", ToolTip="Preset supplying this building's parameters."))
 	FString Preset;
 
 	UFUNCTION()
@@ -90,7 +90,7 @@ public:
 
 	// Generators build the rectangle; BuildLODs warps each LOD to these corners. Under Footprint so
 	// a layout-only export carries it.
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="Corner Offsets (角偏移)", ToolTip="Moves each footprint corner off the rectangle; zero keeps it."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="Corner Offsets (角偏移)", ToolTip="Offset of each footprint corner from the rectangle, in cm."))
 	FHutongFootprintSkew FootprintSkew;
 
 	// Local corners, rectangle plus offsets, anticlockwise from the origin.
@@ -134,7 +134,7 @@ public:
 	}
 
 	// Rank in its court; Auto reads it from the type and preset.
-	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Court Role", ToolTip="What this building is in its courtyard; Auto reads it from the type and preset."))
+	UPROPERTY(EditAnywhere, Category="Metadata", meta=(DisplayName="Court Role", ToolTip="Role of this building in its courtyard; Auto picks it from the type and preset."))
 	EHutongCourtRole CourtRole = EHutongCourtRole::Auto;
 
 	EHutongCourtRole GetCourtRole() const { return CourtRole != EHutongCourtRole::Auto ? CourtRole : InferCourtRole(); }
@@ -160,6 +160,11 @@ public:
 	// 下鹼 top above ground, negative if none. Setter lets a snapped placement match its neighbour.
 	virtual double GetBaseCourseTop() const { return -1.0; }
 	virtual void SetBaseCourseTop(double TopAboveGround) {}
+
+	// What a drag over Placed's footprint writes into this building's parameters at placement (the
+	// tool's AttachBuildingComponent and snapping), laid over freshly loaded preset values so a preset
+	// or type change lands as if drawn there. Base: the 下鹼 line a snapped neighbour gave, same type only.
+	virtual void ApplyDragDerived(const UHutongBuildingComponent& Placed);
 
 	// Footprint corners for callers using reflection (PlaceLabels).
 	UFUNCTION(BlueprintPure, Category="Hutong|Footprint")
@@ -209,6 +214,18 @@ public:
 	virtual bool SetFacade(EHutongBaySide Side) { return false; }
 	// How many quarter turns one press of [ or ] moves the facade.
 	virtual int32 FacadeTurnStep() const { return 1; }
+
+	// Most bays the type takes; the bay keys and a carried count stop there.
+	virtual int32 GetMaxBayCount() const { return 32; }
+	// Bays as built (the plan's lines between them by default).
+	virtual int32 GetDrawnBayCount() const
+	{
+		FHutongPlanBays Bays;
+		GetPlanBays(Bays);
+		return Bays.Boundaries.Num() - 1;
+	}
+	// False where a cut would lose part of the building (the ear room's passage).
+	virtual bool CanDivideOrFuse() const { return true; }
 
 	// Column divisions of the frontage for the plan and readout; empty when no bays. Overrides read
 	// the generator's BayBoundary so plan and mesh agree.
@@ -260,6 +277,18 @@ class UHutongWallBuildingComponent : public UHutongBuildingComponent
 public:
 	// A wall may stand between two courts.
 	virtual bool CanShareCourts() const override { return true; }
+
+	// A leg of a run that does not carry the run's opening is drawn without one (SegmentParams).
+	virtual void ApplyDragDerived(const UHutongBuildingComponent& Placed) override
+	{
+		Super::ApplyDragDerived(Placed);
+		const UHutongWallBuildingComponent* Wall = Cast<UHutongWallBuildingComponent>(&Placed);
+		if (Wall && !Wall->Params.bHasGate && Wall->Params.Doorway == EHutongWallDoorway::None)
+		{
+			Params.bHasGate = false;
+			Params.Doorway = EHutongWallDoorway::None;
+		}
+	}
 	// The heights tool edits the body top; the cap rises over it.
 	virtual double GetEditHeight() const override { return Params.GetHeight(); }
 	virtual bool CanSetEditHeight() const override { return true; }
@@ -272,8 +301,8 @@ public:
 	virtual FText GetTypeLabel() const override
 	{
 		return (Params.Role == EHutongWallRole::Courtyard)
-			? NSLOCTEXT("Hutong", "TypeCourtWall", "court wall (隔牆)")
-			: NSLOCTEXT("Hutong", "TypeLaneWall", "lane wall (院牆)");
+			? NSLOCTEXT("Hutong", "TypeCourtWall", "Court Wall (隔牆)")
+			: NSLOCTEXT("Hutong", "TypeLaneWall", "Lane Wall (院牆)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override
@@ -300,7 +329,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="End Miter", UIMin="0", UIMax="60", ClampMin="0", Units="cm", ToolTip="How far the end of the run extends past the rectangle, in cm."))
 	double EndExtend = 0.0;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="Footprint Thickness", UIMin="0", ClampMin="0", Units="cm", ToolTip="Cross extent capping the wall's thickness, in cm; zero applies no cap."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="Footprint Thickness", UIMin="0", ClampMin="0", Units="cm", ToolTip="Maximum wall thickness, in cm; zero for no limit."))
 	double FootprintThickness = 0.0;
 
 
@@ -390,7 +419,7 @@ class UHutongSiheyuanBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypeHouse", "house (房)");
+		return NSLOCTEXT("Hutong", "TypeHouse", "House (房)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::House; }
@@ -430,7 +459,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(ToolTip="Which side of the footprint carries the bay facade and door."))
 	EHutongBaySide BaySide = EHutongBaySide::MinusY;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Forces the number of bays; zero derives it from the bay width limits."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Number of bays; zero chooses automatically."))
 	int32 BayCountOverride = 0;
 
 	// Shared by the tool's preview-time build and the component's rebuild.
@@ -480,7 +509,7 @@ class UHutongGateHouseBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypeGateHouse", "gate house (大門)");
+		return NSLOCTEXT("Hutong", "TypeGateHouse", "Gate House (大門)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Gate; }
@@ -540,7 +569,7 @@ class UHutongPaifangBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypePaifang", "memorial arch (牌坊)");
+		return NSLOCTEXT("Hutong", "TypePaifang", "Memorial Arch (牌坊)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Paifang; }
@@ -595,7 +624,7 @@ class UHutongScreenWallBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypeScreen", "screen wall (影壁)");
+		return NSLOCTEXT("Hutong", "TypeScreen", "Screen Wall (影壁)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Screen; }
@@ -644,7 +673,7 @@ class UHutongCorridorBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypeCorridor", "covered corridor (遊廊)");
+		return NSLOCTEXT("Hutong", "TypeCorridor", "Covered Corridor (遊廊)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Corridor; }
@@ -656,6 +685,15 @@ public:
 	virtual bool SetEditHeight(double Cm) override { Params.EaveHeight = Cm; return true; }
 	virtual EHutongCourtRole InferCourtRole() const override { return EHutongCourtRole::Corridor; }
 	virtual double GetRidgeHeight() const override { return HutongGen::Ridge::Corridor(Params); }
+
+	// The walk is what the footprint's depth leaves, as the tool cuts it.
+	virtual void ApplyDragDerived(const UHutongBuildingComponent& Placed) override
+	{
+		Super::ApplyDragDerived(Placed);
+		const FVector2D S = Placed.GetFootprintSize();
+		Params.Width = Params.WalkWidthFromFootprint(FMath::Min(S.X, S.Y));
+		Width = Params.Width;
+	}
 
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="100", ClampMin="40", Units="cm", ToolTip="Length of the corridor run, in cm."))
 	double Length = 800.0;
@@ -672,16 +710,16 @@ public:
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="Bench Gap At", UIMin="-1", UIMax="1", ClampMin="-1", ClampMax="1", ToolTip="Where the bench breaks, as a fraction of the length; negative leaves it unbroken."))
 	double BenchGapAt = -1.0;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="No Post At Low End", ToolTip="Leaves out the post at the run's low end, where another run's post stands at the same corner."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="No Post At Low End", ToolTip="Omits the post at the run's low end."))
 	bool bOmitLowEndPost = false;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="No Post At High End", ToolTip="Leaves out the post at the run's high end, where another run's post stands at the same corner."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="No Post At High End", ToolTip="Omits the post at the run's high end."))
 	bool bOmitHighEndPost = false;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="No Bench At Low End", ToolTip="Leaves the bench out of the end bay at the run's low end, where the walk turns through a doorway."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="No Bench At Low End", ToolTip="Omits the bench from the end bay at the run's low end."))
 	bool bNoBenchAtLowEnd = false;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="No Bench At High End", ToolTip="Leaves the bench out of the end bay at the run's high end, where the walk turns through a doorway."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(HutongAdvanced, DisplayName="No Bench At High End", ToolTip="Omits the bench from the end bay at the run's high end."))
 	bool bNoBenchAtHighEnd = false;
 
 	virtual void GetPlanBays(FHutongPlanBays& Out) const override
@@ -720,7 +758,7 @@ class UHutongInnerGateBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypeInnerGate", "inner gate (垂花門)");
+		return NSLOCTEXT("Hutong", "TypeInnerGate", "Inner Gate (垂花門)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::InnerGate; }
@@ -779,7 +817,7 @@ class UHutongShopfrontBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypeShopfront", "shopfront (鋪面房)");
+		return NSLOCTEXT("Hutong", "TypeShopfront", "Shopfront (鋪面房)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Shopfront; }
@@ -805,7 +843,7 @@ public:
 	virtual bool GetFacade(EHutongBaySide& OutSide) const override { OutSide = BaySide; return true; }
 	virtual bool SetFacade(EHutongBaySide Side) override { BaySide = Side; return true; }
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Forces the number of bays; zero derives it from the frontage."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Number of bays; zero chooses automatically."))
 	int32 BayCountOverride = 0;
 
 	virtual void GetPlanBays(FHutongPlanBays& Out) const override
@@ -848,7 +886,7 @@ class UHutongStoreyBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypeStorey", "multi-story building (樓)");
+		return NSLOCTEXT("Hutong", "TypeStorey", "Multi-Story Building (樓)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Storey; }
@@ -874,7 +912,7 @@ public:
 	virtual bool GetFacade(EHutongBaySide& OutSide) const override { OutSide = BaySide; return true; }
 	virtual bool SetFacade(EHutongBaySide Side) override { BaySide = Side; return true; }
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Forces the number of bays; zero derives it from the frontage."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Number of bays; zero chooses automatically."))
 	int32 BayCountOverride = 0;
 
 	virtual void GetPlanBays(FHutongPlanBays& Out) const override
@@ -909,7 +947,7 @@ protected:
 	virtual void BuildMesh(UE::Geometry::FDynamicMesh3& OutMesh, EHutongDetail Level) const override;
 };
 
-UCLASS(ClassGroup=Hutong, meta=(BlueprintSpawnableComponent, DisplayName="Hutong Ear Room With Passage", PrioritizeCategories="Preset Footprint"))
+UCLASS(ClassGroup=Hutong, meta=(BlueprintSpawnableComponent, DisplayName="Hutong Ear Room", PrioritizeCategories="Preset Footprint"))
 class UHutongEarPassageBuildingComponent : public UHutongBuildingComponent
 {
 	GENERATED_BODY()
@@ -917,12 +955,13 @@ class UHutongEarPassageBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypeEarPassage", "ear room with passage (耳房過道)");
+		// One label for every kind: it keys the conversion list; the preset says which kind.
+		return NSLOCTEXT("Hutong", "TypeEarRoom", "Ear Room (耳房)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::EarPassage; }
 
-	UPROPERTY(EditAnywhere, Category="Ear Room With Passage", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the ear room and the covered passage beside it."))
+	UPROPERTY(EditAnywhere, Category="Ear Room", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the ear room (耳房) and any covered passage (過道) beside or through it."))
 	FHutongEarPassageParams Params;
 
 	virtual double GetBaseCourseTop() const override { return Params.Room.GetFloorHeight() + Params.Room.GetBaseCourseHeight(); }
@@ -938,9 +977,18 @@ public:
 		return HutongGen::Ridge::EarPassage(P, P.Width, P.Depth);
 	}
 
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="2", ClampMin="0", ClampMax="2", ToolTip="Number of room bays, 1 or 2; 0 for automatic."))
+	int32 BayCountOverride = 0;
+
+	virtual int32 GetMaxBayCount() const override { return FHutongEarPassageParams::MaxRoomBays; }
+	// The room's bays; the passage strip is not one.
+	virtual int32 GetDrawnBayCount() const override { return ParamsForFootprint().RoomParams().GetBayCount(); }
+	virtual bool CanDivideOrFuse() const override { return false; }
+
 	FHutongEarPassageParams ParamsForFootprint() const
 	{
 		FHutongEarPassageParams P = Params;
+		P.BayCountOverride = BayCountOverride;
 		const bool bAlongX = HutongGen::BaySide::IsAlongX(BaySide);
 		P.Width = bAlongX ? FootprintX : FootprintY;
 		P.Depth = bAlongX ? FootprintY : FootprintX;
@@ -964,17 +1012,30 @@ public:
 	virtual bool SetFacade(EHutongBaySide Side) override { BaySide = Side; return true; }
 
 	// Room bay lines plus the passage-strip line, in the build frame (facade on -Y). The strip line
-	// replaces the end column so the division sits at the gable face.
+	// replaces the end column so the division sits at the gable face. A whole-frontage passage is one
+	// bay, its doorway the door bay.
 	static FHutongPlanBays PlanBaysInBuildFrame(const FHutongEarPassageParams& P)
 	{
 		FHutongPlanBays Out;
+		if (!P.HasRoom())
+		{
+			Out.Boundaries = { 0.0, P.GetWidth() };
+			if (P.HasClosingDoorway()) Out.DoorBay = 0;
+			return Out;
+		}
 		const FHutongSiheyuanParams R = P.RoomParams();
 		const int32 N = R.GetBayCount();
 		const double ColR = R.GetColumnRadius();
 		const double X0 = P.GetRoomX0();
 		TArray<double> Room;
 		for (int32 i = 0; i <= N; ++i) Room.Add(X0 + R.GetBayBoundary(i, N, R.Width, ColR));
-		if (P.bPassageAtFarEnd)
+		if (!P.HasPassage())
+		{
+			Out.Boundaries = Room;
+			Out.ColumnRadius = ColR;
+			if (R.bHasFrontDoorCenter) Out.DoorBay = R.GetDoorBayIndex(N);
+		}
+		else if (P.bPassageAtFarEnd)
 		{
 			Out.Boundaries = Room;
 			Out.Boundaries.Last() = P.GetWidth() - P.GetStripWidth();
@@ -1015,7 +1076,7 @@ class UHutongPavilionBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypePavilion", "pavilion (亭)");
+		return NSLOCTEXT("Hutong", "TypePavilion", "Pavilion (亭)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Pavilion; }
@@ -1064,7 +1125,7 @@ class UHutongPathBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypePath", "paved path (甬路)");
+		return NSLOCTEXT("Hutong", "TypePath", "Paved Path (甬路)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Path; }
@@ -1110,7 +1171,7 @@ class UHutongPassageBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypePassage", "covered passage (過道)");
+		return NSLOCTEXT("Hutong", "TypePassage", "Covered Passage (過道)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Passage; }
@@ -1164,7 +1225,7 @@ class UHutongFlowerBedBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypeFlowerBed", "flower bed (花池)");
+		return NSLOCTEXT("Hutong", "TypeFlowerBed", "Flower Bed (花池)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::FlowerBed; }
@@ -1204,13 +1265,22 @@ class UHutongWaterJarBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypeWaterJar", "water jar (魚缸)");
+		return NSLOCTEXT("Hutong", "TypeWaterJar", "Water Jar (魚缸)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::WaterJar; }
 
 	UPROPERTY(EditAnywhere, Category="Jar", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the water jar generator."))
 	FHutongWaterJarParams Params;
+
+	// The belly is the drag's: kept from a jar, else the larger extent, as the tool reads the hand.
+	virtual void ApplyDragDerived(const UHutongBuildingComponent& Placed) override
+	{
+		Super::ApplyDragDerived(Placed);
+		const FVector2D S = Placed.GetFootprintSize();
+		const UHutongWaterJarBuildingComponent* Jar = Cast<UHutongWaterJarBuildingComponent>(&Placed);
+		Params.BellyDiameter = Jar ? Jar->Params.BellyDiameter : FMath::Clamp(FMath::Max(S.X, S.Y), 20.0, 140.0);
+	}
 
 	static void BuildWaterJarMesh(const FHutongWaterJarParams& InParams,
 		UE::Geometry::FDynamicMesh3& OutMesh,
@@ -1236,7 +1306,7 @@ class UHutongFrameBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypeFrame", "timber frame (構架)");
+		return NSLOCTEXT("Hutong", "TypeFrame", "Timber Frame (構架)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Frame; }
@@ -1253,7 +1323,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Footprint", meta=(ToolTip="Which side of the footprint is the front of the frame."))
 	EHutongBaySide BaySide = EHutongBaySide::MinusY;
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Forces the number of bays; zero derives it from the bay width limits."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Number of bays; zero chooses automatically."))
 	int32 BayCountOverride = 0;
 
 	// Params' house with the footprint filled in.
@@ -1313,7 +1383,7 @@ class UHutongHallBuildingComponent : public UHutongBuildingComponent
 public:
 	virtual FText GetTypeLabel() const override
 	{
-		return NSLOCTEXT("Hutong", "TypeHall", "temple hall (殿)");
+		return NSLOCTEXT("Hutong", "TypeHall", "Temple Hall (殿)");
 	}
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Hall; }
@@ -1352,7 +1422,7 @@ public:
 	virtual bool GetFacade(EHutongBaySide& OutSide) const override { OutSide = BaySide; return true; }
 	virtual bool SetFacade(EHutongBaySide Side) override { BaySide = Side; return true; }
 
-	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Forces the number of bays; zero derives it from the frontage."))
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="32", ClampMin="0", ClampMax="32", ToolTip="Number of bays; zero chooses automatically."))
 	int32 BayCountOverride = 0;
 
 	virtual void GetPlanBays(FHutongPlanBays& Out) const override

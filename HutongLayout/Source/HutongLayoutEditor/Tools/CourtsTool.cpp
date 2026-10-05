@@ -23,7 +23,7 @@ void UHutongCourtsToolProperties::OpenWindow() { if (Tool.IsValid()) Tool->OpenW
 
 namespace
 {
-	void Notify(const FText& Text)
+	void NotifyCourts(const FText& Text)
 	{
 		FNotificationInfo Info(Text);
 		Info.ExpireDuration = 4.0f;
@@ -155,7 +155,7 @@ void UHutongCourtsTool::AssignNew()
 	const FString Name = CourtName.TrimStartAndEnd();
 	if (Name.IsEmpty())
 	{
-		Notify(LOCTEXT("NoName", "Give the court a name first (Suggest Name fills one in)."));
+		NotifyCourts(LOCTEXT("NoName", "Give the court a name first (Suggest Name fills one in)."));
 		return;
 	}
 	AddSelectedTo(Name);
@@ -166,17 +166,17 @@ void UHutongCourtsTool::AddSelectedTo(const FString& Court)
 	const int32 Count = HutongCourts::Assign(HutongDetailOps::CollectSelected(), Court);
 	if (Count == 0)
 	{
-		Notify(LOCTEXT("NothingSelected", "Select the buildings to add in the viewport first."));
+		NotifyCourts(LOCTEXT("NothingSelected", "Select the buildings to add in the viewport first."));
 		return;
 	}
-	Notify(FText::Format(LOCTEXT("Added", "{0} building(s) now in {1}, filed under Courts in the Outliner."), Count, FText::FromString(Court)));
+	NotifyCourts(FText::Format(LOCTEXT("Added", "{0} building(s) now in {1}."), Count, FText::FromString(Court)));
 	RefreshFromSelection(true);
 }
 
 void UHutongCourtsTool::RemoveSelectedFrom(const FString& Court)
 {
 	const int32 Count = HutongCourts::Remove(HutongDetailOps::CollectSelected(), Court);
-	Notify(Count == 0
+	NotifyCourts(Count == 0
 		? FText::Format(LOCTEXT("NoneIn", "No selected building is in {0}."), FText::FromString(Court))
 		: FText::Format(LOCTEXT("Removed", "Took {0} building(s) out of {1}."), Count, FText::FromString(Court)));
 	RefreshFromSelection(true);
@@ -203,17 +203,17 @@ void UHutongCourtsTool::RebuildFolders()
 		const FScopedTransaction Transaction(LOCTEXT("RebuildFolders", "File Buildings By Court"));
 		Moved = HutongCourts::FileInFolders(World, HutongDetailOps::CollectLoaded(World));
 	}
-	Notify(FText::Format(LOCTEXT("Filed", "Filed {0} building(s) under Courts; buildings in no court were left where they are."), Moved));
+	NotifyCourts(FText::Format(LOCTEXT("Filed", "Filed {0} building(s) under Courts."), Moved));
 	RefreshCourts();
 }
 
 TArray<FText> UHutongCourtsTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines;
-	Lines.Add(LOCTEXT("HelpSelect", "Select buildings in the viewport (click, Shift+click to add, or drag a box); the Courtyard Units window does the rest."));
-	Lines.Add(LOCTEXT("HelpNew", "New court: keep the name suggested from the map tile (3M6_Courtyard_1, …) or type one, then Assign To Selection."));
-	Lines.Add(LOCTEXT("HelpExisting", "Existing court: select the new building and press Add Selected on that court's row; Remove Selected takes buildings out."));
-	Lines.Add(LOCTEXT("HelpFolders", "Every court is filed in the Outliner under Courts / tile / court; a wall shared by two courts under the tile's Shared walls."));
+	Lines.Add(LOCTEXT("HelpSelect", "Select buildings in the viewport: click, Shift+click to add, or drag a box."));
+	Lines.Add(LOCTEXT("HelpNew", "New court: keep the suggested name or type one, then Assign To Selection."));
+	Lines.Add(LOCTEXT("HelpExisting", "Existing court: select buildings, then Add Selected or Remove Selected on its row."));
+	Lines.Add(LOCTEXT("HelpFolders", "Courts are filed in the Outliner under Courts / tile / court; shared walls under the tile's Shared walls."));
 	Lines.Add(LOCTEXT("HelpEsc", "Esc puts the tool down and closes the window."));
 	return Lines;
 }

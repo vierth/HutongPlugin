@@ -8,7 +8,15 @@
 #include "Generation/HutongDetail.h"
 #include "EarPassageGenerator.generated.h"
 
-// 耳房 with a 過道: a low room on a hall's flank, beside a covered way to the boundary.
+UENUM(BlueprintType)
+enum class EHutongEarPassage : uint8
+{
+	None UMETA(DisplayName="None", ToolTip="The room alone, across the whole frontage."),
+	AtEnd UMETA(DisplayName="At One End", ToolTip="A covered passage takes one end of the frontage, the room the rest."),
+	Whole UMETA(DisplayName="Whole Frontage (一間過道)", ToolTip="The whole frontage is a one-bay passage, walled on both sides."),
+};
+
+// 耳房, alone or with a 過道: a low room on a hall's flank, beside (or as) a covered way to the boundary.
 USTRUCT(BlueprintType)
 struct FHutongEarPassageParams
 {
@@ -16,16 +24,19 @@ struct FHutongEarPassageParams
 
 	FHutongEarPassageParams();
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Room", meta=(DisplayName="Room (耳房)", ToolTip="The ear room's house parameters."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Room", meta=(HutongBasic, DisplayName="Room (耳房)", HutongHideChildren="bHasFrontVeranda, bHasRearVeranda, VerandaDepth, bHasVerandaEndDoorways, bHasRearHighWindows, RearWindowWidth, RearWindowHeight, RearWindowHeadDrop", ToolTip="The ear room's house parameters."))
 	FHutongSiheyuanParams Room;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(HutongBasic, DisplayName="Passage Width (過道)", UIMin="120", UIMax="400", ClampMin="80", Units="cm", ToolTip="Clear width of the passage, wall face to wall face, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(HutongBasic, DisplayName="Passage (過道)", ToolTip="Where a covered passage runs: none, at one end, or the whole frontage."))
+	EHutongEarPassage Passageway = EHutongEarPassage::AtEnd;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(HutongBasic, DisplayName="Passage Width (過道)", EditCondition="Passageway != EHutongEarPassage::None", UIMin="120", UIMax="400", ClampMin="80", Units="cm", ToolTip="Clear width of the passage between wall faces, in cm."))
 	double PassageWidth = 240.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(HutongBasic, DisplayName="Passage At Far End", ToolTip="Puts the passage at the far end of the frontage."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(HutongBasic, DisplayName="Passage At Far End", EditCondition="Passageway != EHutongEarPassage::None", ToolTip="Puts the passage, or its outer wall, at the far end of the frontage."))
 	bool bPassageAtFarEnd = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Room's Roof Runs Over It", ToolTip="Carries the ear room's own roof on over the passage to the outer wall, which rises to it as a gable; off gives the passage its own low roof on the walls."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Room's Roof Runs Over It", ToolTip="Runs the ear room's roof over the passage to a gable outer wall."))
 	bool bRoofOverPassage = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Roof (過道頂)", EditCondition="!bRoofOverPassage", ToolTip="The passage's own low roof, when the room's does not run over it."))
@@ -36,6 +47,9 @@ struct FHutongEarPassageParams
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Outer Wall", EditCondition="bHasOuterWall", ToolTip="The wall along the passage's outer side, the full depth of the building."))
 	FHutongWallParams OuterWall;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Has Inner Wall", EditCondition="Passageway == EHutongEarPassage::Whole", ToolTip="Adds a wall on the passage's inner side when it spans the whole frontage."))
+	bool bHasInnerWall = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(HutongBasic, DisplayName="Close The Front (隔牆)", ToolTip="The wall across the front of the passage and its doorway."))
 	bool bHasClosingWall = true;
@@ -50,8 +64,14 @@ struct FHutongEarPassageParams
 
 	// Narrowest room; the frontage is held at the strip plus this.
 	static constexpr double MinRoomWidthCm = 100.0;
+	// An ear room is one or two bays; a wider drag holds at two.
+	static constexpr int32 MaxRoomBays = 2;
 
-	double GetOuterWallThickness() const { return bHasOuterWall ? OuterWall.GetThickness() : 0.0; }
+	bool HasPassage() const { return Passageway != EHutongEarPassage::None; }
+	bool HasRoom() const { return Passageway != EHutongEarPassage::Whole; }
+	double GetOuterWallThickness() const { return HasPassage() && bHasOuterWall ? OuterWall.GetThickness() : 0.0; }
+	double GetInnerWallThickness() const { return Passageway == EHutongEarPassage::Whole && bHasInnerWall ? OuterWall.GetThickness() : 0.0; }
+	double GetSideWallsThickness() const { return GetOuterWallThickness() + GetInnerWallThickness(); }
 	// Closing wall with its doorway, narrowed to what the clear way can carry with the wall generator's
 	// flanking masonry; not yet pinned or sized.
 	FHutongWallParams FittedClosingWall() const
@@ -96,16 +116,16 @@ struct FHutongEarPassageParams
 	// Whether the fitted closing wall has its doorway on its actual run.
 	bool HasClosingDoorway() const
 	{
-		if (!bHasClosingWall) return false;
+		if (!HasPassage() || !bHasClosingWall) return false;
 		const FHutongWallParams C = ClosingWallParams();
 		return C.HasDecorativeDoorway(C.Length);
 	}
 
-	// Clear way, wall face to gable: as asked, or wide enough for the closing wall's doorway (a
-	// passage narrower than its doorway is walled shut).
-	double GetClearWidth() const
+	// Narrowest clear way: wide enough for the closing wall's doorway (a passage narrower than its
+	// doorway is walled shut).
+	double GetMinClearWidth() const
 	{
-		double Clear = FMath::Max(PassageWidth, 60.0);
+		double Clear = 60.0;
 		if (bHasClosingWall)
 		{
 			const FHutongWallParams C = FittedClosingWall();
@@ -113,26 +133,56 @@ struct FHutongEarPassageParams
 		}
 		return Clear;
 	}
-	// Strip taken off the frontage: clear way plus the wall it runs along.
-	double GetStripWidth() const { return GetClearWidth() + GetOuterWallThickness(); }
+	// Clear way, wall face to gable (or wall to wall over the whole frontage): as asked or dragged,
+	// never under the minimum.
+	double GetClearWidth() const
+	{
+		switch (Passageway)
+		{
+		case EHutongEarPassage::None:  return 0.0;
+		case EHutongEarPassage::Whole: return FMath::Max(Width - GetSideWallsThickness(), GetMinClearWidth());
+		default:                       return FMath::Max(PassageWidth, GetMinClearWidth());
+		}
+	}
+	// Strip taken off the frontage: clear way plus the walls it runs along.
+	double GetStripWidth() const { return HasPassage() ? GetClearWidth() + GetSideWallsThickness() : 0.0; }
 	// Frontage as built: at least the strip plus the narrowest room.
-	double GetWidth() const { return FMath::Max(Width, GetStripWidth() + MinRoomWidthCm); }
-	double GetRoomWidth() const { return GetWidth() - GetStripWidth(); }
-	double GetRoomX0() const { return bPassageAtFarEnd ? 0.0 : GetStripWidth(); }
-	// Clear way, wall face to gable, in the frontage frame.
-	double GetClearX0() const { return bPassageAtFarEnd ? GetWidth() - GetStripWidth() : GetOuterWallThickness(); }
-	double GetOuterWallX0() const { return bPassageAtFarEnd ? GetWidth() - GetOuterWallThickness() : 0.0; }
+	double GetWidth() const
+	{
+		switch (Passageway)
+		{
+		case EHutongEarPassage::None:  return FMath::Max(Width, 1.0);
+		case EHutongEarPassage::Whole: return GetStripWidth();
+		default:                       return FMath::Max(Width, GetStripWidth() + MinRoomWidthCm);
+		}
+	}
+	// Frontage a new placement starts from, before any drag.
+	double GetSuggestedWidth() const
+	{
+		if (!HasRoom()) return FMath::Max(PassageWidth, GetMinClearWidth()) + GetSideWallsThickness();
+		return Room.SuggestedFrontage > 0.0 ? Room.SuggestedFrontage + GetStripWidth() : 0.0;
+	}
+	double GetRoomWidth() const { return HasRoom() ? GetWidth() - GetStripWidth() : 0.0; }
+	double GetRoomX0() const { return bPassageAtFarEnd || !HasPassage() ? 0.0 : GetStripWidth(); }
 	double GetStripX0() const { return bPassageAtFarEnd ? GetWidth() - GetStripWidth() : 0.0; }
+	// Clear way, wall face to gable, in the frontage frame; the inner wall (whole frontage) stands on
+	// the strip's room side, the outer one on its far side.
+	double GetClearX0() const { return bPassageAtFarEnd ? GetStripX0() + GetInnerWallThickness() : GetOuterWallThickness(); }
+	double GetOuterWallX0() const { return bPassageAtFarEnd ? GetWidth() - GetOuterWallThickness() : 0.0; }
+	double GetInnerWallX0() const { return bPassageAtFarEnd ? GetStripX0() : GetClearX0() + GetClearWidth(); }
 
-	// Room params with its share of the footprint.
+	// Room params with its share of the footprint; over the whole frontage, the one bay the passage
+	// takes, so the roof and eave are a one-bay ear room's.
 	FHutongSiheyuanParams RoomParams() const
 	{
 		FHutongSiheyuanParams R = Room;
-		R.Width = GetRoomWidth();
+		R.Width = HasRoom() ? GetRoomWidth() : GetWidth();
 		R.Depth = FMath::Max(Depth, 1.0);
-		R.BayCountOverride = BayCountOverride;
-		R.bRoofRunsOnLow = bRoofOverPassage && !bPassageAtFarEnd;
-		R.bRoofRunsOnHigh = bRoofOverPassage && bPassageAtFarEnd;
+		R.BayCountOverride = HasRoom() ? FMath::Min(BayCountOverride, MaxRoomBays) : 1;
+		if (R.BayCountOverride <= 0 && R.GetBayCount() > MaxRoomBays) R.BayCountOverride = MaxRoomBays;
+		const bool bRunsOn = bRoofOverPassage && Passageway == EHutongEarPassage::AtEnd;
+		R.bRoofRunsOnLow = bRunsOn && !bPassageAtFarEnd;
+		R.bRoofRunsOnHigh = bRunsOn && bPassageAtFarEnd;
 		return R;
 	}
 	FHutongPassageParams PassageParams() const

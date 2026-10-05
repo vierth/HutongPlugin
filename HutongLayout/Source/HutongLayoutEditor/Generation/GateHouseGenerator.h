@@ -31,7 +31,7 @@ struct FHutongGateHouseParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(HutongBasic, ToolTip="Which gate style to build."))
 	EHutongGateStyle Style = EHutongGateStyle::Ruyi;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Constrain To Historical Size", ToolTip="Clamps the footprint and eave height to the style's size band."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Constrain To Historical Size", ToolTip="Keeps the footprint and eave height within the style's size range."))
 	bool bConstrainToHistoricalSize = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(UIMin="200", UIMax="600", ClampMin="80", Units="cm", ToolTip="Height of the eave above the ground, in cm."))
@@ -58,7 +58,7 @@ struct FHutongGateHouseParams
 
 	// --- Doorway ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(EditCondition="Style != EHutongGateStyle::Ruyi", UIMin="0.25", UIMax="0.9", ClampMin="0.1", ClampMax="1", ToolTip="Clear width of the doorway as a fraction of the bay width. A Ruyi Gate (如意門) sizes its doorway from the span between its piers."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(EditCondition="Style != EHutongGateStyle::Ruyi", UIMin="0.25", UIMax="0.9", ClampMin="0.1", ClampMax="1", ToolTip="Doorway clear width as a fraction of the bay (pier span on a Ruyi Gate (如意門))."))
 	double DoorWidthFraction = 0.45;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(UIMin="180", UIMax="320", ClampMin="80", Units="cm", ToolTip="Height of the underside of the door head, in cm."))
@@ -96,7 +96,7 @@ struct FHutongGateHouseParams
 
 	// --- 如意門 only ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(DisplayName="Door Head Projection (門頭)", EditCondition="Style == EHutongGateStyle::Ruyi", UIMin="0", UIMax="30", ClampMin="0", Units="cm", ToolTip="How far the brick door head (門頭) frieze under the eave projects from the wall face at its top course, in cm; zero omits it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(DisplayName="Door Head Projection (門頭)", EditCondition="Style == EHutongGateStyle::Ruyi", UIMin="0", UIMax="30", ClampMin="0", Units="cm", ToolTip="Projection of the brick door head (門頭) frieze from the wall, in cm; 0 omits it."))
 	double DoorHeadProjection = 18.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(HutongBasic, DisplayName="Carved Door Head (雕花門頭)", EditCondition="Style == EHutongGateStyle::Ruyi", ToolTip="Carves the brick door head (門頭); off leaves it plain (素活)."))
@@ -104,7 +104,7 @@ struct FHutongGateHouseParams
 
 	// --- Shell ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Base Course Height", UIMin="0", UIMax="200", Units="cm", ToolTip="Height of the base course (下鹼) above the floor, in cm; zero derives it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Base Course Height", UIMin="0", UIMax="200", Units="cm", ToolTip="Height of the base course (下鹼) above the floor, in cm; 0 for automatic."))
 	double BaseCourseHeight = 0.0;
 
 	double GetBaseCourseHeight() const
@@ -126,12 +126,12 @@ struct FHutongGateHouseParams
 
 	// --- Roof ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Front Roof Overhang", UIMin="0", UIMax="200", Units="cm", ToolTip="How far the front eave projects past the wall, in cm; zero derives it from the column height and the gate's rank."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Front Roof Overhang", UIMin="0", UIMax="200", Units="cm", ToolTip="How far the front eave projects past the wall, in cm; 0 for automatic."))
 	double RoofOverhang = 0.0;
 
 	// No rear overhang: the gate's rear eave faces the court and is built as a front eave.
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Rise", UIMin="0", UIMax="300", ClampMin="0", Units="cm", ToolTip="Height of the ridge above the eave, in cm; zero derives it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Rise", UIMin="0", UIMax="300", ClampMin="0", Units="cm", ToolTip="Height of the ridge above the eave, in cm; 0 for automatic."))
 	double RoofRise = 0.0;
 
 
@@ -162,14 +162,14 @@ struct FHutongGateHouseParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="20", ClampMin="0", Units="cm", ToolTip="Section size of the rafter ends (椽頭), in cm; 0 omits them."))
 	double RafterEndSection = 7.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Models each tile course down the roof instead of drawing it in the texture."))
 	bool bHasTileRuns = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Exposed Frame (徹上明造)", ToolTip="No ceiling: the roof is a shell on rafters carried by the roof frame (梁架: beams, posts and purlins) over the columns, open to view from inside. Close detail levels only; it adds triangles only an interior shows."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Exposed Frame (徹上明造)", ToolTip="No ceiling: shows the roof frame (梁架) from inside; close detail levels only."))
 	// On: a gate passage is open to its rafters (圖5-1-4.2 section).
 	bool bExposedFrame = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(HutongBasic, DisplayName="Splayed Screen Walls (反八字影壁)", EditCondition="Style == EHutongGateStyle::Guangliang", EditConditionHides, ToolTip="Builds a pair of screen walls (反八字影壁, 撇山影壁) splayed out from the front of the gable piers, making a small forecourt before the gate. They stand outside the footprint, in front of the neighbouring facade."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(HutongBasic, DisplayName="Splayed Screen Walls (反八字影壁)", EditCondition="Style == EHutongGateStyle::Guangliang", EditConditionHides, ToolTip="Builds splayed screen walls (反八字影壁, 撇山影壁) before the gate, outside the footprint."))
 	bool bSplayedScreens = false;
 
 	bool HasSplayedScreens() const { return bSplayedScreens && Style == EHutongGateStyle::Guangliang; }

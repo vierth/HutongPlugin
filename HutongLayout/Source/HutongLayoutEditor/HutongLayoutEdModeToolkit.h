@@ -27,6 +27,11 @@ public:
 
 	// The active tool's panel or, on the Scene tab, the mode's actions on placed buildings.
 	virtual TSharedPtr<SWidget> GetInlineContent() const override;
+	// Labels get the wider column: at the default split a label was cut to leave a checkbox half the row.
+	virtual void CustomizeDetailsViewArgs(FDetailsViewArgs& ArgsInOut) override { ArgsInOut.ColumnWidth = NameColumnShare; }
+	virtual void CustomizeModeDetailsViewArgs(FDetailsViewArgs& ArgsInOut) override { ArgsInOut.ColumnWidth = NameColumnShare; }
+	// The value column's share of the row.
+	static constexpr float NameColumnShare = 0.4f;
 
 private:
 	URectDragToolBase* GetActiveRectTool() const;
@@ -72,7 +77,6 @@ private:
 	bool IsPropertyVisible(const struct FPropertyAndParent& PropertyAndParent) const;
 	ECheckBoxState GetShowAdvancedState() const;
 	void OnShowAdvancedChanged(ECheckBoxState State);
-	FText GetAdvancedHintText() const;
 
 	// Selected building's component, shown here rather than via the level editor's selection:
 	// selecting the component from here restarted the active tool mid-click and dropped the plan handles.

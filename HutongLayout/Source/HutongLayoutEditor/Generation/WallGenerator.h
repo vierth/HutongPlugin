@@ -54,7 +54,7 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(HutongBasic, DisplayName="Role", ToolTip="Role of the wall."))
 	EHutongWallRole Role = EHutongWallRole::Perimeter;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Derive From Role", ToolTip="Takes height, thickness and cap from the role."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Derive From Role", ToolTip="Uses the role's standard height, thickness and cap."))
 	bool bDeriveFromRole = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(EditCondition="!bDeriveFromRole", UIMin="30", UIMax="600", ClampMin="10", Units="cm", ToolTip="Height of the wall body to the underside of the cap, in cm."))
@@ -63,7 +63,7 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(EditCondition="!bDeriveFromRole", UIMin="5", UIMax="120", ClampMin="1", Units="cm", ToolTip="Thickness of the wall across the run, in cm."))
 	double Thickness = HutongCanon::Wall::PerimeterThicknessCm;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Base Course Height", UIMin="0", UIMax="300", Units="cm", ToolTip="Height of the base course (下鹼) from the ground, in cm; zero derives it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Base Course Height", UIMin="0", UIMax="300", Units="cm", ToolTip="Height of the base course (下鹼) from the ground, in cm; zero for automatic."))
 	double BaseCourseHeight = 0.0;
 
 	double GetBaseCourseHeight() const
@@ -93,10 +93,10 @@ struct FHutongWallParams
 	double CapRidgeHeight = 12.0;
 
 	// Peaked by default: a 眉子 ridge sits on a fold; a rolled crown drops it.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(DisplayName="Cap Ridge Roll", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="How rounded the cap's crown is, 0 for a peaked cap with a ridge course to 1 for a full roll with none."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(DisplayName="Cap Ridge Roll", UIMin="0", UIMax="1", ClampMin="0", ClampMax="1", ToolTip="Roundness of the cap's crown, from 0 (peaked) to 1 (fully rolled)."))
 	double CapRidgeRoll = 0.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the cap, rather than leaving the texture to draw it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Cap", meta=(DisplayName="Tile Courses (壟)", ToolTip="Models each tile course on the cap as geometry."))
 	bool bHasTileRuns = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Window Details", meta=(HutongBasic, DisplayName="Shape", EditCondition="bHasWindows", ToolTip="Outline of each decorative window (什錦窗) opening."))
@@ -135,7 +135,7 @@ struct FHutongWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(DisplayName="Doorway Height", EditCondition="Doorway != EHutongWallDoorway::None", UIMin="150", UIMax="260", ClampMin="120", Units="cm", ToolTip="Clear height of the garden doorway above the sill, in cm."))
 	double DoorwayHeight = 200.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(DisplayName="Doorway Sill", EditCondition="Doorway != EHutongWallDoorway::None", UIMin="0", UIMax="30", ClampMin="0", Units="cm", ToolTip="Height of the stone sill the doorway's shape is cut flat at, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(DisplayName="Doorway Sill", EditCondition="Doorway != EHutongWallDoorway::None", UIMin="0", UIMax="30", ClampMin="0", Units="cm", ToolTip="Height of the doorway's stone sill, in cm."))
 	double DoorwaySillHeight = 12.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Garden Doorway Details", meta=(DisplayName="Surround Width", EditCondition="Doorway != EHutongWallDoorway::None", UIMin="0", UIMax="35", ClampMin="0", Units="cm", ToolTip="Width of the moulded surround round the doorway, in cm; zero omits it."))

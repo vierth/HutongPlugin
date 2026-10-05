@@ -5,6 +5,7 @@
 #include "Tools/HutongPresets.h"
 #include "Tools/HutongPresetDefaults.h"
 #include "Tools/HutongPanelFilter.h"
+#include "Tools/HutongPanelCustomizations.h"
 #include "Tools/CompoundTool.h"
 #include "Generation/HutongBuildingComponent.h"
 #include "Modules/ModuleManager.h"
@@ -180,6 +181,18 @@ bool FHutongPanelSimpleViewTest::RunTest(const FString& Parameters)
 		const int32 Inner = Count(FHutongDoorStoneParams::StaticStruct(), false, Stones);
 		TestTrue(FString::Printf(TEXT("door stones: on/off and style (%d)"), Inner), Inner == 2);
 	}
+	return true;
+}
+
+// The Scene tab's foot names when the source last changed, and says when the running build predates it.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPluginUpdatedTest, "HutongLayout.Panel.PluginUpdated",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongPluginUpdatedTest::RunTest(const FString& Parameters)
+{
+	const FString Text = HutongPanelCustomizations::PluginUpdatedText().ToString();
+	TestTrue(TEXT("names a time"), Text.StartsWith(TEXT("Plugin last updated 20")));
+	AddInfo(Text);
 	return true;
 }
 

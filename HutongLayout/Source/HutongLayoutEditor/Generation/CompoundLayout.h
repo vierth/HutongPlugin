@@ -14,7 +14,7 @@ enum class EHutongCourtWalk : uint8
 
 	Corridor UMETA(DisplayName = "Ring Corridor (抄手遊廊) — the covered ring", ToolTip="A ring corridor (抄手遊廊) round the inner court."),
 
-	Linked UMETA(DisplayName = "Verandas Linked by Corridors (前廊 + 抄手遊廊)", ToolTip="Front verandas (前廊) on the side houses (廂房), joined by corridors (抄手遊廊) to the inner gate (垂花門) and to the main hall's (正房) veranda: a covered walk all round the court."),
+	Linked UMETA(DisplayName = "Verandas Linked by Corridors (前廊 + 抄手遊廊)", ToolTip="Side-house verandas (前廊) linked by corridors (抄手遊廊) into a covered walk round the court."),
 
 	None UMETA(DisplayName = "Neither", ToolTip="No verandas and no corridor."),
 };
@@ -29,7 +29,7 @@ enum class EHutongCompoundSize : uint8
 
 	Large UMETA(DisplayName = "Large (大型) — 25 m wide"),
 
-	Standard UMETA(DisplayName = "Standard (標准) — Fig 2-9.1, 22 m wide", ToolTip="The standard three-court compound of Fig 2-9.1 in Siheyuan Architecture and Its Construction (四合院建築及其構造), at the page's own proportions."),
+	Standard UMETA(DisplayName = "Standard (標准) — Fig 2-9.1, 22 m wide", ToolTip="The standard three-court compound, at its reference proportions."),
 
 	Custom UMETA(DisplayName = "Custom — sized by dragging"),
 };

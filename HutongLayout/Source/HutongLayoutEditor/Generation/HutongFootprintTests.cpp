@@ -733,8 +733,8 @@ bool FHutongFootprintConvertTest::RunTest(const FString& Parameters)
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
-	const HutongDetailOps::FConvertTarget House = HutongDetailOps::FindConvertTarget(TEXT("house (房)"));
-	const HutongDetailOps::FConvertTarget LaneWall = HutongDetailOps::FindConvertTarget(TEXT("lane wall (院牆)"));
+	const HutongDetailOps::FConvertTarget House = HutongDetailOps::FindConvertTarget(TEXT("House (房)"));
+	const HutongDetailOps::FConvertTarget LaneWall = HutongDetailOps::FindConvertTarget(TEXT("Lane Wall (院牆)"));
 	if (!TestTrue(TEXT("the targets exist"), House.IsValid() && LaneWall.IsValid())) { World->DestroyWorld(false); return false; }
 
 	// 鋪面房 → 房 keeps the corners, as does 房 → 院牆 (a wall end can be cut on the bias).

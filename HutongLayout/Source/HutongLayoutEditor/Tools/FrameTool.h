@@ -12,7 +12,7 @@ class UHutongFrameToolProperties : public UInteractiveToolPropertySet
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, Category="Stamp", meta=(DisplayName="Full House (房)", ToolTip="Stamps the whole house these params describe — walls, windows, roof — instead of its bare frame, at the same footprint, so the two can be placed side by side."))
+	UPROPERTY(EditAnywhere, Category="Stamp", meta=(DisplayName="Full House (房)", ToolTip="Builds the whole house (walls, windows, roof) instead of the bare frame."))
 	bool bFullHouse = false;
 
 	UPROPERTY(EditAnywhere, Category="Frame", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the timber frame (構架)."))

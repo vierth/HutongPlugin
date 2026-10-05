@@ -50,4 +50,7 @@ namespace HutongPanelCustomizations
 {
 	void Register();
 	void Unregister();
+
+	// "Plugin last updated <time>": the last commit to change the plugin, in local time.
+	FText PluginUpdatedText();
 }

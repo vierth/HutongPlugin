@@ -8,6 +8,7 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/SBoxPanel.h"
+#include "HutongPluginStamp.h"
 #include "IDetailPropertyRow.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Text/STextBlock.h"
@@ -260,6 +261,15 @@ void FHutongBuildingComponentCustomization::CustomizeDetails(IDetailLayoutBuilde
 	});
 }
 
+FText HutongPanelCustomizations::PluginUpdatedText()
+{
+	// The last commit to change the plugin, written into the source by .githooks/pre-commit: copying,
+	// checking out or rebuilding cannot move it.
+	const FDateTime Utc = FDateTime::FromUnixTimestamp(HUTONG_PLUGIN_UPDATED_UTC);
+	const FText When = FText::FromString((Utc + (FDateTime::Now() - FDateTime::UtcNow())).ToString(TEXT("%Y-%m-%d %H:%M")));
+	return FText::Format(NSLOCTEXT("HutongScene", "Version", "Plugin last updated {0}"), When);
+}
+
 void FHutongModeSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& DetailBuilder)
 {
 	TArray<TWeakObjectPtr<UObject>> Objects;
@@ -285,31 +295,34 @@ void FHutongModeSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& De
 				return FReply::Handled();
 			});
 	};
-	// One action per line: the button, and beside it what it does.
-	auto Action = [&](IDetailCategoryBuilder& Category, const FText& Label, const FText& What, FDo Do, FCan Can = nullptr)
+	// One action per line, its description on hover: written beside it, it wrapped a word a line in a
+	// narrow panel.
+	auto Action = [&](IDetailCategoryBuilder& Category, const FText& Label, const FText& Tip, FDo Do, FCan Can = nullptr)
 	{
 		Category.AddCustomRow(Label)
 		.WholeRowContent()
+		.HAlign(HAlign_Left)
 		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 2.0f, 8.0f, 2.0f)
-			[
-				SNew(SBox).WidthOverride(190.0f)[Button(Label, What, Do, Can)]
-			]
-			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
-			[
-				SNew(STextBlock)
-				.Text(What)
-				.AutoWrapText(true)
-				.Font(IDetailLayoutBuilder::GetDetailFont())
-				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
-			]
+			SNew(SBox).WidthOverride(190.0f).Padding(FMargin(0.0f, 2.0f))[Button(Label, Tip, Do, Can)]
 		];
 	};
+	// A switch: the box, then its whole label (in the name column the label was cut to leave the box half the row).
 	auto Property = [&](IDetailCategoryBuilder& Category, FName Name) -> IDetailPropertyRow*
 	{
 		const TSharedRef<IPropertyHandle> Handle = DetailBuilder.GetProperty(Name);
-		return Handle->IsValidHandle() ? &Category.AddProperty(Handle) : nullptr;
+		if (!Handle->IsValidHandle()) return nullptr;
+		IDetailPropertyRow& Row = Category.AddProperty(Handle);
+		if (CastField<FBoolProperty>(Handle->GetProperty()))
+		{
+			Row.CustomWidget()
+			.WholeRowContent()
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 6.0f, 0.0f)[Handle->CreatePropertyValueWidget()]
+				+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)[Handle->CreatePropertyNameWidget()]
+			];
+		}
+		return &Row;
 	};
 	// A setting with an Apply button, lit while applying it would change something.
 	auto WithApply = [&](IDetailCategoryBuilder& Category, FName Name, const FText& Tip, FDo Do, FCan Can)
@@ -345,57 +358,59 @@ void FHutongModeSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& De
 	IDetailCategoryBuilder& Geometry = Category(TEXT("Geometry"));
 	Property(Geometry, GET_MEMBER_NAME_CHECKED(S, bPlanOnly));
 	Property(Geometry, GET_MEMBER_NAME_CHECKED(S, bShowPlanOutlines));
+	Property(Geometry, GET_MEMBER_NAME_CHECKED(S, bShowBuildingLabels));
 	Property(Geometry, GET_MEMBER_NAME_CHECKED(S, bPlansOverBuildings));
 	Action(Geometry, NSLOCTEXT("HutongScene", "GenLoaded", "Generate Loaded"),
-		NSLOCTEXT("HutongScene", "GenLoadedWhat", "Builds geometry for every laid-out building that is loaded."), &S::GenerateLoadedGeometry);
+		NSLOCTEXT("HutongScene", "GenLoadedWhat", "Build geometry for every loaded outline-only building."), &S::GenerateLoadedGeometry);
 	Action(Geometry, NSLOCTEXT("HutongScene", "GenSelected", "Generate Selected"),
-		NSLOCTEXT("HutongScene", "GenSelectedWhat", "Builds geometry for the selected laid-out buildings."), &S::GenerateSelectedGeometry, &S::HasSelectedLayout);
+		NSLOCTEXT("HutongScene", "GenSelectedWhat", "Build geometry for the selected outline-only buildings."), &S::GenerateSelectedGeometry, &S::HasSelectedLayout);
 	Action(Geometry, NSLOCTEXT("HutongScene", "RevLoaded", "Revert Loaded"),
-		NSLOCTEXT("HutongScene", "RevLoadedWhat", "Removes the geometry of every loaded building, keeping its outline."), &S::RevertLoadedToLayout);
+		NSLOCTEXT("HutongScene", "RevLoadedWhat", "Remove geometry from every loaded building, keeping its outline."), &S::RevertLoadedToLayout);
 	Action(Geometry, NSLOCTEXT("HutongScene", "RevSelected", "Revert Selected"),
-		NSLOCTEXT("HutongScene", "RevSelectedWhat", "Removes the geometry of the selected buildings, keeping their outlines."), &S::RevertSelectedToLayout, &S::HasSelectedBuilt);
+		NSLOCTEXT("HutongScene", "RevSelectedWhat", "Remove geometry from the selected buildings, keeping their outlines."), &S::RevertSelectedToLayout, &S::HasSelectedBuilt);
 
 	IDetailCategoryBuilder& Export = Category(TEXT("Export"));
 	Action(Export, NSLOCTEXT("HutongScene", "ExportAll", "Export All"),
-		NSLOCTEXT("HutongScene", "ExportAllWhat", "Writes every building in the level, loaded or not, to a new time-stamped file."), &S::ExportAll);
+		NSLOCTEXT("HutongScene", "ExportAllWhat", "Save every building in the level to a new file."), &S::ExportAll);
 	Action(Export, NSLOCTEXT("HutongScene", "ExportSel", "Export Selection"),
-		NSLOCTEXT("HutongScene", "ExportSelWhat", "Writes the selected buildings to a new time-stamped file."), &S::ExportSelection, &S::HasSelection);
+		NSLOCTEXT("HutongScene", "ExportSelWhat", "Save the selected buildings to a new file."), &S::ExportSelection, &S::HasSelection);
 
 	IDetailCategoryBuilder& Import = Category(TEXT("Import"));
 	Action(Import, NSLOCTEXT("HutongScene", "ImportLayout", "Import Layout"),
-		NSLOCTEXT("HutongScene", "ImportLayoutWhat", "Opens a layout file (the last export is offered) and places it at its recorded coordinates, or by hand with Customize Placement."), &S::ImportLayout);
+		NSLOCTEXT("HutongScene", "ImportLayoutWhat", "Place the buildings from a layout file."), &S::ImportLayout);
 	Property(Import, GET_MEMBER_NAME_CHECKED(S, bCustomizePlacement));
 	Property(Import, GET_MEMBER_NAME_CHECKED(S, bUpdateMatchingPlacements));
 	Property(Import, GET_MEMBER_NAME_CHECKED(S, ImportFolder));
 
 	IDetailCategoryBuilder& Housekeeping = Category(TEXT("Housekeeping"));
 	Action(Housekeeping, NSLOCTEXT("HutongScene", "RebuildLoaded", "Rebuild Loaded"),
-		NSLOCTEXT("HutongScene", "RebuildLoadedWhat", "Re-bakes every loaded building from its own settings."), &S::RebuildLoaded);
+		NSLOCTEXT("HutongScene", "RebuildLoadedWhat", "Rebuild every loaded building from its settings."), &S::RebuildLoaded);
 	Action(Housekeeping, NSLOCTEXT("HutongScene", "RebuildSel", "Rebuild Selected"),
-		NSLOCTEXT("HutongScene", "RebuildSelWhat", "Re-bakes the selected buildings from their own settings."), &S::RebuildSelection, &S::HasSelection);
+		NSLOCTEXT("HutongScene", "RebuildSelWhat", "Rebuild the selected buildings from their settings."), &S::RebuildSelection, &S::HasSelection);
 	Action(Housekeeping, NSLOCTEXT("HutongScene", "Overlaps", "Find Overlapping Buildings"),
-		NSLOCTEXT("HutongScene", "OverlapsWhat", "Lists loaded buildings sitting mostly on another's footprint, to keep one of each pair."), &S::FindOverlappingBuildings);
+		NSLOCTEXT("HutongScene", "OverlapsWhat", "List loaded buildings that sit mostly on another's footprint."), &S::FindOverlappingBuildings);
 	Action(Housekeeping, NSLOCTEXT("HutongScene", "Starter", "Create Starter Materials"),
-		NSLOCTEXT("HutongScene", "StarterWhat", "Writes one editable material per surface to /Game/HutongLayout/Materials; existing ones are kept."), &S::CreateStarterMaterials);
+		NSLOCTEXT("HutongScene", "StarterWhat", "Create an editable material for each surface in /Game/HutongLayout/Materials."), &S::CreateStarterMaterials);
 	Action(Housekeeping, NSLOCTEXT("HutongScene", "Unused", "Delete Unused Meshes"),
-		NSLOCTEXT("HutongScene", "UnusedWhat", "Offers to delete generated building meshes no building uses any more."), &S::DeleteUnusedGeneratedMeshes);
+		NSLOCTEXT("HutongScene", "UnusedWhat", "Delete generated meshes no building uses."), &S::DeleteUnusedGeneratedMeshes);
 
 	// Only with something selected: it acts on nothing else.
 	IDetailCategoryBuilder& Selection = Category(TEXT("Selection"));
 	if (Settings->HasSelection())
 	{
 		WithApply(Selection, GET_MEMBER_NAME_CHECKED(S, TargetLevel),
-			NSLOCTEXT("HutongScene", "ApplyLevelTip", "Rebuilds the selected buildings at this detail level."),
+			NSLOCTEXT("HutongScene", "ApplyLevelTip", "Rebuild the selected buildings at this detail level."),
 			&S::ApplyDetailLevel, &S::CanApplyDetailLevel);
-		WithApply(Selection, GET_MEMBER_NAME_CHECKED(S, ConvertTo),
-			NSLOCTEXT("HutongScene", "ApplyConvertTip", "Turns the selected buildings into this type, with the Convert Preset below."),
+		// One Apply for the pair, on the second: it takes both.
+		Property(Selection, GET_MEMBER_NAME_CHECKED(S, ConvertTo));
+		WithApply(Selection, GET_MEMBER_NAME_CHECKED(S, ConvertPreset),
+			NSLOCTEXT("HutongScene", "ApplyConvertTip", "Change the selected buildings to this type and preset."),
 			&S::ApplyConvert, &S::CanApplyConvert);
-		Property(Selection, GET_MEMBER_NAME_CHECKED(S, ConvertPreset));
 		WithApply(Selection, GET_MEMBER_NAME_CHECKED(S, DivideAtBayLine),
-			NSLOCTEXT("HutongScene", "ApplyDivideTip", "Divides each selected building in two at this bay line."),
+			NSLOCTEXT("HutongScene", "ApplyDivideTip", "Divide each selected building at this bay line."),
 			&S::ApplyDivide, &S::CanApplyDivide);
 		Action(Selection, NSLOCTEXT("HutongScene", "Fuse", "Fuse Two Selected"),
-			NSLOCTEXT("HutongScene", "FuseWhat", "Fuses two selected buildings standing end to end on one line into one."), &S::FuseSelection, &S::CanFuse);
+			NSLOCTEXT("HutongScene", "FuseWhat", "Join two selected buildings standing end to end."), &S::FuseSelection, &S::CanFuse);
 	}
 	else
 	{
@@ -406,7 +421,7 @@ void FHutongModeSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& De
 	Property(Information, GET_MEMBER_NAME_CHECKED(S, LoadedBuildings));
 	Property(Information, GET_MEMBER_NAME_CHECKED(S, LoadedTriangles));
 	Action(Information, NSLOCTEXT("HutongScene", "Count", "Count Loaded Buildings"),
-		NSLOCTEXT("HutongScene", "CountWhat", "Counts the loaded buildings and their triangles."), &S::RefreshCounts);
+		NSLOCTEXT("HutongScene", "CountWhat", "Count the loaded buildings and their triangles."), &S::RefreshCounts);
 }
 
 void HutongPanelCustomizations::Register()

@@ -266,7 +266,7 @@ FText UHutongWallTool::GetStagePromptText() const
 {
 	if (!bIsDragging || bRotateModeActive) return Super::GetStagePromptText();
 	return FText::Format(NSLOCTEXT("WallTool", "PromptSegment",
-		"Click to end this segment and start the next, at any angle; click the last end again to finish the run, or end it on a placed building's outline and it finishes there. G puts a gate on this segment (press again to take it off). Shift snaps the angle to 15°, - and = change height, Esc drops the run.{0}"),
+		"Click to end this segment; click the last end again or a building's outline to finish. G toggles a gate, Shift snaps to 15°, - and = change height, Esc drops the run.{0}"),
 		SnapKeyClause());
 }
 
@@ -433,7 +433,7 @@ TArray<FText> UHutongWallTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongWallTool", "HelpRun",
-		"Click to start the wall (on a building's edge too: only a click well inside it selects the building), click to end each segment, click the last end again to finish. A segment ending on a placed building's outline finishes the run. G toggles a gate on the segment being drawn.");
+		"Click to start the wall, click to end each segment, click the last end again or a building's outline to finish. G toggles a gate on the current segment.");
 	Lines.Insert(NSLOCTEXT("HutongWallTool", "HelpOpening",
 		"[ and ] slide the gate or doorway along the wall (Shift nudges, Ctrl jumps)."), 1);
 	return Lines;

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Generation/HutongDetail.h"
+#include "Generation/BaySide.h"
 
 class UHutongBuildingComponent;
 class UWorld;
@@ -39,6 +40,10 @@ namespace HutongDetailOps
 		FString Label;
 		UClass* Class = nullptr;
 		FName Variant = NAME_None;
+		// Kind of building, for grouping a menu (ConvertGroupName).
+		int32 Group = INDEX_NONE;
+		// Types one may become from the P / T menu share a family (CanExchange).
+		int32 Family = INDEX_NONE;
 
 		// The dropdown label; must name the target on its own.
 		bool IsValid() const { return Class != nullptr; }
@@ -47,8 +52,59 @@ namespace HutongDetailOps
 	// Every conversion target, found by walking the component classes, not a hand-kept list.
 	const TArray<FConvertTarget>& ConvertTargets();
 
+	// A target group's heading: buildings, gates, walls, ways, temple and pavilion, furnishings.
+	FText ConvertGroupName(int32 Group);
+
+	// Whether the P / T menu offers To for a building of type From: roofed buildings, gates, temple and
+	// pavilion among themselves; walls; corridor, passage and path; flower bed and water jar.
+	bool CanExchange(const FConvertTarget& From, const FConvertTarget& To);
+	// Whether every one of them may become To from the menu or keys.
+	bool CanAllBecome(const TArray<UHutongBuildingComponent*>& Buildings, const FConvertTarget& To);
+
 	// The target a dropdown label names, invalid when nothing matches.
 	FConvertTarget FindConvertTarget(const FString& Label);
+
+	// Index in ConvertTargets() of the building's own type (its label, else its class); INDEX_NONE if none.
+	int32 FindConvertTargetIndex(const UHutongBuildingComponent* Building);
+
+	// The preset key a target type's presets are saved under.
+	FName PresetKeyOf(const FConvertTarget& Target);
+
+	// A throwaway building of the target type (variant, preset) as the drag tool would have left it over
+	// Placed's footprint: the preset's values with the drag's own writes on top (ApplyDragDerived).
+	UHutongBuildingComponent* MakeAsDrawn(const UHutongBuildingComponent& Placed, UClass* Class, FName Variant,
+		const FString& Preset);
+
+	// Parameters on which the building differs from its own preset as drawn over its footprint (type
+	// defaults when it names none, or one that no longer exists), as "Group › Field" display names. What
+	// a change of preset or type would throw away; values the drag itself gave are not among them.
+	TArray<FString> CustomizedFields(const UHutongBuildingComponent* Building);
+
+	// Loads a preset of the building's own type as if it had been drawn with it here; the footprint
+	// stays. Rebuild is the caller's. False if the preset does not load.
+	bool ApplyPresetAsDrawn(UHutongBuildingComponent* Building, const FString& Preset);
+
+	// ---- Edits on a set of buildings, shared by the viewport keys and the right-click menu ----
+	// Each opens its own transaction and rebuilds what it changed; false when none of them applies.
+
+	// Those not already the given type (index into ConvertTargets; INDEX_NONE keeps each one's) and preset.
+	TArray<UHutongBuildingComponent*> NeedingChange(const TArray<UHutongBuildingComponent*>& Buildings,
+		int32 TypeIndex, const FString& Preset);
+	// Every customized field across them (CustomizedFields), each once.
+	TArray<FString> CustomizedAcross(const TArray<UHutongBuildingComponent*>& Buildings);
+	// Type and preset as the drag tool would have drawn them here (bay count carried). Returns how many changed.
+	int32 ChangeTypeOrPreset(const TArray<UHutongBuildingComponent*>& Buildings, int32 TypeIndex, const FString& Preset);
+	// One bay fewer or more on each that forces a count (a derived count seeded from the bays drawn).
+	bool AdjustBays(const TArray<UHutongBuildingComponent*>& Buildings, int32 Delta);
+	// Each facade to NextSide of its current one.
+	bool SetFacing(const TArray<UHutongBuildingComponent*>& Buildings, const FText& Title,
+		TFunctionRef<EHutongBaySide(const UHutongBuildingComponent&, EHutongBaySide)> NextSide);
+	bool TurnFacing(const TArray<UHutongBuildingComponent*>& Buildings, int32 Delta);
+	bool FlipFacing(const TArray<UHutongBuildingComponent*>& Buildings);
+	// Each wall's opening off, or a 牆垣門 on.
+	bool ToggleGate(const TArray<UHutongBuildingComponent*>& Buildings);
+	// Built re-bakes, laid-out redraws: the same seam as a panel edit.
+	void RebuildEdited(UHutongBuildingComponent* Building);
 
 	// Replaces each component with the target type's, keeping what the placement decided (position,
 	// footprint, run axis, facade side, detail level, palette, id) and taking the rest from the

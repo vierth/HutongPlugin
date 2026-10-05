@@ -17,7 +17,7 @@ UENUM()
 enum class EHutongSealedCornice : uint8
 {
 	IceTray UMETA(DisplayName = "Four-Course Ice-Tray Cornice (冰盤檐)", ToolTip="Four plain brick courses, each stepping out."),
-	Rounded UMETA(DisplayName = "Three-Course Rounded Cornice (雞素子檐)", ToolTip="A plain course, a rounded course, a cover course (Fig 5-3-9.8)."),
-	Drawer UMETA(DisplayName = "Three-Course Drawer Cornice (抽屜檐)", ToolTip="A plain course, a course of spaced blocks like drawers, a cover course (Fig 5-3-9.9)."),
-	SevenCourse UMETA(DisplayName = "Seven-Course Cornice (七層)", ToolTip="A string of beads and a half-round under a tall plain band, then brick rafter ends (Fig 5-3-9.10)."),
+	Rounded UMETA(DisplayName = "Three-Course Rounded Cornice (雞素子檐)", ToolTip="A plain course, a rounded course, a cover course."),
+	Drawer UMETA(DisplayName = "Three-Course Drawer Cornice (抽屜檐)", ToolTip="A plain course, a course of spaced drawer-like blocks, a cover course."),
+	SevenCourse UMETA(DisplayName = "Seven-Course Cornice (七層)", ToolTip="Beads and a half-round under a tall plain band, then brick rafter ends."),
 };

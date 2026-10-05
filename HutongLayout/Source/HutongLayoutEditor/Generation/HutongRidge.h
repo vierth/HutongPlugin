@@ -70,12 +70,15 @@ namespace HutongGen::Ridge
 
 	// Central 樓; side 樓 sit lower.
 	inline double Paifang(const FHutongPaifangParams& P) { return P.GetRoofEaveZ() + P.GetRoofRise(); }
-	// Taller of room and passage ridges (the room's in practice).
+	// Taller of room and passage ridges (the room's in practice); a passage over the whole frontage
+	// under its own roof has only that one.
 	inline double EarPassage(FHutongEarPassageParams P, double Frontage, double Depth)
 	{
 		P.Width = FMath::Max(Frontage, 1.0);
 		P.Depth = FMath::Max(Depth, 1.0);
 		const FHutongSiheyuanParams R = P.RoomParams();
+		if (!P.HasPassage()) return House(R, R.Width, R.Depth);
+		if (!P.HasRoom() && !P.bRoofOverPassage) return Passage(P.PassageParams());
 		return FMath::Max(House(R, R.Width, R.Depth), Passage(P.PassageParams()));
 	}
 }

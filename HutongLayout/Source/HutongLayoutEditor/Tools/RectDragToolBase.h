@@ -194,6 +194,26 @@ public:
 	// G with nothing being placed: the gate on each selected wall, on or off.
 	bool ToggleSelectedGate();
 
+	// P / T with nothing being placed: step the selection's pending preset or building type (Delta -1
+	// with Shift); nothing changes until Enter. False with no building selected.
+	bool CycleSelectedPreset(int32 Delta);
+	bool CycleSelectedType(int32 Delta);
+	// P / T: a menu at the cursor of the selection's presets, or of every type with its presets; a pick
+	// is applied as Enter would (warning first when values would be lost). False with no building selected.
+	bool OpenSelectedMenu(bool bTypes, const FVector2D& ScreenPosition);
+	// A menu pick: type (INDEX_NONE keeps each building's) and preset, applied at once.
+	void ChooseForSelection(int32 TypeIndex, const FString& Preset);
+	// Enter: applies the pending change; when it would replace customized values, the first Enter
+	// only warns and a second applies. False with nothing pending.
+	bool ConfirmSelectedCycle();
+	// Esc: drops the pending change; false when there was none.
+	bool CancelSelectedCycle();
+	// The pending change and how to apply it, or its warning; empty with nothing pending.
+	FText GetPendingCycleText() const;
+	// The same as a large title and smaller detail lines, for the viewport banner; false with nothing
+	// pending. bWarning when the next Enter only confirms the warning.
+	bool GetPendingCycleLines(FText& OutTitle, TArray<FText>& OutDetails, bool& bOutWarning) const;
+
 	// Named clicks of a placement, and the one awaited.
 	virtual TArray<FText> GetStageNames() const;
 	virtual int32 GetStageIndex() const;
@@ -212,7 +232,8 @@ public:
 	FText GetPlacementSummaryText() const;
 
 	// Readout of what the cursor rests on, polled by the mode panel.
-	FText GetHoverSummaryText() const;
+	// bWithPending heads it with the pending P / T change (the panel); the viewport has its banner.
+	FText GetHoverSummaryText(bool bWithPending = true) const;
 
 protected:
 	// Building under the cursor while nothing is being placed.
@@ -313,6 +334,26 @@ protected:
 	void DivideAtMarker(class UHutongBuildingComponent* Building, int32 BayLine);
 	void FuseAtMarker(class UHutongBuildingComponent* Building, bool bAtEnd);
 
+	// A preset or type chosen with P / T for the selection, not yet applied. Dropped when the selection
+	// changes.
+	struct FPendingCycle
+	{
+		TArray<TWeakObjectPtr<class UHutongBuildingComponent>> Buildings;
+		int32 TypeIndex = INDEX_NONE;	// into HutongDetailOps::ConvertTargets(); none = keep each type
+		FString Preset;
+		bool bChosen = false;			// a preset or type has been picked, so Enter has something to apply
+		bool bArmed = false;			// warned of customizations; the next Enter applies
+		TArray<FString> Customized;
+		FText Note;						// why P or T could not pick
+	};
+	FPendingCycle Pending;
+	// Pending belongs to exactly this selection.
+	bool IsPendingFor(const TArray<class UHutongBuildingComponent*>& Selected) const;
+	// Starts a fresh pending change unless one is already held for this selection.
+	void HoldPendingFor(const TArray<class UHutongBuildingComponent*>& Selected);
+	// Selected buildings the pending change would alter.
+	TArray<class UHutongBuildingComponent*> PendingWork(const TArray<class UHutongBuildingComponent*>& Selected) const;
+
 	// The single selected building of any kind; the second only if laid out, not built.
 	class UHutongBuildingComponent* GetSelectedBuilding() const;
 	class UHutongBuildingComponent* GetSelectedPlanBuilding() const;
@@ -369,6 +410,12 @@ protected:
 	void DrawSelectedFootprints(FPrimitiveDrawInterface* PDI) const;
 	void DrawHoverInspection(FPrimitiveDrawInterface* PDI) const;
 	void DrawHoverInspectionHUD(FCanvas* Canvas, IToolsContextRenderAPI* RenderAPI) const;
+	// Type and preset on every footprint large enough on screen to hold them.
+	void DrawBuildingLabels(FCanvas* Canvas, IToolsContextRenderAPI* RenderAPI) const;
+	// The pending P / T change, large, across the top of the viewport.
+	void DrawPendingCycleBanner(FCanvas* Canvas) const;
+	// Text the engine's bitmap fonts can draw: bracketed Chinese dropped, the middle dot a dash.
+	static FString AsciiForBitmapFont(const FString& Text);
 
 	// Whether the ray hits a building worth hovering.
 	bool TraceHoveredBuilding(const FInputDeviceRay& Ray, FHitResult& OutHit) const;

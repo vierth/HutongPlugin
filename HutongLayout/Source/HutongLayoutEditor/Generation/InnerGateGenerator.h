@@ -13,8 +13,8 @@
 UENUM(BlueprintType)
 enum class EHutongInnerGateStyle : uint8
 {
-	SinglePost UMETA(DisplayName="Single Post (獨立柱擔梁式)", ToolTip="One column pair in the middle of the depth carrying a beam cantilevered both ways, a hanging post at each of its four ends; the doors between the columns."),
-	OneHallOneRoll UMETA(DisplayName="Hall and Roll (一殿一卷式)", ToolTip="Two column rows: the front carries the doors in the wall line with hanging posts cantilevered ahead of it under a gable roof, the rear a screen door (屏門) under a rolled roof; the sides between open onto the covered walk."),
+	SinglePost UMETA(DisplayName="Single Post (獨立柱擔梁式)", ToolTip="One column pair carrying beams cantilevered both ways, a hanging post at each end."),
+	OneHallOneRoll UMETA(DisplayName="Hall and Roll (一殿一卷式)", ToolTip="Two column rows: front doors under a gable roof, rear screen door (屏門) under a rolled roof."),
 };
 
 // 垂花門: inner gate to the family's private courtyard.
@@ -36,10 +36,10 @@ struct FHutongInnerGateParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Hanging Post Reach", EditCondition="Style == EHutongInnerGateStyle::OneHallOneRoll", UIMin="40", UIMax="120", ClampMin="20", Units="cm", ToolTip="How far ahead of the front columns the beams carry the hanging posts (垂蓮柱), in cm."))
 	double CantileverLength = HutongCanon::Gate::InnerGateCantileverCm;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(HutongBasic, DisplayName="Screen Door Open (屏門)", EditCondition="Style == EHutongInnerGateStyle::OneHallOneRoll", ToolTip="Folds the rear screen door (屏門) open so the way runs straight through; shut, it turns the way aside onto the covered walk."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(HutongBasic, DisplayName="Screen Door Open (屏門)", EditCondition="Style == EHutongInnerGateStyle::OneHallOneRoll", ToolTip="Opens the rear screen door (屏門) so the way runs straight through."))
 	bool bScreenDoorOpen = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Constrain To Historical Size", ToolTip="Holds the footprint and eave height within the inner gate's (垂花門) size band."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(DisplayName="Constrain To Historical Size", ToolTip="Keeps the footprint and eave height within the inner gate's (垂花門) size range."))
 	bool bConstrainToHistoricalSize = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gate", meta=(UIMin="240", UIMax="420", ClampMin="120", Units="cm", ToolTip="Height of the eave above the ground, in cm."))
@@ -147,10 +147,10 @@ struct FHutongInnerGateParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="18", ClampMin="0", Units="cm", ToolTip="Size of each rafter end (椽頭), in cm; 0 builds none."))
 	double RafterEndSection = 7.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Models each tile course down the roof instead of drawing it in the texture."))
 	bool bHasTileRuns = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Exposed Frame (徹上明造)", ToolTip="No ceiling: the roof is a shell on rafters carried by the roof frame (梁架: beams, posts and purlins) over the columns, open to view from inside. Close detail levels only; it adds triangles only an interior shows."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Exposed Frame (徹上明造)", ToolTip="No ceiling: shows the roof frame (梁架) from inside; close detail levels only."))
 	bool bExposedFrame = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="10", UIMax="50", ClampMin="4", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))

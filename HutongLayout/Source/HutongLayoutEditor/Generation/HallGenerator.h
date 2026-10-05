@@ -24,7 +24,7 @@ struct FHutongHallParams
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(HutongBasic, DisplayName="Style", ToolTip="A small lane temple, or the grand nine-purlin hall of the Qing building regulations (則例), sized from its frontage."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(HutongBasic, DisplayName="Style", ToolTip="Small lane temple, or the grand nine-purlin hall of the Qing building regulations (則例)."))
 	EHutongHallStyle Style = EHutongHallStyle::Small;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(HutongBasic, DisplayName="Roof Type", EditCondition="Style == EHutongHallStyle::Small", EditConditionHides, ToolTip="Roof form built over the hall."))
@@ -112,7 +112,7 @@ struct FHutongHallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(DisplayName="Step Tread", UIMin="20", UIMax="50", ClampMin="10", Units="cm", ToolTip="Depth of each step tread, in cm."))
 	double StepTread = 34.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(DisplayName="Base Course Height (下鹼)", UIMin="0", UIMax="200", ClampMin="0", Units="cm", ToolTip="Height of the base course (下鹼) above the floor, in cm; zero derives it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(DisplayName="Base Course Height (下鹼)", UIMin="0", UIMax="200", ClampMin="0", Units="cm", ToolTip="Height of the base course (下鹼) above the floor, in cm; 0 for automatic."))
 	double BaseCourseHeight = 0.0;
 
 	double GetBaseCourseHeight() const
@@ -222,10 +222,10 @@ struct FHutongHallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Eave Fascia Depth (勾頭滴水)", UIMin="0", UIMax="35", ClampMin="0", Units="cm", ToolTip="Depth of the eave cap and drip tile (勾頭滴水) band, in cm."))
 	double EaveFasciaDepth = 14.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Model each course of tiles running down the roof, rather than leaving the texture to draw it."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Models each tile course down the roof instead of drawing it in the texture."))
 	bool bHasTileRuns = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Exposed Frame (徹上明造)", ToolTip="No ceiling: the roof is a shell on rafters carried by the roof frame (梁架: beams, posts and purlins) over the columns, open to view from inside. Close detail levels only; it adds triangles only an interior shows."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Exposed Frame (徹上明造)", ToolTip="No ceiling: shows the roof frame (梁架) from inside; close detail levels only."))
 	bool bExposedFrame = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Section (椽頭)", UIMin="0", UIMax="15", ClampMin="0", Units="cm", ToolTip="Size of the rafter ends under the eave, in cm; zero omits them."))

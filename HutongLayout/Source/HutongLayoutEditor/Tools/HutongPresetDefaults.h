@@ -31,6 +31,12 @@ namespace HutongPresets
 	// Siheyuan preset names RegisterBuiltInPresets registered, in order.
 	const TArray<FString>& BuiltInSiheyuanNames();
 
+	// Ear room preset names (the ear room tool's), in order.
+	const TArray<FString>& BuiltInEarRoomNames();
+
+	// Ear room tool default: the plain room with its front door.
+	const FString& DefaultEarRoomName();
+
 	// Default house: the side house, two per courtyard, the most numerous roof on a 1750 hutong.
 	const FString& DefaultSiheyuanName();
 
