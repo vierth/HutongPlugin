@@ -47,4 +47,6 @@ public:
 	TSharedPtr<FUICommandInfo> BeginImportTool;
 	TSharedPtr<FUICommandInfo> BeginFlowerBedTool;
 	TSharedPtr<FUICommandInfo> BeginWaterJarTool;
+	TSharedPtr<FUICommandInfo> BeginUnknownTool;
+	TSharedPtr<FUICommandInfo> BeginCityWallTool;
 };

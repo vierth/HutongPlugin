@@ -106,7 +106,7 @@ FString UHutongStoreyTool::GetPlacementDetail() const
 	const FHutongStoreyParams& P = Settings->Params;
 	const int32 Bays = ComputeBayCountForSide();
 	return FString::Printf(TEXT("Multi-story building (樓) · %d bays (間) · %d open · eave %.0f cm"),
-		Bays, FMath::Clamp(P.OpenBayCount, 0, Bays), P.GetEaveHeight());
+		Bays, P.GetOpenBayCount(Bays), P.GetEaveHeight());
 }
 
 TArray<FText> UHutongStoreyTool::GetStageNames() const

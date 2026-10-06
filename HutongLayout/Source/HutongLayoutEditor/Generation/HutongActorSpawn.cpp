@@ -50,7 +50,8 @@ namespace
 	// actor's package, so reuse one by colour rather than leak one per rebuild. Scans everything
 	// outered to the actor, not the material list: a demotion (精 → 塊) drops slots from the list
 	// but leaves their instances in the package.
-	UMaterialInterface* FindReusableTint(UObject* Outer, const FLinearColor& Color, UMaterialInterface* Base)
+	UMaterialInterface* FindReusableTint(UObject* Outer, const FLinearColor& Color, UMaterialInterface* Base,
+		UTexture* Albedo = nullptr)
 	{
 		if (!Outer || !Base) return nullptr;
 
@@ -63,8 +64,12 @@ namespace
 			if (!MIC || MIC->Parent != Base) return;
 
 			FLinearColor Existing;
+			UTexture* ExistingAlbedo = nullptr;
+			const bool bOwnAlbedo = MIC->TextureParameterValues.ContainsByPredicate(
+				[](const FTextureParameterValue& V) { return V.ParameterInfo.Name == TEXT("Albedo"); });
+			if (bOwnAlbedo) MIC->GetTextureParameterValue(FMaterialParameterInfo(TEXT("Albedo")), ExistingAlbedo);
 			if (MIC->GetVectorParameterValue(FMaterialParameterInfo(TEXT("Color")), Existing)
-				&& Existing.Equals(Color, 1.0e-4f))
+				&& Existing.Equals(Color, 1.0e-4f) && ExistingAlbedo == Albedo)
 			{
 				Found = MIC;
 			}
@@ -89,6 +94,39 @@ namespace
 		Instance->SetVectorParameterValueEditorOnly(FMaterialParameterInfo(TEXT("Color")), Color);
 		Instance->PostEditChange();
 		return Instance;
+	}
+
+	// An instance of Base with its own colour, and its own Albedo where given (a sign's art), reused by
+	// both like the tint.
+	UMaterialInterface* CreateInstanceOf(UObject* Outer, UMaterialInterface* Base, const FLinearColor& Color, UTexture* Albedo)
+	{
+		if (UMaterialInterface* Existing = FindReusableTint(Outer, Color, Base, Albedo)) return Existing;
+		UMaterialInstanceConstant* Instance = NewObject<UMaterialInstanceConstant>(
+			Outer, NAME_None, RF_Public | RF_Transactional);
+		Instance->SetParentEditorOnly(Base);
+		Instance->SetVectorParameterValueEditorOnly(FMaterialParameterInfo(TEXT("Color")), Color);
+		if (Albedo) Instance->SetTextureParameterValueEditorOnly(FMaterialParameterInfo(TEXT("Albedo")), Albedo);
+		Instance->PostEditChange();
+		return Instance;
+	}
+
+	// Priority: assigned material; a sign's texture on the starter material; the starter material,
+	// tinted where the palette's colour is not the slot's default; the tinted default material.
+	UMaterialInterface* ResolveSlotMaterial(UObject* Outer, const FHutongPalette& Palette, int32 Slot)
+	{
+		if (UMaterialInterface* Assigned = Palette.GetSlotMaterial(Slot)) return Assigned;
+		UMaterialInterface* Starter = HutongGen::FindStarterMaterial(Slot);
+		if (UTexture* Art = Palette.GetSlotTexture(Slot))
+		{
+			if (Starter) return CreateInstanceOf(Outer, Starter, FLinearColor::White, Art);
+			UE_LOG(LogTemp, Warning, TEXT("Hutong: a sign texture needs the starter materials (Scene tab, Create Starter Materials); showing its colour."));
+		}
+		const FLinearColor Color = Palette.GetSlotColor(Slot);
+		if (Starter)
+		{
+			return Color.Equals(FHutongPalette().GetSlotColor(Slot), 1.0e-4f) ? Starter : CreateInstanceOf(Outer, Starter, Color, nullptr);
+		}
+		return CreateTintedMaterial(Outer, Color);
 	}
 
 	TAutoConsoleVariable<bool> CVarShareMeshes(
@@ -181,6 +219,10 @@ namespace HutongGen
 	// Waxed pine boarding, not column lacquer.
 	const FLinearColor DefaultPartitionColor = FLinearColor::FromSRGBColor(FColor(158, 130, 96));
 	const FLinearColor DefaultFloorColor = FLinearColor::FromSRGBColor(FColor(146, 149, 146));
+	const FLinearColor DefaultPlaqueColor = FLinearColor::FromSRGBColor(FColor(30, 28, 27));
+	const FLinearColor DefaultSignboardColor = FLinearColor::FromSRGBColor(FColor(226, 220, 204));
+	const FLinearColor DefaultTradeSignColor = FLinearColor::FromSRGBColor(FColor(168, 42, 34));
+	const FLinearColor DefaultCityBrickColor = FLinearColor::FromSRGBColor(FColor(122, 122, 116));
 
 	AStaticMeshActor* SpawnEmptyActor(
 		UWorld* World,
@@ -327,6 +369,20 @@ namespace HutongGen
 		return Used;
 	}
 
+	void AssignPaletteMaterials(AStaticMeshActor* Actor, const FHutongPalette& Palette)
+	{
+		UStaticMeshComponent* Comp = Actor ? Actor->GetStaticMeshComponent() : nullptr;
+		const UStaticMesh* Mesh = Comp ? Comp->GetStaticMesh() : nullptr;
+		if (!Mesh) return;
+		Comp->Modify();
+		Comp->EmptyOverrideMaterials();
+		const TArray<int32> Slots = SlotsOf(Mesh);
+		for (int32 i = 0; i < Slots.Num(); ++i)
+		{
+			if (UMaterialInterface* M = ResolveSlotMaterial(Actor, Palette, Slots[i])) Comp->SetMaterial(i, M);
+		}
+	}
+
 	void BuildAndAssignStaticMesh(
 		AStaticMeshActor* Actor,
 		FDynamicMesh3& Mesh,
@@ -352,12 +408,7 @@ namespace HutongGen
 		auto PaletteMaterials = [&](const TArray<int32>& Slots)
 		{
 			TArray<UMaterialInterface*> Mats;
-			for (const int32 Slot : Slots)
-			{
-				UMaterialInterface* Assigned = Palette.GetSlotMaterial(Slot);
-				if (!Assigned) Assigned = FindStarterMaterial(Slot);
-				Mats.Add(Assigned ? Assigned : CreateTintedMaterial(Actor, Palette.GetSlotColor(Slot)));
-			}
+			for (const int32 Slot : Slots) Mats.Add(ResolveSlotMaterial(Actor, Palette, Slot));
 			return Mats;
 		};
 		auto Assign = [&](UStaticMesh* StaticMesh, const TArray<UMaterialInterface*>& SlotMats)

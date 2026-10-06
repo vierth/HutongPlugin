@@ -70,6 +70,28 @@ namespace HutongMeshUtils
 		}
 	}
 
+	void SetFaceUVs(FDynamicMesh3& Mesh, int32 FirstTri, int32 EndTri, const FVector3d& Outward,
+		const FVector3d& Origin, const FVector3d& UAxis, double ULength, const FVector3d& VAxis, double VLength,
+		double U0, double U1)
+	{
+		EnsureUVLayer(Mesh);
+		UE::Geometry::FDynamicMeshUVOverlay* UV = Mesh.Attributes()->PrimaryUV();
+		const double UL = FMath::Max(ULength, 0.01), VL = FMath::Max(VLength, 0.01);
+		for (int32 tid = FMath::Max(FirstTri, 0); UV && tid < FMath::Min(EndTri, Mesh.MaxTriangleID()); ++tid)
+		{
+			// Pre-bake normals point inward.
+			if (!Mesh.IsTriangle(tid) || Mesh.GetTriNormal(tid).Dot(Outward) > -0.9) continue;
+			const UE::Geometry::FIndex3i Tri = Mesh.GetTriangle(tid);
+			int32 E[3];
+			for (int32 c = 0; c < 3; ++c)
+			{
+				const FVector3d P = Mesh.GetVertex(Tri[c]) - Origin;
+				E[c] = UV->AppendElement(FVector2f(float(U0 + (U1 - U0) * P.Dot(UAxis) / UL), float(P.Dot(VAxis) / VL)));
+			}
+			UV->SetTriangle(tid, UE::Geometry::FIndex3i(E[0], E[1], E[2]));
+		}
+	}
+
 	void EnsureUVLayer(FDynamicMesh3& Mesh)
 	{
 		Mesh.EnableAttributes();
@@ -271,6 +293,39 @@ namespace HutongMeshUtils
 		T(3, 7, 6); T(3, 6, 2);        // +Y
 		T(0, 4, 7); T(0, 7, 3);        // -X
 		T(1, 2, 6); T(1, 6, 5);        // +X
+	}
+
+	void AppendHexahedron(FDynamicMesh3& Mesh, const FVector3d Corners[8])
+	{
+		int32 V[8];
+		FVector3d Centre = FVector3d::ZeroVector;
+		for (int32 i = 0; i < 8; ++i)
+		{
+			V[i] = Mesh.AppendVertex(Corners[i]);
+			Centre += Corners[i] / 8.0;
+		}
+		// As AppendBox: (b - a) × (c - a) points out of the solid.
+		auto Quad = [&](int32 a, int32 b, int32 c, int32 d)
+		{
+			const FVector3d FaceCentre = 0.25 * (Corners[a] + Corners[b] + Corners[c] + Corners[d]);
+			const FVector3d N = (Corners[b] - Corners[a]).Cross(Corners[c] - Corners[a])
+				+ (Corners[c] - Corners[a]).Cross(Corners[d] - Corners[a]);
+			const bool bOut = N.Dot(FaceCentre - Centre) >= 0.0;
+			auto Tri = [&](int32 i, int32 j, int32 k)
+			{
+				if ((Corners[j] - Corners[i]).Cross(Corners[k] - Corners[i]).SquaredLength() < 1.0e-6) return;
+				if (bOut) Mesh.AppendTriangle(V[i], V[j], V[k]); else Mesh.AppendTriangle(V[i], V[k], V[j]);
+			};
+			Tri(a, b, c);
+			Tri(a, c, d);
+		};
+		Quad(0, 1, 2, 3);
+		Quad(4, 5, 6, 7);
+		for (int32 i = 0; i < 4; ++i)
+		{
+			const int32 j = (i + 1) % 4;
+			Quad(i, j, j + 4, i + 4);
+		}
 	}
 
 	void AppendTriPrism(

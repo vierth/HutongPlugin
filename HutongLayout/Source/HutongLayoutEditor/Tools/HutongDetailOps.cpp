@@ -161,7 +161,7 @@ int32 GeneratePlanned(const TArray<UHutongBuildingComponent*>& Buildings)
 	Work.Reserve(Buildings.Num());
 	for (UHutongBuildingComponent* B : Buildings)
 	{
-		if (B && B->bPlanOnly) Work.Add(B);
+		if (B && B->bPlanOnly && B->HasGeometry()) Work.Add(B);
 	}
 	if (Work.Num() == 0) return 0;
 
@@ -256,14 +256,17 @@ const TArray<FConvertTarget>& ConvertTargets()
 		{ UHutongPaifangBuildingComponent::StaticClass(), 1, 0 },
 		{ UHutongHallBuildingComponent::StaticClass(), 4, 0 }, { UHutongPavilionBuildingComponent::StaticClass(), 4, 0 },
 		{ UHutongWallBuildingComponent::StaticClass(), 2, 1 }, { UHutongScreenWallBuildingComponent::StaticClass(), 2, 1 },
+		// City scale: a lane wall's footprint would make a sliver of it, so it turns only into Unknown.
+		{ UHutongCityWallBuildingComponent::StaticClass(), 2, 4 },
 		{ UHutongCorridorBuildingComponent::StaticClass(), 3, 2 }, { UHutongPassageBuildingComponent::StaticClass(), 3, 2 },
 		{ UHutongPathBuildingComponent::StaticClass(), 3, 2 },
-		{ UHutongFlowerBedBuildingComponent::StaticClass(), 5, 3 }, { UHutongWaterJarBuildingComponent::StaticClass(), 5, 3 } };
+		{ UHutongFlowerBedBuildingComponent::StaticClass(), 5, 3 }, { UHutongWaterJarBuildingComponent::StaticClass(), 5, 3 },
+		{ UHutongUnknownBuildingComponent::StaticClass(), 6, UnknownFamily } };
 	auto RankOf = [](const UClass* Class) { return Order.IndexOfByPredicate([Class](const FRank& R) { return R.Class == Class; }); };
 	for (FConvertTarget& T : Targets)
 	{
 		const int32 R = RankOf(T.Class);
-		T.Group = R == INDEX_NONE ? 6 : Order[R].Group;
+		T.Group = R == INDEX_NONE ? 7 : Order[R].Group;
 		T.Family = R == INDEX_NONE ? INDEX_NONE : Order[R].Family;
 	}
 	// A class missing from the list goes last, by label.
@@ -283,10 +286,11 @@ FText ConvertGroupName(int32 Group)
 	{
 	case 0:  return LOCTEXT("GroupBuildings", "Buildings (房屋)");
 	case 1:  return LOCTEXT("GroupGates", "Gates (門)");
-	case 2:  return LOCTEXT("GroupWalls", "Walls (牆)");
+	case 2:  return LOCTEXT("GroupWalls", "Walls (牆, 城牆)");
 	case 3:  return LOCTEXT("GroupWays", "Walks and Passages (廊, 過道, 甬路)");
 	case 4:  return LOCTEXT("GroupTemple", "Temple and Pavilion (殿, 亭)");
 	case 5:  return LOCTEXT("GroupFurnishing", "Courtyard Furnishings (花池, 魚缸)");
+	case 6:  return LOCTEXT("GroupUnknown", "Unknown (未知)");
 	default: return LOCTEXT("GroupOther", "Other");
 	}
 }
@@ -294,6 +298,8 @@ FText ConvertGroupName(int32 Group)
 bool CanExchange(const FConvertTarget& From, const FConvertTarget& To)
 {
 	// A type outside every family turns only into itself.
+	// A traced footprint of unknown type may become anything, and anything may go back to it.
+	if (From.Family == UnknownFamily || To.Family == UnknownFamily) return true;
 	return From.Class == To.Class || (From.Family != INDEX_NONE && From.Family == To.Family);
 }
 
@@ -486,7 +492,7 @@ UHutongBuildingComponent* ConvertBuilding(UHutongBuildingComponent* Old,
 	New->BuildingId = Id;
 	New->Palette = Palette;
 	New->DetailLevel = Level;
-	New->bPlanOnly = bPlanOnly;
+	New->bPlanOnly = bPlanOnly || !New->HasGeometry();
 	New->bBespokeMesh = bBespoke;
 	New->bBuildLODChain = bLODs;
 

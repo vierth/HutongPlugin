@@ -104,7 +104,7 @@ FString UHutongShopfrontTool::GetPlacementDetail() const
 	const FHutongShopfrontParams& P = Settings->Params;
 	const int32 Bays = ComputeBayCountForSide();
 	return FString::Printf(TEXT("Shopfront (鋪面房) · %d bays (間) · %d open"),
-		Bays, FMath::Clamp(P.OpenBayCount, 0, Bays));
+		Bays, P.GetOpenBayCount(Bays));
 }
 
 TArray<FText> UHutongShopfrontTool::GetStageNames() const

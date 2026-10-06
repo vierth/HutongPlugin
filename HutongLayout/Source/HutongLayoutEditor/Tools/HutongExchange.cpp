@@ -819,7 +819,7 @@ namespace
 		}
 		if (Record.bHasFacing) Component->SetFacade(Record.Facing);
 		Component->DetailLevel = Record.Detail;
-		Component->bPlanOnly = Record.bPlanOnly;
+		Component->bPlanOnly = Record.bPlanOnly || !Component->HasGeometry();
 	}
 
 	// Everything a record says about a component: parameters if present, else layout. One path, so

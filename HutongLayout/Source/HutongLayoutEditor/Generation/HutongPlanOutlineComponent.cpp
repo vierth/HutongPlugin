@@ -28,6 +28,8 @@ namespace
 	// Facing chevron behind the ticks in every bay, pointing out through the facade: half-width limits.
 	constexpr double ChevronMin = 30.0;
 	constexpr double ChevronMax = 120.0;
+	// An arrow mark's square, at most (a city wall's ramp).
+	constexpr double ArrowMarkSize = 300.0;
 	// Slightly above ground to avoid z-fighting a map plane at Z = 0.
 	constexpr double Lift = 2.0;
 	// Plans stack by type in drawing only (HutongPlanColours::Layers); the actor stays where it stands.
@@ -134,6 +136,7 @@ public:
 		, BayBoundaries(C->BayBoundaries)
 		, bBaysAlongX(C->bBaysAlongX)
 		, DoorBay(C->DoorBay)
+		, ArrowMarks(C->ArrowMarks)
 		, Yielded(PendingEdges)
 		, DPG(HutongPlanOutline::ArePlansOverBuildings() ? SDPG_Foreground : SDPG_World)
 		, Level(C->GetStackLevel())
@@ -229,6 +232,32 @@ public:
 				PDI->DrawLine(Run(A, 0.0), Run(A, Across), Door, DPG, Thickness + 1.0f, 0.0f, true);
 				PDI->DrawLine(Run(B, 0.0), Run(B, Across), Door, DPG, Thickness + 1.0f, 0.0f, true);
 				PDI->DrawLine(Run(A, 0.5 * Across), Run(B, 0.5 * Across), Door, DPG, Thickness + 2.0f, 0.0f, true);
+			}
+
+			// Arrow marks: a square, an arrow across it in the mark's direction, in the facade hue.
+			for (const FVector4& M : ArrowMarks)
+			{
+				const double Half = 0.5 * FMath::Min(ArrowMarkSize, 0.3 * FMath::Min(W, D));
+				const FVector2D C(M.X, M.Y);
+				const FVector2D Dir = FVector2D(M.Z, M.W).GetSafeNormal();
+				const FVector2D Side(-Dir.Y, Dir.X);
+				FLinearColor Mark = FacadeColor;
+				Mark.A = Line.A;
+				const FVector2D Sq[4] = { C - Dir * Half - Side * Half, C + Dir * Half - Side * Half,
+					C + Dir * Half + Side * Half, C - Dir * Half + Side * Half };
+				for (int32 k = 0; k < 4; ++k)
+				{
+					const FVector2D A = Sq[k], B = Sq[(k + 1) % 4];
+					PDI->DrawLine(At(A.X, A.Y), At(B.X, B.Y), Mark, DPG, Thickness + 1.0f, 0.0f, true);
+				}
+				const FVector2D Tail = C - Dir * 0.7 * Half, Tip = C + Dir * 0.7 * Half;
+				const FVector2D Wing = Tip - Dir * 0.45 * Half;
+				PDI->DrawLine(At(Tail.X, Tail.Y), At(Tip.X, Tip.Y), Mark, DPG, Thickness + 1.5f, 0.0f, true);
+				for (const double S : { -1.0, 1.0 })
+				{
+					const FVector2D End = Wing + Side * S * 0.4 * Half;
+					PDI->DrawLine(At(Tip.X, Tip.Y), At(End.X, End.Y), Mark, DPG, Thickness + 1.5f, 0.0f, true);
+				}
 			}
 
 			// Bay divisions (間) at the columns; end boundaries are left to the outline.
@@ -358,6 +387,7 @@ private:
 	TArray<double> BayBoundaries;
 	bool bBaysAlongX;
 	int32 DoorBay;
+	TArray<FVector4> ArrowMarks;
 	TArray<TPair<FVector, FVector>> Yielded;
 	uint8 DPG;
 	int32 Level;

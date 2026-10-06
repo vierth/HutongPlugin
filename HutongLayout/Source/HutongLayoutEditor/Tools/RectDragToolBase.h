@@ -147,7 +147,7 @@ public:
 	void BeginRotateMode();
 	void EndRotateMode();
 	// G toggles the mark on the segment being drawn: that segment carries the run's opening.
-	void ToggleOpeningMark() { bOpeningMarked = !bOpeningMarked; }
+	virtual void ToggleOpeningMark() { bOpeningMarked = !bOpeningMarked; }
 	bool bOpeningMarked = false;
 	bool IsPlacingActive() const { return bIsDragging; }
 
@@ -392,6 +392,8 @@ protected:
 	virtual bool PointSnapsOnly() const { return false; }
 	// False for a tool that only edits what is placed (heights): clicks select, nothing is anchored.
 	virtual bool HasPlacement() const { return true; }
+	// False for a tool that only traces footprints: every placement is laid out, whatever the mode says.
+	virtual bool BuildsGeometry() const { return true; }
 	FVector PlanRotateHandleWorld(const class UHutongBuildingComponent* Building, FVector& OutEdgeMid) const;
 	// Handle, ring or inside hit by a ground point; INDEX_NONE for none.
 	int32 HitTestPlan(const class UHutongBuildingComponent* Building, const FVector& Ground) const;

@@ -24,7 +24,7 @@ namespace HutongGen
 	{
 		// Procedural from mesh UVs (no shippable textures). Box-projected faces: 1 UV unit per metre;
 		// roofs: 1 壟 per unit across, 1 tile row per unit down the slope.
-		enum class EPattern { Flat, Brick, Tile, Grain, Speckle, Mottle, Courses, Moulded, Pavers };
+		enum class EPattern { Flat, Brick, CityBrick, Tile, Grain, Speckle, Mottle, Courses, Moulded, Pavers };
 
 		struct FStarterMaterial
 		{
@@ -53,6 +53,11 @@ namespace HutongGen
 			{ MatSlot_Ridge,      TEXT("M_Hutong_Ridge"),      0.80f, EPattern::Courses },
 			{ MatSlot_Finial,     TEXT("M_Hutong_Finial"),     0.75f, EPattern::Moulded },
 			{ MatSlot_Floor,      TEXT("M_Hutong_Floor"),      0.80f, EPattern::Pavers },
+			// Flat: the Albedo texture is the sign; a pattern would print through it.
+			{ MatSlot_Plaque,     TEXT("M_Hutong_Plaque"),     0.40f, EPattern::Flat },
+			{ MatSlot_Signboard,  TEXT("M_Hutong_Signboard"),  0.40f, EPattern::Flat },
+			{ MatSlot_TradeSign,  TEXT("M_Hutong_TradeSign"),  0.85f, EPattern::Flat },
+			{ MatSlot_CityBrick,  TEXT("M_Hutong_CityBrick"),  0.90f, EPattern::CityBrick },
 		};
 
 		// Friction and bounce; surface types (footstep sounds) are the project's to define.
@@ -62,7 +67,7 @@ namespace HutongGen
 		{
 			switch (Slot)
 			{
-			case MatSlot_Body: case MatSlot_BaseCourse: return { TEXT("PM_Hutong_Brick"),   0.80f, 0.10f };
+			case MatSlot_Body: case MatSlot_BaseCourse: case MatSlot_CityBrick: return { TEXT("PM_Hutong_Brick"),   0.80f, 0.10f };
 			case MatSlot_Roof: case MatSlot_Ridge: case MatSlot_Finial: return { TEXT("PM_Hutong_Tile"), 0.60f, 0.15f };
 			case MatSlot_Floor:                         return { TEXT("PM_Hutong_Brick"),   0.80f, 0.10f };
 			case MatSlot_Stone:                         return { TEXT("PM_Hutong_Stone"),   0.70f, 0.10f };
@@ -93,6 +98,35 @@ namespace HutongGen
 			return Phys;
 		}
 
+		// Running bond of FaceCm × CourseCm faces; joints JointX, JointY of a brick; Base + Tone the brick-to-brick
+		// shade; JointShade the joint's colour against the brick's.
+		FString BrickCode(double FaceCm, double CourseCm, double JointX, double JointY, double Base, double Tone, double JointShade)
+		{
+			return FString::Printf(TEXT("float2 P = UV / float2(%g, %g);\n"), FaceCm / 100.0, CourseCm / 100.0)
+				+ TEXT(
+				"P.x += frac(floor(P.y) * 0.5);\n"
+				"float2 F = frac(P);\n"
+				"float2 W = max(fwidth(P), 1e-5);\n"
+				"float Detail = saturate(1.0 - 0.7 * max(W.x, W.y));\n")
+				// Joint edge at least a pixel wide: dissolves, not crawls.
+				+ FString::Printf(TEXT(
+				"float Jx = 1.0 - smoothstep(%g - W.x, %g + W.x, F.x);\n"
+				"float Jy = 1.0 - smoothstep(%g - W.y, %g + W.y, F.y);\n"), JointX, JointX, JointY, JointY)
+				+ TEXT(
+				"float Joint = max(Jx, Jy);\n")
+				// Below a pixel per brick, joints become average coverage.
+				+ FString::Printf(TEXT("Joint = lerp(%g, Joint, Detail);\n"), JointX + JointY)
+				+ TEXT("float H = frac(sin(dot(floor(P), float2(12.9898, 78.233))) * 43758.5453);\n")
+				+ FString::Printf(TEXT("float3 Brick = Color.rgb * (%g + %g * H * Detail);\n"), Base, Tone)
+				// Joint is a groove: brick arrises fall into it, the bed does not.
+				+ TEXT(
+				"float Nx = smoothstep(0.94, 1.0, F.x) - (1.0 - smoothstep(0.0, 0.06, F.x));\n"
+				"float Ny = smoothstep(0.86, 1.0, F.y) - (1.0 - smoothstep(0.0, 0.16, F.y));\n"
+				"Normal = normalize(float3(float2(Nx, Ny) * 0.55 * Detail, 1.0));\n"
+				"Rough = lerp(1.0, 1.15, Joint);\n")
+				+ FString::Printf(TEXT("return lerp(Brick, Color.rgb * %g, Joint);\n"), JointShade);
+		}
+
 		// Custom-node HLSL: UV, Color in; colour out plus tangent-space Normal and a Rough multiplier.
 		// All Color-modulated, so Color stays the one retint knob.
 		// Each pattern antialiases against fwidth(UV); features under a pixel are averaged, not drawn
@@ -104,27 +138,15 @@ namespace HutongGen
 			// 磨磚對縫: dressed 停泥磚, 24×6 cm faces, running bond, hairline joint.
 			case EPattern::Brick:
 			{
-				static const FString Code = FString::Printf(TEXT("float2 P = UV / float2(%g, %g);\n"),
-					HutongGen::BrickPattern::FaceLength / 100.0, HutongGen::BrickPattern::CourseHeight / 100.0)
-					+ TEXT(
-				"P.x += frac(floor(P.y) * 0.5);\n"
-				"float2 F = frac(P);\n"
-				"float2 W = max(fwidth(P), 1e-5);\n"
-				"float Detail = saturate(1.0 - 0.7 * max(W.x, W.y));\n"
-				// Joint edge at least a pixel wide: dissolves, not crawls.
-				"float Jx = 1.0 - smoothstep(0.03 - W.x, 0.03 + W.x, F.x);\n"
-				"float Jy = 1.0 - smoothstep(0.10 - W.y, 0.10 + W.y, F.y);\n"
-				"float Joint = max(Jx, Jy);\n"
-				// Below a pixel per brick, joints become average coverage.
-				"Joint = lerp(0.13, Joint, Detail);\n"
-				"float H = frac(sin(dot(floor(P), float2(12.9898, 78.233))) * 43758.5453);\n"
-				"float3 Brick = Color.rgb * (0.88 + 0.22 * H * Detail);\n"
-				// Joint is a groove: brick arrises fall into it, the bed does not.
-				"float Nx = smoothstep(0.94, 1.0, F.x) - (1.0 - smoothstep(0.0, 0.06, F.x));\n"
-				"float Ny = smoothstep(0.86, 1.0, F.y) - (1.0 - smoothstep(0.0, 0.16, F.y));\n"
-				"Normal = normalize(float3(float2(Nx, Ny) * 0.55 * Detail, 1.0));\n"
-				"Rough = lerp(1.0, 1.15, Joint);\n"
-				"return lerp(Brick, Color.rgb * 0.62, Joint);\n");
+				static const FString Code = BrickCode(HutongGen::BrickPattern::FaceLength, HutongGen::BrickPattern::CourseHeight,
+					0.03, 0.10, 0.88, 0.22, 0.62);
+				return *Code;
+			}
+			// 城磚: twice the size, a wider joint, more tone from brick to brick (the user's photograph).
+			case EPattern::CityBrick:
+			{
+				static const FString Code = BrickCode(HutongGen::CityBrickPattern::FaceLength, HutongGen::CityBrickPattern::CourseHeight,
+					0.025, 0.09, 0.80, 0.34, 0.72);
 				return *Code;
 			}
 

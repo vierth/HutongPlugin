@@ -156,6 +156,16 @@ void FHutongLayoutCommands::RegisterCommands()
 		"The blue outlines are the footprints it will lay down. Hold R to turn the set, Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord(EModifierKey::Shift | EModifierKey::Alt, EKeys::Seven));
 
+	UI_COMMAND(BeginCityWallTool, "City Wall",
+		"Lay a city wall (城牆) on the Beijing inner city's pattern: battered brick, crenellated outer parapet (垛口).\n"
+		"Click to start, click to end each leg, click the last end to finish or the first point to close. F flips the battlements.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	UI_COMMAND(BeginUnknownTool, "Unknown",
+		"Trace a footprint whose type is not known (未知): an outline with metadata, no geometry.\n"
+		"Click to anchor, move, click again to place. Press T on it later to give it a type.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
 	UI_COMMAND(BeginMeasureTool, "Measure",
 		"Measure a span, and calibrate a map image against it.\n"
 		"Click, move, click. Reads out metres, paces (步), and what the span would be as a street width. Places nothing.",

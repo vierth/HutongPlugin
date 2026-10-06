@@ -49,6 +49,9 @@ namespace HutongDetailOps
 		bool IsValid() const { return Class != nullptr; }
 	};
 
+	// The Unknown type's family: exchanges with every other.
+	inline constexpr int32 UnknownFamily = 100;
+
 	// Every conversion target, found by walking the component classes, not a hand-kept list.
 	const TArray<FConvertTarget>& ConvertTargets();
 

@@ -70,6 +70,7 @@ void UHutongBuildingComponent::Rebuild()
 	AStaticMeshActor* Actor = Cast<AStaticMeshActor>(GetOwner());
 	if (!Actor) return;
 
+	if (!HasGeometry()) bPlanOnly = true;
 	if (bPlanOnly)
 	{
 		// Plan only: remove the built mesh, add the outline.
@@ -88,7 +89,7 @@ void UHutongBuildingComponent::Rebuild()
 	if (LODs.Num() == 0 || LODs[0].TriangleCount() == 0) return;
 
 	Actor->Modify();
-	HutongGen::BuildAndAssignStaticMesh(Actor, LODs, Palette, CollisionLOD);
+	HutongGen::BuildAndAssignStaticMesh(Actor, LODs, GetBuiltPalette(), CollisionLOD);
 	ApplyPlanOutline();
 }
 
@@ -186,6 +187,8 @@ void UHutongBuildingComponent::ApplyPlanOutline()
 	for (const FHutongPlanOpening& O : Openings) Marks.Add(FVector2D(O.Centre, O.Width));
 	FHutongPlanBays Bays;
 	GetPlanBays(Bays);
+	Outline->ArrowMarks.Reset();
+	GetPlanArrows(Outline->ArrowMarks);
 	Outline->SetPlan(GetFootprintSize(), GetFootprintSkew(), bHasFacade, Side, Marks, IsRunAlongY(),
 		Bays, ArePlanBaysAlongX(), GetPlanColour());
 }
@@ -540,6 +543,49 @@ void UHutongInnerGateBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHuton
 
 // --- 鋪面房 ---
 
+namespace
+{
+	struct FShopColours { FColor Wood, Boards, Paint, Plaque; };
+
+	// sRGB. Order matches EHutongShopScheme after Auto.
+	const FShopColours ShopSchemeColours[] = {
+		{ FColor(150, 38, 28),  FColor(122, 40, 30),  FColor(44, 96, 98),   FColor(28, 26, 25) },   // 朱紅
+		{ FColor(44, 84, 58),   FColor(52, 78, 58),   FColor(150, 40, 30),  FColor(34, 56, 96) },   // 綠
+		{ FColor(30, 27, 25),   FColor(36, 31, 28),   FColor(196, 156, 64), FColor(30, 27, 25) },   // 黑金
+		{ FColor(150, 38, 28),  FColor(118, 86, 58),  FColor(46, 92, 132),  FColor(30, 28, 27) },   // 青綠
+		{ FColor(104, 70, 44),  FColor(120, 86, 56),  FColor(88, 62, 42),   FColor(30, 28, 27) },   // 本色
+	};
+	constexpr int32 ShopSchemeCount = UE_ARRAY_COUNT(ShopSchemeColours);
+	static_assert(ShopSchemeCount == (int32)EHutongShopScheme::Natural, "one colour set per scheme");
+}
+
+void UHutongShopfrontBuildingComponent::AdjustPalette(FHutongPalette& InOut) const
+{
+	int32 Index = (int32)Params.Scheme - 1;
+	if (Params.Scheme == EHutongShopScheme::Auto)
+	{
+		Index = BuildingId.IsValid() ? int32(GetTypeHash(BuildingId) % uint32(ShopSchemeCount)) : 0;
+	}
+	if (Index < 0 || Index >= ShopSchemeCount) return;
+	const FShopColours& C = ShopSchemeColours[Index];
+	const FHutongPalette Default;
+	// A colour chosen by hand stays.
+	auto Lay = [](FLinearColor& Slot, const FLinearColor& Was, const FColor& To)
+	{
+		if (Slot.Equals(Was, 1.0e-4f)) Slot = FLinearColor::FromSRGBColor(To);
+	};
+	Lay(InOut.Wood, Default.Wood, C.Wood);
+	Lay(InOut.DoorPaint, Default.DoorPaint, C.Boards);
+	Lay(InOut.Paint, Default.Paint, C.Paint);
+	Lay(InOut.Plaque, Default.Plaque, C.Plaque);
+}
+
+void UHutongShopfrontBuildingComponent::ApplyPlacementAttachments()
+{
+	Super::ApplyPlacementAttachments();
+	if (!bPlanOnly) HutongGen::AssignPaletteMaterials(Cast<AStaticMeshActor>(GetOwner()), GetBuiltPalette());
+}
+
 void UHutongShopfrontBuildingComponent::BuildShopfrontMesh(
 	const FHutongShopfrontParams& InParams, EHutongBaySide Side, int32 InBayCountOverride,
 	double SizeX, double SizeY, FDynamicMesh3& OutMesh, EHutongDetail Detail)
@@ -759,6 +805,80 @@ void UHutongFlowerBedBuildingComponent::BuildFlowerBedMesh(
 void UHutongFlowerBedBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDetail Level) const
 {
 	BuildFlowerBedMesh(Params, FootprintX, FootprintY, OutMesh, Level);
+}
+
+// --- 城牆 ---
+
+namespace
+{
+	// The params the generator builds with: it builds the outer face on -Y and the half turn puts it on +Y,
+	// which also reverses the run — so the ramp's position and direction are flipped first and stay the
+	// leg's own whichever side the battlements are on.
+	FHutongCityWallParams CityWallBuiltParams(const FHutongCityWallParams& InParams, double InLength, EHutongBaySide Outer)
+	{
+		FHutongCityWallParams P = InParams;
+		P.Length = FMath::Max(InLength, 10.0);
+		if (Outer == EHutongBaySide::PlusY)
+		{
+			P.bRampRisesTowardStart = !P.bRampRisesTowardStart;
+			P.RampPosition = 1.0 - P.RampPosition;
+		}
+		return P;
+	}
+}
+
+void UHutongCityWallBuildingComponent::GetPlanArrows(TArray<FVector4>& Out) const
+{
+	FVector2D C[4], From, To, Gap[2];
+	if (!GetRampOutline(Params, Length, OuterSide, C, From, To, Gap)) return;
+	// The square stands inside the footprint (the ramp itself is outside it), against the inner edge.
+	const double B = Params.GetBaseWidth();
+	const double Inset = 0.5 * FMath::Min(300.0, 0.3 * B) + 40.0;
+	const double Y = OuterSide == EHutongBaySide::PlusY ? Inset : B - Inset;
+	Out.Add(FVector4(0.5 * (From.X + To.X), Y, To.X > From.X ? 1.0 : -1.0, 0.0));
+}
+
+bool UHutongCityWallBuildingComponent::GetRampOutline(const FHutongCityWallParams& InParams, double InLength,
+	EHutongBaySide Outer, FVector2D OutCorners[4], FVector2D& OutUpFrom, FVector2D& OutUpTo, FVector2D OutGap[2])
+{
+	const FHutongCityWallParams P = CityWallBuiltParams(InParams, InLength, Outer);
+	HutongGen::FCityWallRamp R;
+	if (!HutongGen::CityWallRampLayout(P, R)) return false;
+	const double B = P.GetBaseWidth();
+	const double RW = FMath::Max(P.RampWidth, 150.0);
+	const double YGap = B - P.GetBatter() - 0.5 * P.GetInnerParapetThickness();
+	// Built frame, then the same half turn as the mesh.
+	auto Leg = [&](double X, double Y)
+	{
+		return Outer == EHutongBaySide::PlusY ? FVector2D(P.Length - X, B - Y) : FVector2D(X, Y);
+	};
+	OutCorners[0] = Leg(R.XGate, B);
+	OutCorners[1] = Leg(R.XTop, B);
+	OutCorners[2] = Leg(R.XTop, B + RW);
+	OutCorners[3] = Leg(R.XGate, B + RW);
+	OutUpFrom = Leg(R.XFoot, B + 0.5 * RW);
+	OutUpTo = Leg(R.XLand, B + 0.5 * RW);
+	OutGap[0] = Leg(R.XLand, YGap);
+	OutGap[1] = Leg(R.XTop - R.Dir * HutongCanon::CityWall::RampParapetThicknessCm, YGap);
+	return true;
+}
+
+void UHutongCityWallBuildingComponent::BuildCityWallMesh(const FHutongCityWallParams& InParams, double InLength,
+	EHutongBaySide Outer, FDynamicMesh3& OutMesh, EHutongDetail Detail)
+{
+	FHutongCityWallParams P = CityWallBuiltParams(InParams, InLength, Outer);
+	HutongGen::BuildCityWall(OutMesh, P, Detail != EHutongDetail::Massing,
+		P.bLoopholes && (Detail == EHutongDetail::Near || Detail == EHutongDetail::Hero));
+	// Built outer face on -Y; a half turn about the centre, never a mirror, puts it on +Y.
+	if (Outer == EHutongBaySide::PlusY)
+	{
+		HutongMeshUtils::YawVerticesFrom(OutMesh, 0, FVector2d(0.5 * P.Length, 0.5 * P.GetBaseWidth()), 180.0);
+	}
+}
+
+void UHutongCityWallBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDetail Level) const
+{
+	BuildCityWallMesh(Params, Length, OuterSide, OutMesh, Level);
 }
 
 // --- 魚缸 ---

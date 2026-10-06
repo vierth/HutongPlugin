@@ -24,6 +24,8 @@
 #include "Tools/PathTool.h"
 #include "Tools/FlowerBedTool.h"
 #include "Tools/WaterJarTool.h"
+#include "Tools/UnknownTool.h"
+#include "Tools/CityWallTool.h"
 #include "Tools/FrameTool.h"
 #include "Tools/PavilionTool.h"
 #include "Tools/ShopfrontTool.h"
@@ -243,6 +245,10 @@ void UHutongLayoutEdMode::Enter()
 		NewObject<UHutongFlowerBedToolBuilder>(this));
 	RegisterTool(Commands.BeginWaterJarTool, TEXT("HutongWaterJarTool"),
 		NewObject<UHutongWaterJarToolBuilder>(this));
+	RegisterTool(Commands.BeginCityWallTool, TEXT("HutongCityWallTool"),
+		NewObject<UHutongCityWallToolBuilder>(this));
+	RegisterTool(Commands.BeginUnknownTool, TEXT("HutongUnknownTool"),
+		NewObject<UHutongUnknownToolBuilder>(this));
 	RegisterTool(Commands.BeginCompoundTool, TEXT("HutongCompoundTool"),
 		NewObject<UHutongCompoundToolBuilder>(this));
 	RegisterTool(Commands.BeginStreetRowTool, TEXT("HutongStreetRowTool"),
@@ -351,13 +357,13 @@ TMap<FName, TArray<TSharedPtr<FUICommandInfo>>> UHutongLayoutEdMode::GetModeComm
 		{ Commands.BeginGateHouseTool, Commands.BeginInnerGateTool,
 		  Commands.BeginPaifangTool, Commands.BeginScreenWallTool });
 	Result.Add(FName("Enclosure"),
-		{ Commands.BeginWallTool, Commands.BeginCourtWallTool,
+		{ Commands.BeginWallTool, Commands.BeginCourtWallTool, Commands.BeginCityWallTool,
 		  Commands.BeginCorridorTool, Commands.BeginPathTool });
 	Result.Add(FName("Courtyard"),
 		{ Commands.BeginFlowerBedTool, Commands.BeginWaterJarTool });
 	Result.Add(FName("Layout"),
 		{ Commands.BeginGalleryTool, Commands.BeginGalleryWallsTool, Commands.BeginGalleryHousesTool, Commands.BeginGalleryGatesTool, Commands.BeginGalleryCourtyardTool, Commands.BeginGalleryStreetTool, Commands.BeginGalleryTemplesTool,
-		  Commands.BeginMeasureTool, Commands.BeginHeightsTool, Commands.BeginCourtsTool, Commands.BeginImportTool });
+		  Commands.BeginUnknownTool, Commands.BeginMeasureTool, Commands.BeginHeightsTool, Commands.BeginCourtsTool, Commands.BeginImportTool });
 	return Result;
 }
 
@@ -445,6 +451,8 @@ FString UHutongLayoutEdMode::ToolIdentifierFor(const UHutongBuildingComponent* B
 		{ UHutongFlowerBedBuildingComponent::StaticClass(),  TEXT("HutongFlowerBedTool") },
 		{ UHutongWaterJarBuildingComponent::StaticClass(),   TEXT("HutongWaterJarTool") },
 		{ UHutongFrameBuildingComponent::StaticClass(),      TEXT("HutongFrameTool") },
+		{ UHutongUnknownBuildingComponent::StaticClass(),    TEXT("HutongUnknownTool") },
+		{ UHutongCityWallBuildingComponent::StaticClass(),   TEXT("HutongCityWallTool") },
 	};
 	for (const UClass* Class = Building->GetClass(); Class; Class = Class->GetSuperClass())
 	{

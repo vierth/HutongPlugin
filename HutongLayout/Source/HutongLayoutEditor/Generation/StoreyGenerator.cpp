@@ -141,8 +141,9 @@ namespace HutongGen
 			Front.BoardThickness = P.BoardThickness;
 			Front.SillZ = Floor;
 			Front.HeadZ = OpenTop;
-			Front.OpenBayCount = P.OpenBayCount;
-			Front.bHasCounter = P.bHasCounter;
+			Front.OpenBayCount = P.GetOpenBayCount(N);
+			Front.Counter = static_cast<ShopBay::FFront::ECounter>(P.Counter);
+			Front.InsideDepth = D - T - Front.FaceY;
 			Front.CounterHeight = P.CounterHeight;
 			Front.CounterDepth = P.CounterDepth;
 			ShopBay::AppendFront(Mesh, BayBoundaryX, N, ColR, Front);
@@ -284,8 +285,8 @@ namespace HutongGen
 		if (P.bHasSignboard && N > 0 && P.bHasGallery)
 		{
 			int32 OpenLo = 0, OpenHi = -1;
-			ShopBay::OpenBayRange(N, P.OpenBayCount, OpenLo, OpenHi);
-			const int32 SignBay = (P.OpenBayCount > 0)
+			ShopBay::OpenBayRange(N, P.GetOpenBayCount(N), OpenLo, OpenHi);
+			const int32 SignBay = (P.GetOpenBayCount(N) > 0)
 				? FMath::Clamp((OpenLo + OpenHi) / 2, 0, N - 1) : (N / 2);
 
 			const double SX0 = BayBoundaryX(SignBay);

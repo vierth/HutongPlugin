@@ -15,6 +15,11 @@ namespace HutongMeshUtils
 		const FVector3d& Min,
 		const FVector3d& Max);
 
+	// Convex solid of six planar quad faces: Corners[0..3] the bottom loop, Corners[4..7] the top, each above
+	// its partner. Faces wound outward by the solid's centroid, so the loops may run either way. For a
+	// battered or sloped block (a ramp on a battered face, a bastion) a box cannot express.
+	void AppendHexahedron(UE::Geometry::FDynamicMesh3& Mesh, const FVector3d Corners[8]);
+
 	// Prism with a ridge along its length.
 	void AppendTriPrism(
 		UE::Geometry::FDynamicMesh3& Mesh,
@@ -163,6 +168,13 @@ namespace HutongMeshUtils
 		UE::Geometry::FDynamicMesh3& Mesh, int32 FirstVertex, int32 FirstTri,
 		const TArray<FTransform>& Stations,
 		TFunctionRef<FVector2f(int32 Station, const FVector2d& Local)> UVAt);
+
+	// A sign's face mapped once: triangles of [FirstTri, EndTri) facing Outward get u from U0 to U1 along
+	// UAxis over ULength from Origin and v from 0 to 1 along VAxis over VLength (v down the image).
+	// Pick UAxis as the viewer's right, so the image reads unmirrored.
+	void SetFaceUVs(UE::Geometry::FDynamicMesh3& Mesh, int32 FirstTri, int32 EndTri, const FVector3d& Outward,
+		const FVector3d& Origin, const FVector3d& UAxis, double ULength, const FVector3d& VAxis, double VLength,
+		double U0 = 0.0, double U1 = 1.0);
 
 	// Solid of one (Y, Z) section from X0 to X1.
 	void AppendYZPrism(UE::Geometry::FDynamicMesh3& Mesh, const TArray<FVector2d>& ProfileYZ, double X0, double X1);

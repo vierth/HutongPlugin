@@ -10,11 +10,60 @@
 #include "Generation/HutongRearEave.h"
 #include "ShopfrontGenerator.generated.h"
 
+// What stands in front of the shop: the street face that tells one shop from the next.
+UENUM(BlueprintType)
+enum class EHutongShopFront : uint8
+{
+	Plain   UMETA(DisplayName = "Plain Board Front", ToolTip = "Board doors (排板門) under a plain header, the name plaque on it."),
+	Carved  UMETA(DisplayName = "Carved Fascia Front", ToolTip = "A deep painted hanging board (掛檐板) with fretwork brackets (花牙子) under the eave."),
+	Platform UMETA(DisplayName = "Platform Front (拍子式)", ToolTip = "A flat canopy on posts across the front, an upward railing (朝天欄杆) along its edge."),
+	Shed    UMETA(DisplayName = "Lattice Shed Front (涼棚)", ToolTip = "A light frame of thin posts with an open lattice top shading the street in front of the shop."),
+	// A 牌樓式 front (沖天柱 rising past the eave) was removed 2026-10-05: neither view of the 萬壽圖 shows
+	// one on a shop. Re-add only once a source of the period confirms it.
+};
+
+// The tall 招牌 a shop puts up for the street.
+UENUM(BlueprintType)
+enum class EHutongUprightSign : uint8
+{
+	None        UMETA(DisplayName = "None", ToolTip = "No upright signboard."),
+	Freestanding UMETA(DisplayName = "Freestanding (沖天招牌)", ToolTip = "One tall board on its own post at the street edge, about as high as the eave, beside the way in."),
+	OnPosts     UMETA(DisplayName = "On the Posts", ToolTip = "A pair of boards hung on the posts either side of the open bays."),
+};
+
+// Where the 櫃檯 stands in the open bays. Each leaves a way in at least a walker wide.
+UENUM(BlueprintType)
+enum class EHutongShopCounter : uint8
+{
+	None    UMETA(DisplayName = "None", ToolTip = "No counter: the open bays are clear."),
+	Inside  UMETA(DisplayName = "Inside, L-Shaped (曲尺櫃台)", ToolTip = "Set back inside the shop: one arm parallel to the front, one running back, the customers' floor in front of it."),
+	Street  UMETA(DisplayName = "At the Street", ToolTip = "Across the open bays at the front, served over from the street, with a gap at one end to walk in."),
+};
+
+// Paint of a shop's woodwork. Colours land where the building's palette keeps its default, so a colour
+// set by hand still wins.
+UENUM(BlueprintType)
+enum class EHutongShopScheme : uint8
+{
+	Auto       UMETA(DisplayName = "Auto (varies by building)", ToolTip = "One of the schemes below, picked from the building's id, so a street of shops varies."),
+	Vermilion  UMETA(DisplayName = "Vermilion (朱紅)", ToolTip = "Red columns and boards, blue-green painted fascia, black plaque."),
+	Green      UMETA(DisplayName = "Green (綠)", ToolTip = "Green columns and boards, red painted fascia, blue plaque."),
+	BlackGold  UMETA(DisplayName = "Black and Gold (黑金)", ToolTip = "Black lacquer with gilded fascia and brackets."),
+	BlueGreen  UMETA(DisplayName = "Blue-Green Painted (青綠)", ToolTip = "Red columns, oiled boards, a blue fascia."),
+	Natural    UMETA(DisplayName = "Oiled Timber (本色)", ToolTip = "Brown oiled timber throughout."),
+};
+
 // 鋪面房: a house's 硬山 shell with an open shop facade.
 USTRUCT(BlueprintType)
 struct FHutongShopfrontParams
 {
 	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(HutongBasic, DisplayName="Front", ToolTip="What stands across the front of the shop."))
+	EHutongShopFront Front = EHutongShopFront::Carved;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(HutongBasic, DisplayName="Colour Scheme", ToolTip="Paint of the shop's woodwork; Auto varies it from building to building."))
+	EHutongShopScheme Scheme = EHutongShopScheme::Auto;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shop", meta=(UIMin="260", UIMax="450", ClampMin="120", Units="cm", ToolTip="Height of the eave above the ground, in cm."))
 	double EaveHeight = 330.0;
@@ -48,8 +97,14 @@ struct FHutongShopfrontParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Opening Head / Eave", UIMin="0.6", UIMax="0.92", ClampMin="0.3", ClampMax="0.95", ToolTip="Height of the shopfront opening's head as a fraction of the eave height."))
 	double OpeningTopRatio = 0.8;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(HutongBasic, DisplayName="Open Bays", UIMin="0", UIMax="5", ClampMin="0", ClampMax="12", ToolTip="Number of bays left open, counted outward from the middle."))
+	// As the 萬壽圖: by day a shop's boards are down the whole front.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(HutongBasic, DisplayName="All Bays Open", ToolTip="Opens the whole front; off, Open Bays says how many."))
+	bool bAllBaysOpen = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Open Bays", EditCondition="!bAllBaysOpen", UIMin="0", UIMax="5", ClampMin="0", ClampMax="12", ToolTip="Number of bays left open, counted outward from the middle; zero boards the shop up."))
 	int32 OpenBayCount = 1;
+
+	int32 GetOpenBayCount(int32 BayCount) const { return bAllBaysOpen ? BayCount : FMath::Clamp(OpenBayCount, 0, BayCount); }
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Board Width", UIMin="15", UIMax="45", ClampMin="8", Units="cm", ToolTip="Width of each board of the board doors (排板門), in cm."))
 	double BoardWidth = 26.0;
@@ -57,13 +112,13 @@ struct FHutongShopfrontParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Board Thickness", UIMin="3", UIMax="12", ClampMin="1", Units="cm", ToolTip="Thickness of each board of the board doors (排板門), in cm."))
 	double BoardThickness = 5.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(HutongBasic, DisplayName="Has Counter (櫃檯)", ToolTip="Adds a shop counter (櫃檯) across each open bay."))
-	bool bHasCounter = true;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Counter (櫃檯)", ToolTip="Where the shop counter (櫃檯) stands in the open bays; every choice leaves a way in."))
+	EHutongShopCounter Counter = EHutongShopCounter::Street;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Counter Height", EditCondition="bHasCounter", UIMin="70", UIMax="110", ClampMin="30", Units="cm", ToolTip="Height of the counter above the floor, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Counter Height", EditCondition="Counter != EHutongShopCounter::None", UIMin="70", UIMax="110", ClampMin="30", Units="cm", ToolTip="Height of the counter above the floor, in cm."))
 	double CounterHeight = 88.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Counter Depth", EditCondition="bHasCounter", UIMin="30", UIMax="80", ClampMin="10", Units="cm", ToolTip="Depth of the counter from front to back, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Counter Depth", EditCondition="Counter != EHutongShopCounter::None", UIMin="30", UIMax="80", ClampMin="10", Units="cm", ToolTip="Depth of the counter from front to back, in cm."))
 	double CounterDepth = 52.0;
 
 	// --- 掛檐板 and 匾額 ---
@@ -89,6 +144,50 @@ struct FHutongShopfrontParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fascia", meta=(DisplayName="Signboard Height", EditCondition="bHasSignboard", UIMin="30", UIMax="90", ClampMin="10", Units="cm", ToolTip="Height of the signboard, in cm."))
 	double SignboardHeight = 52.0;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Signs", meta=(DisplayName="Upright Signboard (招牌)", ToolTip="The tall signboard put up for the street."))
+	EHutongUprightSign UprightSign = EHutongUprightSign::Freestanding;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Signs", meta=(DisplayName="Upright Signboard Height", EditCondition="UprightSign != EHutongUprightSign::None", UIMin="80", UIMax="300", ClampMin="30", Units="cm", ToolTip="Height of each upright signboard, in cm."))
+	double UprightSignHeight = 210.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Signs", meta=(DisplayName="Upright Signboard Width", EditCondition="UprightSign != EHutongUprightSign::None", UIMin="20", UIMax="80", ClampMin="10", Units="cm", ToolTip="Width of each upright signboard, in cm."))
+	double UprightSignWidth = 40.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Signs", meta=(DisplayName="Hanging Trade Sign (幌子)", ToolTip="Hangs a trade sign from an arm at one end of the front, turned to face along the street."))
+	bool bHasTradeSign = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Signs", meta=(DisplayName="Trade Sign Width", EditCondition="bHasTradeSign", UIMin="20", UIMax="80", ClampMin="10", Units="cm", ToolTip="Width of the hanging trade sign, in cm."))
+	double TradeSignWidth = 40.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Signs", meta=(DisplayName="Trade Sign Height", EditCondition="bHasTradeSign", UIMin="40", UIMax="160", ClampMin="15", Units="cm", ToolTip="Height of the hanging trade sign, in cm."))
+	double TradeSignHeight = 90.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Signs", meta=(DisplayName="Trade Sign Reach", EditCondition="bHasTradeSign", UIMin="50", UIMax="200", ClampMin="20", Units="cm", ToolTip="How far the trade sign's arm reaches out from the front, in cm."))
+	double TradeSignReach = 95.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Front Details", meta=(DisplayName="Canopy Depth (拍子)", EditCondition="Front == EHutongShopFront::Platform", UIMin="80", UIMax="250", ClampMin="40", Units="cm", ToolTip="How far the platform canopy reaches in front of the columns, in cm."))
+	double CanopyDepth = 140.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Front Details", meta=(DisplayName="Shed Depth (涼棚)", EditCondition="Front == EHutongShopFront::Shed", UIMin="100", UIMax="400", ClampMin="40", Units="cm", ToolTip="How far the lattice shed reaches in front of the columns, in cm."))
+	double ShedDepth = 220.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Front Details", meta=(DisplayName="Eave Lanterns", ToolTip="Hangs a round lantern over each open bay, under the eave or the canopy."))
+	bool bHasLanterns = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Front Details", meta=(DisplayName="Raised Platform (高臺基)", ToolTip="Stands the shop on a high stone platform with broad steps up to the open bays."))
+	bool bRaisedPlatform = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Front Details", meta=(DisplayName="Raised Platform Height", EditCondition="bRaisedPlatform", UIMin="30", UIMax="90", ClampMin="20", Units="cm", ToolTip="Height of the raised platform above the ground, in cm."))
+	double RaisedPlatformHeight = 60.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Front Details", meta=(DisplayName="Fence (柵欄)", ToolTip="Puts a low picket fence along the front of the shut bays."))
+	bool bHasFence = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Front Details", meta=(DisplayName="Railing Height (朝天欄杆)", EditCondition="Front == EHutongShopFront::Platform", UIMin="30", UIMax="100", ClampMin="10", Units="cm", ToolTip="Height of the railing along the canopy's edge, in cm."))
+	double CanopyRailHeight = 55.0;
+
+
+
 	// --- Shell ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Base Course Height (下鹼)", UIMin="0", UIMax="150", ClampMin="0", Units="cm", ToolTip="Height of the base course (下鹼) above the floor, in cm; zero for automatic."))
@@ -96,7 +195,7 @@ struct FHutongShopfrontParams
 
 	double GetBaseCourseHeight() const
 	{
-		return BaseCourseHeight > 0.0 ? BaseCourseHeight : FMath::Max(HutongCanon::BaseCourse::TopCm - FMath::Max(FloorHeight, 0.0), 25.0);
+		return BaseCourseHeight > 0.0 ? BaseCourseHeight : FMath::Max(HutongCanon::BaseCourse::TopCm - GetFloorHeight(), 25.0);
 	}
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Base Course Projection", UIMin="0", UIMax="15", ClampMin="0", Units="cm", ToolTip="How far the base course stands proud of the wall face, in cm."))
@@ -133,6 +232,12 @@ struct FHutongShopfrontParams
 
 	// Roof figures shared by generator, massing block, preview and ridge estimate.
 	double GetEaveHeight() const { return FMath::Max(EaveHeight, 60.0); }
+	// The 臺基, raised when asked; never past a quarter of the eave.
+	double GetFloorHeight() const
+	{
+		const double Asked = bRaisedPlatform ? FMath::Max(FloorHeight, RaisedPlatformHeight) : FloorHeight;
+		return FMath::Clamp(Asked, 0.0, 0.25 * GetEaveHeight());
+	}
 	// Roof above the column tops, the ceiling at the column line, and the roof's base
 	// (HutongGen::Proportions::RoofLift).
 	// The eave step's 舉 of the roof as built: the section scaled to the fixed rise.

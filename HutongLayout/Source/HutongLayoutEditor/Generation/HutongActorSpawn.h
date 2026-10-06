@@ -32,6 +32,9 @@ namespace HutongGen
 		const FHutongPalette& Palette = FHutongPalette(),
 		int32 CollisionLOD = 0);
 
+	// Re-dresses the actor's baked mesh from Palette, slot by slot, without rebuilding it.
+	void AssignPaletteMaterials(AStaticMeshActor* Actor, const FHutongPalette& Palette);
+
 	// Bakes Mesh onto an actor that already exists.
 	void BuildAndAssignStaticMesh(
 		AStaticMeshActor* Actor,

@@ -194,6 +194,7 @@ void FHutongLayoutEdModeToolkit::BuildToolPalette(FName PaletteName, FToolBarBui
 	{
 		ToolbarBuilder.AddToolBarButton(Commands.BeginWallTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginCourtWallTool);
+		ToolbarBuilder.AddToolBarButton(Commands.BeginCityWallTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginCorridorTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginPathTool);
 	}
@@ -211,6 +212,7 @@ void FHutongLayoutEdModeToolkit::BuildToolPalette(FName PaletteName, FToolBarBui
 		ToolbarBuilder.AddToolBarButton(Commands.BeginGalleryCourtyardTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginGalleryStreetTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginGalleryTemplesTool);
+		ToolbarBuilder.AddToolBarButton(Commands.BeginUnknownTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginMeasureTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginHeightsTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginCourtsTool);

@@ -27,6 +27,8 @@ bool FHutongGalleryCoverageTest::RunTest(const FString& Parameters)
 		if (C->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists)) continue;
 		if (C->GetName().StartsWith(TEXT("SKEL_")) || C->GetName().StartsWith(TEXT("REINST_"))) continue;
 		++Types;
+		// Nothing to see: a type that only traces a footprint.
+		if (!C->GetDefaultObject<UHutongBuildingComponent>()->HasGeometry()) continue;
 		TestTrue(FString::Printf(TEXT("the gallery places a %s"), *C->GetName()), Placed.Contains(C));
 	}
 	TestTrue(FString::Printf(TEXT("building types found (%d)"), Types), Types >= 17);

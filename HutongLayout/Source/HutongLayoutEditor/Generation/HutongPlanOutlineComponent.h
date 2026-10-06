@@ -36,6 +36,8 @@ namespace HutongPlanColours
 	inline const FLinearColor Wall(0.55f, 0.72f, 0.95f, 1.0f);       // 院牆, onto the lane
 	// Same generator as 院牆, told apart only by colour; greener than its blue, same family.
 	inline const FLinearColor CourtWall(0.35f, 0.85f, 0.88f, 1.0f);  // 隔牆, inside the compound
+	// 城牆: the lane wall's blue, darker and greyer — the same family at city scale.
+	inline const FLinearColor CityWall(0.40f, 0.48f, 0.78f, 1.0f);   // 城牆
 	inline const FLinearColor Corridor(0.40f, 0.90f, 0.55f, 1.0f);   // 遊廊
 	inline const FLinearColor Passage(0.60f, 0.85f, 0.45f, 1.0f);    // 過道
 	inline const FLinearColor Path(0.78f, 0.78f, 0.72f, 1.0f);       // 甬路
@@ -44,6 +46,9 @@ namespace HutongPlanColours
 	inline const FLinearColor FlowerBed(0.35f, 0.80f, 0.35f, 1.0f);  // 花池
 	inline const FLinearColor WaterJar(0.30f, 0.72f, 1.00f, 1.0f);   // 魚缸
 
+	// Traced, type not known: cool grey, no family's hue, cooler than the path.
+	inline const FLinearColor Unknown(0.60f, 0.60f, 0.68f, 1.0f);   // 未知
+
 	// Fallback for a type with no colour.
 	inline const FLinearColor Building(1.00f, 0.85f, 0.20f, 1.0f);
 
@@ -51,7 +56,7 @@ namespace HutongPlanColours
 	// so depth decides, not the engine's draw order. Like types share a colour, a tie there is not seen.
 	// Ground first, then buildings large to small, enclosure and garden on top.
 	inline const FLinearColor* const Layers[] = {
-		&Path, &Hall, &House, &Storey, &Shopfront, &Frame, &Pavilion, &Corridor, &EarPassage, &Passage,
+		&Path, &Unknown, &CityWall, &Hall, &House, &Storey, &Shopfront, &Frame, &Pavilion, &Corridor, &EarPassage, &Passage,
 		&Gate, &InnerGate, &Paifang, &Screen, &Wall, &CourtWall, &FlowerBed, &WaterJar, &Building };
 	inline constexpr int32 LayerCount = UE_ARRAY_COUNT(Layers);
 
@@ -157,6 +162,11 @@ public:
 
 	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Colour the outline is drawn in."))
 	FLinearColor Colour = HutongPlanColours::Building;
+
+	// Square marks with an arrow (a city wall's ramp, pointing up it): centre X, Y and the arrow's direction
+	// X, Y in footprint coords. Set before SetPlan, which redraws.
+	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Marks with an arrow, such as a ramp's direction up the wall."))
+	TArray<FVector4> ArrowMarks;
 
 
 	void SetPlan(const FVector2D& InFootprint, const FHutongFootprintSkew& InSkew, bool bInHasFacade, EHutongBaySide InFacade,

@@ -9,6 +9,7 @@
 #include "Generation/HutongBays.h"
 #include "Generation/HutongDoor.h"
 #include "Generation/HutongRearEave.h"
+#include "Generation/ShopfrontGenerator.h"
 #include "StoreyGenerator.generated.h"
 
 // 樓: two-storey street building (乾隆京城全圖): a 鋪面房 below, 腰檐 at the storey line, railed gallery and upper bays above.
@@ -56,8 +57,14 @@ struct FHutongStoreyParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Opening Head / Story", UIMin="0.6", UIMax="0.92", ClampMin="0.3", ClampMax="0.95", ToolTip="Height of the shopfront opening's head as a fraction of the lower story."))
 	double OpeningTopRatio = 0.82;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(HutongBasic, DisplayName="Open Bays", UIMin="0", UIMax="5", ClampMin="0", ClampMax="12", ToolTip="Number of bays left open, counted outward from the middle."))
+	// As the 萬壽圖: by day a shop's boards are down the whole front.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(HutongBasic, DisplayName="All Bays Open", ToolTip="Opens the whole front; off, Open Bays says how many."))
+	bool bAllBaysOpen = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Open Bays", EditCondition="!bAllBaysOpen", UIMin="0", UIMax="5", ClampMin="0", ClampMax="12", ToolTip="Number of bays left open, counted outward from the middle; zero boards the shop up."))
 	int32 OpenBayCount = 1;
+
+	int32 GetOpenBayCount(int32 BayCount) const { return bAllBaysOpen ? BayCount : FMath::Clamp(OpenBayCount, 0, BayCount); }
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Board Width", UIMin="15", UIMax="45", ClampMin="8", Units="cm", ToolTip="Width of each board of the board doors (排板門), in cm."))
 	double BoardWidth = 26.0;
@@ -65,13 +72,13 @@ struct FHutongStoreyParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Board Thickness", UIMin="3", UIMax="12", ClampMin="1", Units="cm", ToolTip="Thickness of each board of the board doors (排板門), in cm."))
 	double BoardThickness = 5.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Has Counter (櫃檯)", ToolTip="Adds a shop counter (櫃檯) across each open bay."))
-	bool bHasCounter = true;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Counter (櫃檯)", ToolTip="Where the shop counter (櫃檯) stands in the open bays; every choice leaves a way in."))
+	EHutongShopCounter Counter = EHutongShopCounter::Street;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Counter Height", EditCondition="bHasCounter", UIMin="70", UIMax="110", ClampMin="30", Units="cm", ToolTip="Height of the counter above the floor, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Counter Height", EditCondition="Counter != EHutongShopCounter::None", UIMin="70", UIMax="110", ClampMin="30", Units="cm", ToolTip="Height of the counter above the floor, in cm."))
 	double CounterHeight = 88.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Counter Depth", EditCondition="bHasCounter", UIMin="30", UIMax="80", ClampMin="10", Units="cm", ToolTip="Depth of the counter from front to back, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Counter Depth", EditCondition="Counter != EHutongShopCounter::None", UIMin="30", UIMax="80", ClampMin="10", Units="cm", ToolTip="Depth of the counter from front to back, in cm."))
 	double CounterDepth = 52.0;
 
 	// --- 腰檐 and the gallery ---

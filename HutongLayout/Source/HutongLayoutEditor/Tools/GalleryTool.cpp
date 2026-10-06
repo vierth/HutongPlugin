@@ -110,6 +110,35 @@ namespace
 			Cluster = TEXT("Walls (牆)");
 			AddWall(TEXT("Wall (牆)"), [](FHutongWallParams&) {});
 
+			auto AddCityWall = [&](const FString& Label, double Len, TFunction<void(FHutongCityWallParams&)> Tweak)
+			{
+				FHutongCityWallParams P;
+				Tweak(P);
+				const EHutongBaySide Outer = EHutongBaySide::MinusY;
+				FGalleryItem It;
+				It.Label = Label;
+				It.Footprint = FVector2D(Len, P.GetBaseWidth());
+				It.Build = [P, Len, Outer](FDynamicMesh3& M, EHutongDetail D)
+				{
+					UHutongCityWallBuildingComponent::BuildCityWallMesh(P, Len, Outer, M, D);
+				};
+				It.Attach = MakeAttach<UHutongCityWallBuildingComponent>(Palette,
+					[P, Len, Outer](UHutongCityWallBuildingComponent* C)
+					{
+						C->Params = P;
+						C->Length = Len;
+						C->OuterSide = Outer;
+					});
+				Add(MoveTemp(It));
+			};
+			// Long enough for a bastion and a ramp: about 60 m for the inner city's.
+			AddCityWall(TEXT("City Wall (城牆)"), 6000.0, [](FHutongCityWallParams& P) { P.bRamp = true; });
+			AddCityWall(TEXT("City Wall (城牆) · Outer City (外城)"), 4000.0, [](FHutongCityWallParams& P)
+			{
+				P.Rank = EHutongCityWallRank::Outer;
+				P.bRamp = true;
+			});
+
 			// Garden openings.
 			Cluster = TEXT("Garden Doorways (牆門洞)");
 			AddWall(TEXT("Moon Gate (月亮門)"), [](FHutongWallParams& P)
@@ -630,10 +659,17 @@ namespace
 		// --- 鋪面房 and 牌坊 ---
 		Cat = EHutongGalleryCategory::Street;
 		{
-			auto AddShop = [&](const FString& Label, int32 OpenBays)
+			auto AddShop = [&](const FString& Label, int32 OpenBays, EHutongShopFront Front, EHutongShopScheme Scheme,
+				bool bRaised = false)
 			{
 				FHutongShopfrontParams P;
-				P.OpenBayCount = OpenBays;
+				P.bRaisedPlatform = bRaised;
+				P.bHasFence = bRaised;
+				// Negative: the default, every bay open.
+				P.bAllBaysOpen = OpenBays < 0;
+				P.OpenBayCount = FMath::Max(OpenBays, 0);
+				P.Front = Front;
+				P.Scheme = Scheme;
 				const double SX = 1000.0, SY = 520.0;
 
 				FGalleryItem It;
@@ -653,8 +689,15 @@ namespace
 				Add(MoveTemp(It));
 			};
 			Cluster = TEXT("Shopfronts (鋪面房)");
-			AddShop(TEXT("Shopfront (鋪面房)"), 1);
-			if (bVar) AddShop(TEXT("Shopfront (鋪面房) · Boarded Up"), 0);
+			AddShop(TEXT("Shopfront (鋪面房)"), -1, EHutongShopFront::Carved, EHutongShopScheme::Vermilion);
+			AddShop(TEXT("Shopfront (鋪面房) · Lattice Shed Front (涼棚)"), -1, EHutongShopFront::Shed, EHutongShopScheme::Natural);
+			AddShop(TEXT("Shopfront (鋪面房) · Platform Front (拍子式)"), -1, EHutongShopFront::Platform, EHutongShopScheme::Green);
+			if (bVar)
+			{
+				AddShop(TEXT("Shopfront (鋪面房) · Plain Board Front"), -1, EHutongShopFront::Plain, EHutongShopScheme::Natural);
+				AddShop(TEXT("Shopfront (鋪面房) · Raised, With Fence"), 2, EHutongShopFront::Plain, EHutongShopScheme::BlackGold, true);
+				AddShop(TEXT("Shopfront (鋪面房) · Boarded Up"), 0, EHutongShopFront::Carved, EHutongShopScheme::BlueGreen);
+			}
 
 			auto AddStorey = [&](const FString& Label, bool bGallery)
 			{

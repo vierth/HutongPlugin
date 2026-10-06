@@ -292,6 +292,59 @@ namespace HutongCanon
 		inline constexpr double ChitouColumnClearanceCm = 1.0;
 	}
 
+	// 城牆, the 內城 wall. NOMINAL — published round figures for the Ming-Qing inner city (高約12米, 底寬約20米,
+	// 頂寬約16米), not yet checked against the user's figures or photographs.
+	namespace CityWall
+	{
+		inline constexpr double HeightCm = 1200.0;
+		inline constexpr double BaseWidthCm = 2000.0;
+		inline constexpr double TopWidthCm = 1600.0;
+
+		// JUDGEMENT — dressed stone courses at the foot (城基 條石).
+		inline constexpr double FootingHeightCm = 100.0;
+
+		// NOMINAL — 垛口牆 on the outer edge, about a man's height and a half; 垛口 cut down from its top.
+		inline constexpr double ParapetHeightCm = 190.0;
+		inline constexpr double ParapetThicknessCm = 70.0;
+		inline constexpr double MerlonWidthCm = 160.0;
+		inline constexpr double CrenelWidthCm = 50.0;
+		inline constexpr double CrenelDepthCm = 70.0;
+		// JUDGEMENT — one square 射眼 low in each 垛.
+		inline constexpr double LoopholeSizeCm = 24.0;
+
+		// NOMINAL — 宇牆 (女牆) on the inner edge, plain and waist high.
+		inline constexpr double InnerParapetHeightCm = 100.0;
+		inline constexpr double InnerParapetThicknessCm = 50.0;
+
+		// UNVERIFIED — 外城, the Ming record (嘉靖三十二年) as usually quoted: 高二丈, 垛口五尺, 基厚二丈,
+		// 頂收一丈四尺, at 32 cm the 尺. Parapet thickness JUDGEMENT, thinner than the inner city's.
+		inline constexpr double OuterHeightCm = 640.0;
+		inline constexpr double OuterBaseWidthCm = 640.0;
+		inline constexpr double OuterTopWidthCm = 448.0;
+		inline constexpr double OuterParapetHeightCm = 160.0;
+		inline constexpr double OuterParapetThicknessCm = 50.0;
+
+		// JUDGEMENT — 馬面 from the user's photographs of the 東南角樓 (2026-10-06): front about as wide as the
+		// wall is high, projecting about two thirds of that, several widths apart.
+		inline constexpr double BastionWidthCm = 1500.0;
+		inline constexpr double BastionProjectionCm = 1000.0;
+		inline constexpr double BastionSpacingCm = 9000.0;
+		// JUDGEMENT — the outer city's, in proportion to its lower wall.
+		inline constexpr double OuterBastionWidthCm = 800.0;
+		inline constexpr double OuterBastionProjectionCm = 550.0;
+
+		// JUDGEMENT — 馬道: a horse ramp, about 1:4, wide enough for a cart; landing at the top a ramp's width.
+		inline constexpr double RampWidthCm = 500.0;
+		inline constexpr double RampSlopeDeg = 14.0;
+		inline constexpr double RampParapetHeightCm = 100.0;
+		inline constexpr double RampParapetThicknessCm = 40.0;
+		// 馬道門 at the foot.
+		inline constexpr double RampGateHeightCm = 380.0;
+		inline constexpr double RampGateOpeningWidthCm = 220.0;
+		inline constexpr double RampGateOpeningHeightCm = 260.0;
+		inline constexpr double RampGateThicknessCm = 60.0;
+	}
+
 	// The four courtyard gates: one 硬山 bay each, ranked by door-plane depth behind the 檐柱 line.
 	namespace Gate
 	{

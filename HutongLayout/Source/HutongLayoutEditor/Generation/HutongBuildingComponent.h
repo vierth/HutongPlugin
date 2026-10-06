@@ -23,6 +23,7 @@
 #include "Generation/ShopfrontGenerator.h"
 #include "Generation/StoreyGenerator.h"
 #include "Generation/EarPassageGenerator.h"
+#include "Generation/CityWallGenerator.h"
 #include "Generation/HutongDetail.h"
 #include "Generation/HutongMetadata.h"
 #include "Generation/HutongGateRow.h"
@@ -205,6 +206,18 @@ public:
 	// Plan-only outline colour; tells plan rectangles apart by type.
 	virtual FLinearColor GetPlanColour() const { return HutongPlanColours::Building; }
 
+	// False for a type that only traces a footprint: always laid out, never built.
+	virtual bool HasGeometry() const { return true; }
+
+	// The palette the baked mesh wears: Palette, with whatever the type lays over it (a shop's scheme).
+	FHutongPalette GetBuiltPalette() const
+	{
+		FHutongPalette P = Palette;
+		AdjustPalette(P);
+		return P;
+	}
+	virtual void AdjustPalette(FHutongPalette& InOut) const {}
+
 	// Attachments besides the baked mesh (currently lights).
 	virtual void ApplyPlacementAttachments() { ApplyPlanOutline(); }
 
@@ -233,6 +246,10 @@ public:
 
 	// Axis of the boundaries: facade edge if any, else the run.
 	bool ArePlanBaysAlongX() const;
+
+	// Marks the plan draws as a square with an arrow (centre X, Y; direction X, Y, footprint coords): a city
+	// wall's ramps, pointing up them.
+	virtual void GetPlanArrows(TArray<FVector4>& Out) const {}
 
 	// The openings a plan can slide along the run — a wall's 牆垣式門 and garden doorway.
 	virtual void GetPlanOpenings(TArray<FHutongPlanOpening>& Out) const {}
@@ -822,11 +839,16 @@ public:
 
 	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Shopfront; }
 
+	// The scheme's colours where the palette keeps its defaults.
+	virtual void AdjustPalette(FHutongPalette& InOut) const override;
+	// Every placement path bakes with its own palette, then attaches: dress the mesh in the scheme here.
+	virtual void ApplyPlacementAttachments() override;
+
 	UPROPERTY(EditAnywhere, Category="Shopfront", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the shopfront generator."))
 	FHutongShopfrontParams Params;
 
-	virtual double GetBaseCourseTop() const override { return FMath::Max(Params.FloorHeight, 0.0) + Params.GetBaseCourseHeight(); }
-	virtual void SetBaseCourseTop(double TopAboveGround) override { Params.BaseCourseHeight = FMath::Max(TopAboveGround - FMath::Max(Params.FloorHeight, 0.0), 25.0); }
+	virtual double GetBaseCourseTop() const override { return Params.GetFloorHeight() + Params.GetBaseCourseHeight(); }
+	virtual void SetBaseCourseTop(double TopAboveGround) override { Params.BaseCourseHeight = FMath::Max(TopAboveGround - Params.GetFloorHeight(), 25.0); }
 	virtual double GetEaveHeight() const override { return Params.GetEaveHeight(); }
 	virtual bool CanSetEditHeight() const override { return true; }
 	virtual bool SetEditHeight(double Cm) override { Params.EaveHeight = Cm; return true; }
@@ -1295,6 +1317,103 @@ public:
 
 protected:
 	virtual void BuildMesh(UE::Geometry::FDynamicMesh3& OutMesh, EHutongDetail Level) const override;
+};
+
+// 城牆: one straight leg of a city wall; the tool lays a run as legs mitred where they meet.
+UCLASS(ClassGroup=Hutong, meta=(BlueprintSpawnableComponent, DisplayName="Hutong City Wall", PrioritizeCategories="Preset Footprint"))
+class UHutongCityWallBuildingComponent : public UHutongBuildingComponent
+{
+	GENERATED_BODY()
+
+public:
+	virtual FText GetTypeLabel() const override
+	{
+		return NSLOCTEXT("Hutong", "TypeCityWall", "City Wall (城牆)");
+	}
+
+	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::CityWall; }
+	virtual bool CanDivideOrFuse() const override { return false; }
+
+	UPROPERTY(EditAnywhere, Category="City Wall", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the city wall generator."))
+	FHutongCityWallParams Params;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="500", ClampMin="100", Units="cm", ToolTip="Length of this leg of the wall, in cm."))
+	double Length = 3000.0;
+
+	// The outer face, where the crenellated parapet stands: one of the two long sides.
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Outer Face", ToolTip="Which long side of the footprint faces out of the city and carries the crenellated parapet."))
+	EHutongBaySide OuterSide = EHutongBaySide::MinusY;
+
+	virtual double GetEditHeight() const override { return Params.GetHeight(); }
+	virtual bool CanSetEditHeight() const override { return true; }
+	virtual bool SetEditHeight(double Cm) override { Params.PinFromRank(); Params.Height = Cm; return true; }
+
+	virtual bool GetFacade(EHutongBaySide& OutSide) const override { OutSide = OuterSide; return true; }
+	virtual bool SetFacade(EHutongBaySide Side) override
+	{
+		if (Side != EHutongBaySide::MinusY && Side != EHutongBaySide::PlusY) return false;
+		OuterSide = Side;
+		return true;
+	}
+	virtual int32 FacadeTurnStep() const override { return 2; }
+
+	// The ramp's mark: just inside the inner edge, half way up it, pointing the way it rises.
+	virtual void GetPlanArrows(TArray<FVector4>& Out) const override;
+
+	static void BuildCityWallMesh(const FHutongCityWallParams& InParams, double InLength, EHutongBaySide Outer,
+		UE::Geometry::FDynamicMesh3& OutMesh, EHutongDetail Detail = EHutongDetail::Near);
+
+	// The 馬道 in the leg's own frame (origin at the footprint's min corner, the leg along +X): its four ground
+	// corners, the line up its middle from foot to top, and the 宇牆 opening. False when there is none.
+	static bool GetRampOutline(const FHutongCityWallParams& InParams, double InLength, EHutongBaySide Outer,
+		FVector2D OutCorners[4], FVector2D& OutUpFrom, FVector2D& OutUpTo, FVector2D OutGap[2]);
+
+	virtual FVector2D GetFootprintSize() const override { return FVector2D(Length, Params.GetBaseWidth()); }
+	// Across, the base widens or narrows with the top, the batter kept.
+	virtual void SetFootprintSize(const FVector2D& S) override
+	{
+		Length = FMath::Max(S.X, 100.0);
+		const double Delta = FMath::Max(S.Y, 200.0) - Params.GetBaseWidth();
+		if (FMath::Abs(Delta) < 0.5) return;
+		Params.PinFromRank();
+		Params.BaseWidth = Params.GetBaseWidth() + Delta;
+		Params.TopWidth = FMath::Max(Params.GetTopWidth() + Delta, 150.0);
+	}
+
+protected:
+	virtual void BuildMesh(UE::Geometry::FDynamicMesh3& OutMesh, EHutongDetail Level) const override;
+};
+
+// A traced footprint whose type is not known: laid out, never built; carries metadata only.
+UCLASS(ClassGroup=Hutong, meta=(BlueprintSpawnableComponent, DisplayName="Hutong Unknown", PrioritizeCategories="Metadata Footprint"))
+class UHutongUnknownBuildingComponent : public UHutongBuildingComponent
+{
+	GENERATED_BODY()
+
+public:
+	UHutongUnknownBuildingComponent() { bPlanOnly = true; }
+
+	virtual FText GetTypeLabel() const override
+	{
+		return NSLOCTEXT("Hutong", "TypeUnknown", "Unknown (未知)");
+	}
+
+	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::Unknown; }
+	virtual bool HasGeometry() const override { return false; }
+	virtual bool CanDivideOrFuse() const override { return false; }
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="50", ClampMin="10", Units="cm", ToolTip="Extent of the footprint along the actor's local X, in cm."))
+	double FootprintX = 600.0;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="50", ClampMin="10", Units="cm", ToolTip="Extent of the footprint along the actor's local Y, in cm."))
+	double FootprintY = 400.0;
+
+	virtual FVector2D GetFootprintSize() const override { return FVector2D(FootprintX, FootprintY); }
+	virtual void SetFootprintSize(const FVector2D& S) override
+	{
+		FootprintX = FMath::Max(S.X, 10.0);
+		FootprintY = FMath::Max(S.Y, 10.0);
+	}
 };
 
 // 構架: a house's frame alone, for showing how it is built.

@@ -128,7 +128,7 @@ bool URectDragToolBase::ShouldBuildLODChain() const
 
 int32 URectDragToolBase::BuildLODsForRect(double SizeX, double SizeY, TArray<FDynamicMesh3>& OutLODs)
 {
-	return HutongGen::Detail::BuildPlacementLODs(IsPlanOnly(), SizeX, SizeY,
+	return HutongGen::Detail::BuildPlacementLODs(IsPlanOnly() || !BuildsGeometry(), SizeX, SizeY,
 		GetDetailLevel(), ShouldBuildLODChain(),
 		[this, SizeX, SizeY](FDynamicMesh3& Mesh, EHutongDetail Level)
 		{
@@ -157,7 +157,7 @@ void URectDragToolBase::StampDetail(UHutongBuildingComponent* Building) const
 		Building->Confidence = MetadataSettings->Confidence;
 		Building->Notes = MetadataSettings->Notes;
 	}
-	Building->bPlanOnly = IsPlanOnly();
+	Building->bPlanOnly = IsPlanOnly() || !Building->HasGeometry();
 	// Record which preset laid the building: 正房 and 耳房 share a generator, so params alone cannot
 	// name it. Empty when none was picked.
 	// Only when the picker picks this type: compound and gallery stamp pieces through here with a
@@ -1501,7 +1501,7 @@ void URectDragToolBase::SpawnFinalActor()
 	ToolManager->BeginUndoTransaction(NSLOCTEXT("HutongLayout", "PlaceActor", "Place Hutong Actor"));
 	const FHutongPalette Palette = Appearance ? Appearance->Palette : FHutongPalette();
 	// Plan-only: meshless actor, drawn by the component's outline.
-	AStaticMeshActor* Actor = IsPlanOnly()
+	AStaticMeshActor* Actor = IsPlanOnly() || !BuildsGeometry()
 		? HutongGen::SpawnEmptyActor(World, Xform, GetActorNameBase())
 		: HutongGen::SpawnStaticMeshActor(World, LODs, Xform, GetActorNameBase(), Palette, CollisionLOD);
 	if (Actor)
