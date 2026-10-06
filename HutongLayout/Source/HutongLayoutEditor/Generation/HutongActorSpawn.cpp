@@ -27,6 +27,10 @@
 #include "HAL/IConsoleManager.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "UObject/UObjectIterator.h"
+#include "StaticMeshCompiler.h"
+#include "Containers/Ticker.h"
+#include "Editor.h"
+#include "UObject/ObjectSaveContext.h"
 
 using UE::Geometry::FDynamicMesh3;
 
@@ -129,6 +133,67 @@ namespace
 		return CreateTintedMaterial(Outer, Color);
 	}
 
+	TAutoConsoleVariable<bool> CVarLogBakeTiming(
+		TEXT("hutong.LogBakeTiming"), false,
+		TEXT("Logs how long each stage of a building's bake takes."));
+
+	// Stage timer for the bake: logs on scope exit when hutong.LogBakeTiming is on.
+	struct FBakeTimer
+	{
+		const TCHAR* Stage;
+		double Start;
+		explicit FBakeTimer(const TCHAR* InStage) : Stage(InStage), Start(FPlatformTime::Seconds()) {}
+		~FBakeTimer()
+		{
+			if (CVarLogBakeTiming.GetValueOnGameThread())
+			{
+				UE_LOG(LogTemp, Display, TEXT("HutongBake %s: %.1f ms"), Stage, 1000.0 * (FPlatformTime::Seconds() - Start));
+			}
+		}
+	};
+
+	// New library meshes wait here until their background build is done, then are saved: saving at once
+	// waited for the build, so every placement (and every building of a bulk Generate, one after another)
+	// stood still for it. Flushed before a level is saved, so the level never references an unsaved mesh.
+	TArray<TWeakObjectPtr<UStaticMesh>>& PendingLibrarySaves()
+	{
+		static TArray<TWeakObjectPtr<UStaticMesh>> Pending;
+		return Pending;
+	}
+
+	void SaveLibraryMeshNow(UStaticMesh* Mesh)
+	{
+		UPackage* Package = Mesh ? Mesh->GetPackage() : nullptr;
+		if (!Package) return;
+		FSavePackageArgs Args;
+		Args.TopLevelFlags = RF_Public | RF_Standalone;
+		const FString File = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
+		UPackage::SavePackage(Package, Mesh, *File, Args);
+	}
+
+	// Saves the pending meshes whose build is done; with bWait, finishes the rest first.
+	void SavePendingLibraryMeshes(bool bWait)
+	{
+		TArray<TWeakObjectPtr<UStaticMesh>>& Pending = PendingLibrarySaves();
+		if (Pending.Num() == 0) return;
+		if (bWait)
+		{
+			TArray<UStaticMesh*> Building;
+			for (const TWeakObjectPtr<UStaticMesh>& M : Pending) if (M.IsValid() && M->IsCompiling()) Building.Add(M.Get());
+			if (Building.Num() > 0) FStaticMeshCompilingManager::Get().FinishCompilation(Building);
+		}
+		for (int32 i = Pending.Num() - 1; i >= 0; --i)
+		{
+			UStaticMesh* M = Pending[i].Get();
+			if (M && M->IsCompiling()) continue;
+			SaveLibraryMeshNow(M);
+			Pending.RemoveAtSwap(i);
+		}
+	}
+
+	FTSTicker::FDelegateHandle LibrarySaveTicker;
+	FDelegateHandle LibraryPreSaveWorld;
+
 	TAutoConsoleVariable<bool> CVarShareMeshes(
 		TEXT("hutong.ShareMeshes"), true,
 		TEXT("Buildings with identical geometry share one mesh asset under /Game/HutongLayout/Generated."));
@@ -185,9 +250,18 @@ namespace
 		return nullptr;
 	}
 
+	// Slots of each mesh this session baked or met, so a re-dress never reads the mesh while it is still
+	// building in the background (reading its materials waits for the build).
+	TMap<TWeakObjectPtr<const UStaticMesh>, TArray<int32>>& SlotCache()
+	{
+		static TMap<TWeakObjectPtr<const UStaticMesh>, TArray<int32>> Cache;
+		return Cache;
+	}
+
 	// Slot list of a baked mesh, read back off its material slot names.
 	TArray<int32> SlotsOf(const UStaticMesh* Mesh)
 	{
+		if (const TArray<int32>* Known = SlotCache().Find(Mesh)) return *Known;
 		TArray<int32> Slots;
 		for (const FStaticMaterial& M : Mesh->GetStaticMaterials())
 		{
@@ -196,6 +270,7 @@ namespace
 				if (HutongGen::MaterialSlotName(Slot) == M.MaterialSlotName) { Slots.Add(Slot); break; }
 			}
 		}
+		SlotCache().Add(Mesh, Slots);
 		return Slots;
 	}
 }
@@ -398,7 +473,8 @@ namespace HutongGen
 		AStaticMeshActor* Actor,
 		TArray<FDynamicMesh3>& LODs,
 		const FHutongPalette& Palette,
-		int32 CollisionLOD)
+		int32 CollisionLOD,
+		bool bBespoke)
 	{
 		if (!Actor || LODs.Num() == 0) return;
 
@@ -431,10 +507,15 @@ namespace HutongGen
 		};
 
 		// The library: a building whose geometry is already baked takes that mesh, no build.
-		const bool bShare = CVarShareMeshes.GetValueOnGameThread();
-		const FString Key = bShare ? LibraryKey(LODs, CollisionLOD) : FString();
+		const bool bShare = CVarShareMeshes.GetValueOnGameThread() && !bBespoke;
+		FString Key;
+		{
+			FBakeTimer T(TEXT("library key"));
+			Key = bShare ? LibraryKey(LODs, CollisionLOD) : FString();
+		}
 		if (bShare)
 		{
+			FBakeTimer T(TEXT("library hit: find and dress"));
 			if (UStaticMesh* Shared = FindLibraryMesh(Key))
 			{
 				Assign(Shared, PaletteMaterials(SlotsOf(Shared)));
@@ -449,7 +530,11 @@ namespace HutongGen
 
 		// From the collision LOD as built, before bake winding: the fit does not care which way faces point.
 		FKAggregateGeom CollisionGeom;
-		BuildSimpleCollision(LODs[FMath::Clamp(CollisionLOD, 0, LODs.Num() - 1)], CollisionGeom);
+		{
+			FBakeTimer T(TEXT("collision fit"));
+			BuildSimpleCollision(LODs[FMath::Clamp(CollisionLOD, 0, LODs.Num() - 1)], CollisionGeom);
+		}
+		TOptional<FBakeTimer> PrepTimer(InPlace, TEXT("normals, UVs, conversion"));
 
 		// Prepare every LOD before touching the asset.
 		TArray<TArray<int32>> LODSlots;
@@ -479,7 +564,7 @@ namespace HutongGen
 			Converter.Convert(&Mesh, Desc);
 		}
 
-		// The asset's one material list: the union of what the chain wears, in enum order.
+		// The asset's one material list: the union of what the chain wears, in enum order (cached below).
 		TArray<int32> UsedSlots;
 		{
 			bool bSeen[MatSlot_Count] = {};
@@ -497,7 +582,12 @@ namespace HutongGen
 			if (UsedSlots.Num() == 0) UsedSlots.Add(MatSlot_Body);
 		}
 
-		const TArray<UMaterialInterface*> SlotMats = PaletteMaterials(UsedSlots);
+		PrepTimer.Reset();
+		TArray<UMaterialInterface*> SlotMats;
+		{
+			FBakeTimer T(TEXT("materials"));
+			SlotMats = PaletteMaterials(UsedSlots);
+		}
 
 		// Shared: its own package in the library, its slots wearing only what any building may (the
 		// palette rides on each component). Bespoke: outered to the actor, saved in the actor's package.
@@ -576,7 +666,10 @@ namespace HutongGen
 
 		// No PostEditChange after Build: it runs a second Build (900 ms vs 7 ms on a 正房 chain).
 		// Everything it would refresh (section info, body setup, materials) is already set.
-		StaticMesh->Build(false);
+		{
+			FBakeTimer T(TEXT("static mesh build (Nanite, LODs, collision cook)"));
+			StaticMesh->Build(false);
+		}
 
 		if (LibraryPackage)
 		{
@@ -584,16 +677,48 @@ namespace HutongGen
 			LibraryPackage->MarkPackageDirty();
 			// On disk at once: a level saved without it would reload with its buildings missing their mesh.
 			// Not under automation, which would litter the host project.
-			if (!GIsAutomationTesting)
-			{
-				FSavePackageArgs Args;
-				Args.TopLevelFlags = RF_Public | RF_Standalone;
-				const FString File = FPackageName::LongPackageNameToFilename(
-					LibraryPackage->GetName(), FPackageName::GetAssetPackageExtension());
-				UPackage::SavePackage(LibraryPackage, StaticMesh, *File, Args);
-			}
+			if (!GIsAutomationTesting) PendingLibrarySaves().AddUnique(StaticMesh);
 		}
+		SlotCache().Add(StaticMesh, UsedSlots);
 		NoUndo.Reset();
 		Assign(StaticMesh, SlotMats);
+	}
+
+	void StartLibrarySaver()
+	{
+		LibrarySaveTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
+		{
+			SavePendingLibraryMeshes(false);
+			return true;
+		}), 0.5f);
+		LibraryPreSaveWorld = FEditorDelegates::PreSaveWorldWithContext.AddLambda([](UWorld*, FObjectPreSaveContext)
+		{
+			SavePendingLibraryMeshes(true);
+		});
+	}
+
+	void StopLibrarySaver()
+	{
+		SavePendingLibraryMeshes(true);
+		FTSTicker::GetCoreTicker().RemoveTicker(LibrarySaveTicker);
+		FEditorDelegates::PreSaveWorldWithContext.Remove(LibraryPreSaveWorld);
+	}
+
+	bool MakeMeshUnique(AStaticMeshActor* Actor)
+	{
+		UStaticMeshComponent* Comp = Actor ? Actor->GetStaticMeshComponent() : nullptr;
+		UStaticMesh* Shared = Comp ? Comp->GetStaticMesh() : nullptr;
+		// Already its own (outered to the actor, as a bespoke bake is).
+		if (!Shared || Shared->GetOuter() == Actor) return false;
+		Actor->Modify();
+		Comp->Modify();
+		UStaticMesh* Own = DuplicateObject<UStaticMesh>(Shared, Actor);
+		Own->ClearFlags(RF_Standalone);
+		Own->SetFlags(RF_Public | RF_Transactional);
+		Own->Build(false);
+		// The overrides (a student's materials) stay on the component.
+		Comp->SetStaticMesh(Own);
+		SlotCache().Add(Own, SlotsOf(Shared));
+		return true;
 	}
 }

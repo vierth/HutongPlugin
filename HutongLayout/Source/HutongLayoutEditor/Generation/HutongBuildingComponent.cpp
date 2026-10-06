@@ -12,6 +12,7 @@
 #include "Generation/HutongMeshUtils.h"
 #include "Tools/HutongPresets.h"
 #include "Engine/StaticMeshActor.h"
+#include "ScopedTransaction.h"
 
 using UE::Geometry::FDynamicMesh3;
 
@@ -35,9 +36,10 @@ int32 UHutongBuildingComponent::BuildLODs(TArray<FDynamicMesh3>& OutLODs) const
 FHutongFootprintSkew UHutongBuildingComponent::WithEndBays(FHutongFootprintSkew Skew) const
 {
 	Skew.EndBayReach[0] = Skew.EndBayReach[1] = 0.0;
+	Skew.RunAxis = GetSkewRunAxis();
 	EHutongBaySide Side;
 	const FVector2D Size = GetFootprintSize();
-	const bool bRunX = HutongFootprint::RunAlongX(Size);
+	const bool bRunX = HutongFootprint::RunAlongX(Size, Skew);
 	if (Skew.Mode != EHutongSkewMode::Ends || !GetFacade(Side) || ArePlanBaysAlongX() != bRunX) return Skew;
 	FHutongPlanBays Bays;
 	GetPlanBays(Bays);
@@ -69,6 +71,8 @@ void UHutongBuildingComponent::Rebuild()
 {
 	AStaticMeshActor* Actor = Cast<AStaticMeshActor>(GetOwner());
 	if (!Actor) return;
+	// Locked: its mesh, materials and anything fitted to it stay as they are.
+	if (bLocked) return;
 
 	if (!HasGeometry()) bPlanOnly = true;
 	if (bPlanOnly)
@@ -89,7 +93,7 @@ void UHutongBuildingComponent::Rebuild()
 	if (LODs.Num() == 0 || LODs[0].TriangleCount() == 0) return;
 
 	Actor->Modify();
-	HutongGen::BuildAndAssignStaticMesh(Actor, LODs, GetBuiltPalette(), CollisionLOD);
+	HutongGen::BuildAndAssignStaticMesh(Actor, LODs, GetBuiltPalette(), CollisionLOD, bBespokeMesh);
 	ApplyPlanOutline();
 }
 
@@ -193,6 +197,17 @@ void UHutongBuildingComponent::ApplyPlanOutline()
 		Bays, ArePlanBaysAlongX(), GetPlanColour());
 }
 
+void UHutongBuildingComponent::MakeMeshUnique()
+{
+	AStaticMeshActor* Actor = Cast<AStaticMeshActor>(GetOwner());
+	if (!Actor || bPlanOnly) return;
+	const FScopedTransaction Transaction(NSLOCTEXT("Hutong", "MakeMeshUnique", "Make Hutong Mesh Unique"));
+	Modify();
+	// Later rebuilds (once unlocked) keep it the building's own too.
+	bBespokeMesh = true;
+	HutongGen::MakeMeshUnique(Actor);
+}
+
 void UHutongBuildingComponent::PostInitProperties()
 {
 	Super::PostInitProperties();
@@ -206,6 +221,13 @@ void UHutongBuildingComponent::PostEditChangeProperty(FPropertyChangedEvent& Pro
 
 	// Skip the stream of updates a slider drag produces.
 	if (PropertyChangedEvent.ChangeType == EPropertyChangeType::Interactive) return;
+	// Locking or unlocking changes nothing built: unlocking must not rebuild over the finished work. Locking
+	// gives it a mesh of its own, so work on the mesh touches no other building.
+	if (PropertyChangedEvent.GetPropertyName() == GET_MEMBER_NAME_CHECKED(UHutongBuildingComponent, bLocked))
+	{
+		if (bLocked) MakeMeshUnique();
+		return;
+	}
 
 	// A picked preset replaces only the parameters; footprint, facing and transform stay. Its
 	// suggested frontage only affects a *new* drag.
@@ -807,6 +829,33 @@ void UHutongFlowerBedBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHuton
 	BuildFlowerBedMesh(Params, FootprintX, FootprintY, OutMesh, Level);
 }
 
+// --- 小房 ---
+
+void UHutongSmallBuildingComponent::BuildSmallBuildingMesh(const FHutongSmallBuildingParams& InParams, EHutongBaySide Side,
+	int32 InBayCountOverride, double SizeX, double SizeY, FDynamicMesh3& OutMesh, EHutongDetail Detail)
+{
+	const bool bAlongX = HutongGen::BaySide::IsAlongX(Side);
+	FHutongSmallBuildingParams P = InParams;
+	P.Width = bAlongX ? SizeX : SizeY;
+	P.Depth = bAlongX ? SizeY : SizeX;
+	P.BayCountOverride = InBayCountOverride;
+	// Tile courses only close up, as on every roof.
+	if (Detail != EHutongDetail::Near && Detail != EHutongDetail::Hero) P.bHasTileRuns = false;
+	HutongGen::BuildSmallBuilding(OutMesh, P, Detail != EHutongDetail::Massing);
+
+	// Built front on -Y, turned onto the chosen side.
+	if (Side == EHutongBaySide::MinusY) return;
+	for (int32 vid : OutMesh.VertexIndicesItr())
+	{
+		OutMesh.SetVertex(vid, HutongGen::BaySide::RotateVertex(Side, OutMesh.GetVertex(vid), SizeX, SizeY));
+	}
+}
+
+void UHutongSmallBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDetail Level) const
+{
+	BuildSmallBuildingMesh(Params, BaySide, BayCountOverride, FootprintX, FootprintY, OutMesh, Level);
+}
+
 // --- 城牆 ---
 
 namespace
@@ -826,6 +875,17 @@ namespace
 		return P;
 	}
 }
+
+#if WITH_EDITOR
+void UHutongCityWallBuildingComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	if (PropertyChangedEvent.GetPropertyName() == GET_MEMBER_NAME_CHECKED(FHutongCityWallParams, Rank))
+	{
+		Params.ChooseRank(Params.Rank);
+	}
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+}
+#endif
 
 void UHutongCityWallBuildingComponent::GetPlanArrows(TArray<FVector4>& Out) const
 {

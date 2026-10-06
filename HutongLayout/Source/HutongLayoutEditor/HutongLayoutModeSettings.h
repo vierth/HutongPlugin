@@ -5,6 +5,41 @@
 #include "Generation/HutongDetail.h"
 #include "HutongLayoutModeSettings.generated.h"
 
+// The step drawn sizes round to, in 營造尺 (32 cm): buildings of one kind come out the same size and share
+// one mesh, which is built once (about a quarter second) and reused (about a millisecond).
+UENUM()
+enum class EHutongSizeStep : uint8
+{
+	Off      UMETA(DisplayName = "Off", ToolTip = "Sizes follow the cursor exactly."),
+	Cun      UMETA(DisplayName = "1 cun (寸, 3.2 cm)", ToolTip = "Sizes round to whole cun."),
+	FiveCun  UMETA(DisplayName = "5 cun (五寸, 16 cm)", ToolTip = "Sizes round to five cun."),
+	Chi      UMETA(DisplayName = "1 chi (尺, 32 cm)", ToolTip = "Sizes round to whole chi."),
+	Zhang    UMETA(DisplayName = "1 zhang (丈, 3.2 m)", ToolTip = "Sizes round to whole zhang."),
+};
+
+namespace HutongSizeStep
+{
+	inline double Cm(EHutongSizeStep Step)
+	{
+		switch (Step)
+		{
+		case EHutongSizeStep::Cun:     return 3.2;
+		case EHutongSizeStep::FiveCun: return 16.0;
+		case EHutongSizeStep::Chi:     return 32.0;
+		case EHutongSizeStep::Zhang:   return 320.0;
+		default:                       return 0.0;
+		}
+	}
+
+	// Length rounded to a whole number of steps, never under one step.
+	inline double Round(double Length, double StepCm)
+	{
+		if (StepCm <= 0.0) return Length;
+		const double Sign = Length < 0.0 ? -1.0 : 1.0;
+		return Sign * FMath::Max(StepCm, FMath::RoundToDouble(FMath::Abs(Length) / StepCm) * StepCm);
+	}
+}
+
 // The mode's own panel, under the active tool's, collapsed as "Placed Buildings".
 UCLASS(config = EditorPerProjectUserSettings)
 class UHutongLayoutModeSettings : public UObject
@@ -26,6 +61,9 @@ public:
 
 	// Mirrors HutongPlanOutline's switch: plans draw regardless of mode, and another plugin's panel
 	// wants them hidden. Seeded on Enter so a fresh object cannot report hidden plans as visible.
+	UPROPERTY(EditAnywhere, config, Category = "Geometry", meta = (DisplayName = "Size Step", ToolTip = "Drawn and resized footprints round to this step, so buildings of one kind match and share one mesh. Snapping to a placed building still wins."))
+	EHutongSizeStep SizeStep = EHutongSizeStep::FiveCun;
+
 	UPROPERTY(EditAnywhere, Category = "Geometry", meta = (DisplayName = "Show Plan Outlines", ToolTip = "Show every building's footprint outline."))
 	bool bShowPlanOutlines = true;
 

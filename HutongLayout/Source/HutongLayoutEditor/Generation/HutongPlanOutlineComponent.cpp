@@ -30,6 +30,8 @@ namespace
 	constexpr double ChevronMax = 120.0;
 	// An arrow mark's square, at most (a city wall's ramp).
 	constexpr double ArrowMarkSize = 300.0;
+	// A wall's openings: the tool's orange for a handle being dragged.
+	const FLinearColor OpeningColor(1.0f, 0.45f, 0.1f, 1.0f);
 	// Slightly above ground to avoid z-fighting a map plane at Z = 0.
 	constexpr double Lift = 2.0;
 	// Plans stack by type in drawing only (HutongPlanColours::Layers); the actor stays where it stands.
@@ -218,7 +220,8 @@ public:
 				DrawOwnPart(PDI, World[j], World[i], Line, Thickness);
 			}
 
-			// Openings: jambs across the thickness, bar between, in door colour.
+			// Openings (a wall's gate or garden doorway): an orange patch across the thickness, edged in the
+			// same orange — the slider's while dragged — so a gate reads unselected (user, 2026-10-06).
 			for (const FVector2D& O : Openings)
 			{
 				const double A = O.X - 0.5 * O.Y, B = O.X + 0.5 * O.Y;
@@ -227,11 +230,29 @@ public:
 					return bRunAlongY ? At(Across, Along) : At(Along, Across);
 				};
 				const double Across = bRunAlongY ? W : D;
-				FLinearColor Door = FacadeColor;
-				Door.A = Line.A;
-				PDI->DrawLine(Run(A, 0.0), Run(A, Across), Door, DPG, Thickness + 1.0f, 0.0f, true);
-				PDI->DrawLine(Run(B, 0.0), Run(B, Across), Door, DPG, Thickness + 1.0f, 0.0f, true);
-				PDI->DrawLine(Run(A, 0.5 * Across), Run(B, 0.5 * Across), Door, DPG, Thickness + 2.0f, 0.0f, true);
+				const FVector Q[4] = { Run(A, 0.0), Run(B, 0.0), Run(B, Across), Run(A, Across) };
+				if (GEngine && GEngine->DebugMeshMaterial)
+				{
+					FLinearColor Patch = OpeningColor;
+					Patch.A = 0.7f;
+					FMaterialRenderProxy* Material = &Collector.AllocateOneFrameResource<FColoredMaterialRenderProxy>(
+						GEngine->DebugMeshMaterial->GetRenderProxy(), Patch);
+					FDynamicMeshBuilder Builder(Views[ViewIndex]->GetFeatureLevel());
+					for (int32 k = 0; k < 4; ++k)
+					{
+						// Over the plan's own fill (1.5 cm under the lines), under the lines.
+						Builder.AddVertex(FVector3f(Q[k] - FVector(0.0, 0.0, 0.5)), FVector2f::ZeroVector,
+							FVector3f(1, 0, 0), FVector3f(0, 1, 0), FVector3f(0, 0, 1), FColor::White);
+					}
+					Builder.AddTriangle(0, 1, 2);
+					Builder.AddTriangle(0, 2, 3);
+					Builder.GetMesh(FMatrix::Identity, Material, DPG, /*bDisableBackfaceCulling*/ true, /*bReceivesDecals*/ false,
+						/*bUseSelectionOutline*/ false, ViewIndex, Collector, HitProxyId);
+				}
+				for (int32 k = 0; k < 4; ++k)
+				{
+					PDI->DrawLine(Q[k], Q[(k + 1) % 4], OpeningColor, DPG, Thickness + 1.0f, 0.0f, true);
+				}
 			}
 
 			// Arrow marks: a square, an arrow across it in the mark's direction, in the facade hue.
@@ -372,6 +393,12 @@ public:
 		Result.bSeparateTranslucency = Result.bNormalTranslucency = true;
 		return Result;
 	}
+
+	// Never occlusion-culled: the bounds are a slab a few centimetres thick lying on the map, a thin wall's
+	// only a pixel or two wide on screen, and the coarse depth test of the last frame judged one hidden one
+	// frame and shown the next — a whole wall blinking out (user, 2026-10-06). Lines and a fill cost nothing
+	// to draw anyway.
+	virtual bool CanBeOccluded() const override { return false; }
 
 	virtual uint32 GetMemoryFootprint() const override { return sizeof(*this) + GetAllocatedSize(); }
 

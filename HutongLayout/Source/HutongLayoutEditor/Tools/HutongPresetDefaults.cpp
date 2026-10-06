@@ -8,6 +8,7 @@
 #include "Generation/WallGenerator.h"
 #include "Generation/GateHouseGenerator.h"
 #include "Generation/HutongCanon.h"
+#include "Generation/SmallBuildingGenerator.h"
 
 // Courtyard building types, as presets rather than tools.
 FHutongSiheyuanParams HutongPresets::MakeHouse(const HutongCanon::House::FHouse& H)
@@ -138,6 +139,42 @@ void HutongPresets::RegisterBuiltInPresets()
 		P.Style = Style;
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("GateHouse"),
 			StaticEnum<EHutongGateStyle>()->GetDisplayNameTextByValue((int64)Style).ToString(), FHutongGateHouseParams::StaticStruct(), &P);
+	}
+
+	// 小房: minor freestanding buildings. PROVISIONAL — general knowledge, to be shaped on the user's figures.
+	{
+		FHutongSmallBuildingParams House;
+		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Small"), TEXT("Small House (小房)"), FHutongSmallBuildingParams::StaticStruct(), &House);
+
+		// 堆撥房: the watch post at a lane mouth or bridgehead, door to the street.
+		FHutongSmallBuildingParams Post;
+		Post.EaveHeight = 280.0;
+		Post.MinBayWidth = 240.0;
+		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Small"), TEXT("Guard Post (堆撥房)"), FHutongSmallBuildingParams::StaticStruct(), &Post);
+
+		// 棚: a lean-to, open at the front.
+		FHutongSmallBuildingParams Shed;
+		Shed.Roof = EHutongSmallRoof::LeanTo;
+		Shed.Front = EHutongSmallFront::Open;
+		Shed.EaveHeight = 230.0;
+		Shed.FloorHeight = 0.0;
+		Shed.WallThickness = 24.0;
+		Shed.RoofRise = 90.0;
+		Shed.bHasTileRuns = false;
+		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Small"), TEXT("Shed (棚)"), FHutongSmallBuildingParams::StaticStruct(), &Shed);
+
+		// 土地廟: a one-bay wayside shrine on a raised base.
+		FHutongSmallBuildingParams Shrine;
+		Shrine.EaveHeight = 210.0;
+		Shrine.FloorHeight = 45.0;
+		Shrine.WallThickness = 24.0;
+		Shrine.DoorWidth = 60.0;
+		Shrine.bWindows = false;
+		Shrine.RoofRise = 80.0;
+		Shrine.RoofOverhang = 35.0;
+		Shrine.MinBayWidth = 120.0;
+		Shrine.MaxBayWidth = 400.0;
+		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Small"), TEXT("Shrine (土地廟)"), FHutongSmallBuildingParams::StaticStruct(), &Shrine);
 	}
 
 	// 亭: the 則例's two, the round one with its 倒掛楣子 as drawn.

@@ -357,6 +357,7 @@ void FHutongModeSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& De
 
 	IDetailCategoryBuilder& Geometry = Category(TEXT("Geometry"));
 	Property(Geometry, GET_MEMBER_NAME_CHECKED(S, bPlanOnly));
+	Property(Geometry, GET_MEMBER_NAME_CHECKED(S, SizeStep));
 	Property(Geometry, GET_MEMBER_NAME_CHECKED(S, bShowPlanOutlines));
 	Property(Geometry, GET_MEMBER_NAME_CHECKED(S, bShowBuildingLabels));
 	Property(Geometry, GET_MEMBER_NAME_CHECKED(S, bPlansOverBuildings));

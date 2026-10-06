@@ -134,7 +134,7 @@ namespace HutongMeshUtils
 		if (Skew.Mode == EHutongSkewMode::Ends)
 		{
 			// Split at the zone seam so a primitive spanning the run keeps its body exactly as built.
-			const bool bX = HutongFootprint::RunAlongX(Size);
+			const bool bX = HutongFootprint::RunAlongX(Size, Skew);
 			const double L = bX ? Width : Depth;
 			const FVector3d Normal = bX ? FVector3d(1, 0, 0) : FVector3d(0, 1, 0);
 			for (const bool bStart : { true, false })

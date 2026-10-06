@@ -24,9 +24,19 @@ void UHutongCityWallTool::RegisterToolSettings()
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("CityWall"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongCityWallToolProperties, Params));
-	Presets->OnPresetLoaded = [this]() { NotifyOfPropertyChangeByTool(Settings); };
+	Presets->OnPresetLoaded = [this]() { LastRank = Settings->Params.Rank; NotifyOfPropertyChangeByTool(Settings); };
 	RegisterSettings(Settings);
 	RegisterSettings(Presets);
+	LastRank = Settings->Params.Rank;
+}
+
+void UHutongCityWallTool::OnPropertyModified(UObject* PropertySet, FProperty* Property)
+{
+	Super::OnPropertyModified(PropertySet, Property);
+	if (PropertySet != Settings || Settings->Params.Rank == LastRank) return;
+	Settings->Params.ChooseRank(Settings->Params.Rank);
+	LastRank = Settings->Params.Rank;
+	NotifyOfPropertyChangeByTool(Settings);
 }
 
 void UHutongCityWallTool::AdjustHeight(double DeltaCm)
@@ -105,6 +115,8 @@ bool UHutongCityWallTool::OnRectCommitted(const FVector& HitWorld)
 {
 	// Every click lands here: undo the base's commit until the run ends.
 	bRectCommitted = false;
+	// The click re-read the cursor: step it as the hover did.
+	if (!IsNear(HitWorld, ChainPoints.Last()) && !(ChainPoints.Num() >= 3 && IsNear(HitWorld, ChainPoints[0]))) StepCursorBearing(0.0);
 	const FVector P = CurrentWorld;
 	if (ChainPoints.Num() >= 2 && (IsNear(HitWorld, ChainPoints.Last()) || IsNear(P, ChainPoints.Last()))) return true;
 	if (IsNear(P, ChainPoints.Last())) return false;
@@ -126,16 +138,7 @@ void UHutongCityWallTool::OnPlacementHover(const FVector& HitWorld)
 {
 	if (ChainPoints.Num() >= 2 && IsNear(HitWorld, ChainPoints.Last())) { CurrentWorld = ChainPoints.Last(); return; }
 	if (ChainPoints.Num() >= 3 && IsNear(HitWorld, ChainPoints[0])) { CurrentWorld = ChainPoints[0]; return; }
-	if (bSnapActive) return;
-	// Shift steps 15°.
-	const bool bShift = FSlateApplication::IsInitialized() && FSlateApplication::Get().GetModifierKeys().IsShiftDown();
-	if (!bShift) return;
-	const double dx = CurrentWorld.X - StartWorld.X, dy = CurrentWorld.Y - StartWorld.Y;
-	const double Len = FMath::Sqrt(dx * dx + dy * dy);
-	if (Len < 1.0) return;
-	const double Snapped = FMath::RoundToDouble(FMath::RadiansToDegrees(FMath::Atan2(dy, dx)) / 15.0) * 15.0;
-	const double R = FMath::DegreesToRadians(Snapped);
-	CurrentWorld = StartWorld + FVector(FMath::Cos(R) * Len, FMath::Sin(R) * Len, 0.0);
+	StepCursorBearing(0.0);
 }
 
 void UHutongCityWallTool::CancelPlacement()

@@ -122,6 +122,10 @@ namespace HutongGen
 			const double SW = FMath::Max(P.UprightSignWidth, 10.0);
 			const double SH = FMath::Clamp(P.UprightSignHeight, 30.0, Top - Floor - 60.0);
 			if (SH < 30.0) return;
+			// Inside the side walls: at the end posts of an all-open front, centred on them, the boards stood
+			// half out past the footprint, onto a neighbour's in a street row.
+			XLeft = FMath::Clamp(XLeft, T + 0.5 * SW, W - T - 0.5 * SW);
+			XRight = FMath::Clamp(XRight, T + 0.5 * SW, W - T - 0.5 * SW);
 			AppendSignFace(MatSlot_Signboard, XLeft - 0.5 * SW, XLeft + 0.5 * SW, Top - SH, Top, FaceY - 4.0, 4.0, 0.0, 0.5);
 			AppendSignFace(MatSlot_Signboard, XRight - 0.5 * SW, XRight + 0.5 * SW, Top - SH, Top, FaceY - 4.0, 4.0, 0.5, 1.0);
 		};

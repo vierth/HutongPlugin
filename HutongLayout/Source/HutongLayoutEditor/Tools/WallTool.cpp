@@ -189,6 +189,8 @@ bool UHutongWallTool::OnRectCommitted(const FVector& HitWorld)
 {
 	// Multi-click: undo the base's bRectCommitted so every click lands here; a zero-length segment ends the run.
 	bRectCommitted = false;
+	// The click re-read the cursor: step it as the hover did (off the run's end only; there it is pinned).
+	if (!IsOnRunEnd(HitWorld)) StepCursorBearing(PlacementYawDeg);
 	const FVector P = CurrentWorld;
 	// Also test the raw cursor: an abutting end pulls the snapped cursor along the neighbour's face, missing the close click.
 	if (IsOnRunEnd(HitWorld) || FVector::Dist2D(P, ChainPoints.Last()) <= FMath::Max(10.0, 8.0 * WorldPerPixelAt(P)))
@@ -237,16 +239,7 @@ void UHutongWallTool::OnPlacementHover(const FVector& HitWorld)
 		return;
 	}
 	// Free: a run snaps its ends to corners, never its angle. Shift steps 15° off the frame.
-	if (bRotateModeActive || bSnapActive) return;
-	const bool bShift = FSlateApplication::IsInitialized() && FSlateApplication::Get().GetModifierKeys().IsShiftDown();
-	if (!bShift) return;
-	const double dx = CurrentWorld.X - StartWorld.X, dy = CurrentWorld.Y - StartWorld.Y;
-	const double Len = FMath::Sqrt(dx * dx + dy * dy);
-	if (Len < 1.0) return;
-	const double Angle = FMath::RadiansToDegrees(FMath::Atan2(dy, dx));
-	const double Snapped = PlacementYawDeg + FMath::RoundToDouble((Angle - PlacementYawDeg) / 15.0) * 15.0;
-	const double R = FMath::DegreesToRadians(Snapped);
-	CurrentWorld = StartWorld + FVector(FMath::Cos(R) * Len, FMath::Sin(R) * Len, 0.0);
+	StepCursorBearing(PlacementYawDeg);
 }
 
 void UHutongWallTool::CancelPlacement()

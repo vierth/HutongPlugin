@@ -110,6 +110,8 @@ namespace
 		for (UHutongBuildingComponent* B : Buildings)
 		{
 			if (!Owner || !B->GetClass()->IsChildOf(Owner)) continue;
+			// Locked: metadata yes, the building's own options no.
+			if (B->bLocked && Owner != UHutongBuildingComponent::StaticClass()) continue;
 			if (B->GetOwner()) B->GetOwner()->Modify();
 			B->Modify();
 			Write(F.Chain.Last(), ValueOf(B, F));

@@ -5,6 +5,7 @@
 #include "Tools/HutongPanelCustomizations.h"
 #include "Tools/HutongContextMenu.h"
 #include "Generation/HutongPlanOutlineComponent.h"
+#include "Generation/HutongActorSpawn.h"
 #include "Modules/ModuleManager.h"
 
 #define LOCTEXT_NAMESPACE "FHutongLayoutEditorModule"
@@ -23,10 +24,14 @@ void FHutongLayoutEditorModule::StartupModule()
 
 	// Plans draw whether or not the mode is active, so load their visibility before anyone enters it.
 	HutongPlanOutline::LoadVisibilityFromConfig();
+
+	// New library meshes are saved once their background build is done (and all before a level save).
+	HutongGen::StartLibrarySaver();
 }
 
 void FHutongLayoutEditorModule::ShutdownModule()
 {
+	HutongGen::StopLibrarySaver();
 	HutongContextMenu::Unregister();
 	HutongPanelCustomizations::Unregister();
 	FHutongLayoutCommands::Unregister();

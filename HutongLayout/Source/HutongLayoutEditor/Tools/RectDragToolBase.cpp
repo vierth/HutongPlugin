@@ -137,6 +137,37 @@ int32 URectDragToolBase::BuildLODsForRect(double SizeX, double SizeY, TArray<FDy
 		OutLODs);
 }
 
+void URectDragToolBase::StepCursorBearing(double BaseYawDeg)
+{
+	if (bRotateModeActive || bSnapActive) return;
+	const bool bShift = FSlateApplication::IsInitialized() && FSlateApplication::Get().GetModifierKeys().IsShiftDown();
+	if (bShift) CurrentWorld = HutongSnap::StepBearing(StartWorld, CurrentWorld, BaseYawDeg, 15.0);
+}
+
+double URectDragToolBase::SizeStepCm()
+{
+	const UHutongLayoutModeSettings* Settings = UHutongLayoutEdMode::GetActiveSettings();
+	return Settings ? HutongSizeStep::Cm(Settings->SizeStep) : 0.0;
+}
+
+FVector URectDragToolBase::StepDrawnSize(const FVector& World) const
+{
+	const double Step = SizeStepCm();
+	if (Step <= 0.0 || !bIsDragging) return World;
+	if (PointSnapsOnly())
+	{
+		// A run: its leg's length, whatever its bearing.
+		const FVector2D D(World.X - StartWorld.X, World.Y - StartWorld.Y);
+		const double L = D.Size();
+		if (L < 1.0) return World;
+		const FVector2D P = FVector2D(StartWorld.X, StartWorld.Y) + D / L * HutongSizeStep::Round(L, Step);
+		return FVector(P.X, P.Y, World.Z);
+	}
+	const FVector2D Local = WorldXYToLocalRect(World);
+	const FVector Stepped = LocalRectToWorld(HutongSizeStep::Round(Local.X, Step), HutongSizeStep::Round(Local.Y, Step));
+	return FVector(Stepped.X, Stepped.Y, World.Z);
+}
+
 bool URectDragToolBase::IsPlanOnly()
 {
 	const UHutongLayoutModeSettings* Settings = UHutongLayoutEdMode::GetActiveSettings();
@@ -938,7 +969,8 @@ FVector URectDragToolBase::ApplySnap(const FVector& World, bool bIsAnchor)
 
 	if (!R.bSnapped)
 	{
-		return World;
+		// Free end: the size steps (a snapped end keeps the neighbour's line).
+		return bIsAnchor ? World : StepDrawnSize(World);
 	}
 	if (!bIsAnchor)
 	{
@@ -1264,9 +1296,10 @@ FText URectDragToolBase::GetHoverSummaryText(bool bWithPending) const
 		: FString();
 
 	// Plan-only has no mesh; saying so explains the empty ground.
-	const FString Built = Building->bPlanOnly
+	const FString Built = (Building->bPlanOnly
 		? FString(TEXT("plan only"))
-		: FString::Printf(TEXT("%d tris"), Triangles);
+		: FString::Printf(TEXT("%d tris"), Triangles))
+		+ (Building->bLocked ? TEXT("  ·  locked") : TEXT(""));
 	const FString DetailText =
 		StaticEnum<EHutongDetail>()->GetDisplayNameTextByValue((int64)Building->DetailLevel).ToString();
 
@@ -2160,6 +2193,14 @@ void URectDragToolBase::BeginPlanEdit(UHutongBuildingComponent* Building, int32 
 	const FTransform Xf = Owner->GetActorTransform();
 	const FVector2D Size = Building->GetFootprintSize();
 
+	// Locked: moved and turned by hand only; nothing that reshapes or rebuilds it.
+	if (Building->bLocked && Hit != PlanHandleInside && Hit != PlanHandleRing)
+	{
+		PlanEdit = EPlanEdit::None;
+		EditedPlan.Reset();
+		return;
+	}
+
 	EditedPlan = Building;
 	EditStartTransform = Xf;
 	EditStartSize = Size;
@@ -2203,7 +2244,8 @@ void URectDragToolBase::BeginPlanEdit(UHutongBuildingComponent* Building, int32 
 	{
 		// Wall leg end: the run's vertex, not the rect edge; the legs meeting there move with it.
 		UHutongWallBuildingComponent* Wall = Cast<UHutongWallBuildingComponent>(Building);
-		if (HutongWallRun::Gather(Wall, GatherWallLegs(), EditRun))
+		if (HutongWallRun::Gather(Wall, GatherWallLegs(), EditRun)
+			&& !EditRun.Legs.ContainsByPredicate([](const TWeakObjectPtr<UHutongWallBuildingComponent>& L) { return L.IsValid() && L->bLocked; }))
 		{
 			const int32 Leg = EditRun.Legs.IndexOfByPredicate([&](const TWeakObjectPtr<UHutongWallBuildingComponent>& L) { return L.Get() == Wall; });
 			const bool bStartEnd = Building->IsRunAlongY() ? (Hit == 4) : (Hit == 7);
@@ -2517,7 +2559,7 @@ void URectDragToolBase::CaptureJointOnEdge(UHutongBuildingComponent* Building, i
 	for (const HutongSnap::FFootprint& F : GetFootprints())
 	{
 		UHutongBuildingComponent* Other = F.Building.Get();
-		if (!Other || Other == Building || !Other->bPlanOnly || Other->HasFootprintSkew()
+		if (!Other || Other == Building || !Other->bPlanOnly || Other->bLocked || Other->HasFootprintSkew()
 			|| Cast<UHutongWallBuildingComponent>(Other) || !Other->GetOwner()) continue;
 		if (Joints.ContainsByPredicate([&](const FJoint& J) { return J.Start.Building.Get() == Other; })) continue;
 		FVector2D OQuad[4];
@@ -2673,11 +2715,13 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 	case EPlanEdit::Resize:
 	{
 		FVector G = Ground;
+		bool bEdgeSnapped = false;
 		// Joined, the nearest snap is the partner's own edge, which would hold the join still.
 		if (SnappingActive() && !HasJoint())
 		{
 			const HutongSnap::FResult R = HutongSnap::FindSnap(GetFootprints(), G, EffectiveSnapRadius(G), Owner);
 			if (R.bSnapped) G = FVector(R.Point.X, R.Point.Y, G.Z);
+			bEdgeSnapped = R.bSnapped;
 		}
 		const FVector Local = EditStartTransform.InverseTransformPosition(G);
 
@@ -2689,6 +2733,15 @@ void URectDragToolBase::UpdatePlanEdit(const FVector& Ground)
 		if (SideX > 0) MaxX = FMath::Max(Local.X, PlanMinSize);
 		if (SideY < 0) MinY = FMath::Min(Local.Y, MaxY - PlanMinSize);
 		if (SideY > 0) MaxY = FMath::Max(Local.Y, PlanMinSize);
+		// The size steps as when drawn, the edge not dragged held.
+		const double Step = SizeStepCm();
+		if (Step > 0.0 && SnappingActive() && !bEdgeSnapped)
+		{
+			if (SideX < 0) MinX = MaxX - HutongSizeStep::Round(MaxX - MinX, Step);
+			if (SideX > 0) MaxX = MinX + HutongSizeStep::Round(MaxX - MinX, Step);
+			if (SideY < 0) MinY = MaxY - HutongSizeStep::Round(MaxY - MinY, Step);
+			if (SideY > 0) MaxY = MinY + HutongSizeStep::Round(MaxY - MinY, Step);
+		}
 
 		B->SetFootprintSize(FVector2D(MaxX - MinX, MaxY - MinY));
 		// A minus-side drag keeps the far edge fixed.

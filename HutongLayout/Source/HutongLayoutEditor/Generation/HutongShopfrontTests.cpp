@@ -2,6 +2,8 @@
 #include "Generation/HutongShopBay.h"
 #include "Generation/HutongCanon.h"
 #include "DynamicMesh/DynamicMeshAABBTree3.h"
+#include "DynamicMesh/DynamicMeshAttributeSet.h"
+#include "Generation/HutongPalette.h"
 
 #include "Misc/AutomationTest.h"
 
@@ -149,6 +151,40 @@ bool FHutongShopfrontOpenRangeTest::RunTest(const FString& Parameters)
 				TestTrue(FString::Printf(TEXT("%d of %d open: inside the frontage (%d..%d)"), Open, N, Lo, Hi), Lo >= 0 && Hi <= N - 1);
 			}
 		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongShopfrontSignsInsideTest,
+	"HutongLayout.Shopfront.SignsInside",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongShopfrontSignsInsideTest::RunTest(const FString& Parameters)
+{
+	// Signboards on the posts stay within the shop's ends, every bay open, every front: half out past the
+	// footprint they met a neighbour's face to face in a street row.
+	for (const EHutongShopFront Front : { EHutongShopFront::Plain, EHutongShopFront::Carved, EHutongShopFront::Platform, EHutongShopFront::Shed })
+	{
+		FHutongShopfrontParams P;
+		P.Width = 1000.0;
+		P.Depth = 520.0;
+		P.Front = Front;
+		P.UprightSign = EHutongUprightSign::OnPosts;
+		FDynamicMesh3 Mesh;
+		HutongGen::BuildShopfront(Mesh, P);
+		const UE::Geometry::FDynamicMeshMaterialAttribute* Slots = Mesh.HasAttributes() ? Mesh.Attributes()->GetMaterialID() : nullptr;
+		if (!TestNotNull(TEXT("slots"), Slots)) return false;
+		double MinX = 1.0e9, MaxX = -1.0e9;
+		for (const int32 T : Mesh.TriangleIndicesItr())
+		{
+			if (Slots->GetValue(T) != HutongGen::MatSlot_Signboard) continue;
+			FVector3d A, B, C;
+			Mesh.GetTriVertices(T, A, B, C);
+			MinX = FMath::Min3(MinX, A.X, FMath::Min(B.X, C.X));
+			MaxX = FMath::Max3(MaxX, A.X, FMath::Max(B.X, C.X));
+		}
+		TestTrue(FString::Printf(TEXT("front %d: signboards within the shop (%.0f..%.0f)"), (int32)Front, MinX, MaxX),
+			MinX >= 0.0 && MaxX <= P.Width && MinX < MaxX);
 	}
 	return true;
 }

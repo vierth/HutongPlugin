@@ -43,6 +43,8 @@ public:
 	virtual bool HasRotateKey() const override { return false; }
 	virtual bool WantsLaneWidthSnap() const override { return false; }
 	virtual void Render(IToolsContextRenderAPI* RenderAPI) override;
+	// A City chosen in the panel takes its figures.
+	virtual void OnPropertyModified(UObject* PropertySet, FProperty* Property) override;
 
 protected:
 	virtual void RegisterToolSettings() override;
@@ -68,6 +70,8 @@ protected:
 	// Per leg drawn, and the leg under the cursor: 0 none, 1 rising toward the leg's end, 2 toward its start.
 	TArray<int32> ChainRamps;
 	int32 CursorRamp = 0;
+	// The City last seen in the panel: a nested edit may report the struct, not the field.
+	EHutongCityWallRank LastRank = EHutongCityWallRank::Inner;
 
 	UPROPERTY()
 	TObjectPtr<UHutongCityWallToolProperties> Settings;

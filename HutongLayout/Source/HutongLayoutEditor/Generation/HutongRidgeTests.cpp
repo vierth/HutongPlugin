@@ -57,6 +57,15 @@ bool FHutongRidgeEstimatesTest::RunTest(const FString& Parameters)
 		Cases.Add({ TEXT("gate house"), HutongGen::Ridge::Gate(P, 600.0), 380.0, 600.0,
 			[P](FDynamicMesh3& M, EHutongDetail L) { UHutongGateHouseBuildingComponent::BuildGateHouseMesh(P, EHutongBaySide::MinusY, 380.0, 600.0, M, L); } });
 	}
+	for (const EHutongSmallRoof Roof : { EHutongSmallRoof::Gable, EHutongSmallRoof::LeanTo })
+	{
+		FHutongSmallBuildingParams P;
+		P.Roof = Roof;
+		P.Width = 500.0;
+		P.Depth = 360.0;
+		Cases.Add({ Roof == EHutongSmallRoof::Gable ? TEXT("small building") : TEXT("small building, lean-to"), HutongGen::Ridge::Small(P), 500.0, 360.0,
+			[P](FDynamicMesh3& M, EHutongDetail L) { UHutongSmallBuildingComponent::BuildSmallBuildingMesh(P, EHutongBaySide::MinusY, 0, 500.0, 360.0, M, L); } });
+	}
 	{
 		FHutongShopfrontParams P;
 		Cases.Add({ TEXT("shopfront"), HutongGen::Ridge::Shop(P), 900.0, 500.0,

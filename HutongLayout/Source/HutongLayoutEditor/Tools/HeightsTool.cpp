@@ -144,7 +144,7 @@ void UHutongHeightsTool::RefreshRows(bool bForce)
 		Row.Role = B->GetCourtRole();
 		Row.CurrentEave = FMath::RoundToDouble(B->GetEditHeight());
 		Row.NewEave = Row.CurrentEave;
-		Row.bEditable = B->CanSetEditHeight();
+		Row.bEditable = B->CanSetEditHeight() && !B->bLocked;
 		Row.Preset = Row.NewPreset = B->Preset;
 		Row.RidgeAboveEave = B->GetRidgeHeight() > 0.0 ? B->GetRidgeHeight() - B->GetEaveHeight() : 0.0;
 		Rows.Add(Row);
@@ -361,6 +361,8 @@ void UHutongHeightsTool::Apply()
 			if (B->GetOwner()) B->GetOwner()->Modify();
 			B->Modify();
 			if (Row.Role != B->GetCourtRole()) B->CourtRole = Row.Role;
+			// Locked: its role (metadata) only.
+			if (B->bLocked) continue;
 			bool bChanged = false;
 			// Preset first: it replaces the parameters, the height included.
 			if (Row.NewPreset != Row.Preset)

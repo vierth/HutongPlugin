@@ -1,5 +1,7 @@
 #include "Generation/CityWallGenerator.h"
 #include "Generation/HutongBuildingComponent.h"
+#include "Tools/HutongSnap.h"
+#include "UObject/UnrealType.h"
 #include "Generation/HutongMeshInspect.h"
 #include "DynamicMesh/DynamicMeshAABBTree3.h"
 
@@ -230,6 +232,102 @@ bool FHutongCityWallRampMarkTest::RunTest(const FString& Parameters)
 			TestEqual(Case + TEXT(": points the way it rises"), M.Z > 0.0, !bTowardStart);
 		}
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCityWallShortLegTest,
+	"HutongLayout.CityWall.ShortLegMitre",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongCityWallShortLegTest::RunTest(const FString& Parameters)
+{
+	// A leg shorter than the wall is wide (12 m against 20 m) still runs along X: its mitre lengthens the
+	// outer face and shortens the inner, and only the end zone moves. Read off the proportions, the run was
+	// taken along Y and the battlements were pushed sideways along the whole leg.
+	auto Build = [](bool bSkew)
+	{
+		UHutongCityWallBuildingComponent* Wall = NewObject<UHutongCityWallBuildingComponent>(GetTransientPackage());
+		Wall->Length = 1200.0;
+		Wall->Params.bBastions = false;
+		Wall->bBuildLODChain = false;
+		if (bSkew)
+		{
+			Wall->FootprintSkew.Corner10 = FVector2D(300.0, 0.0);
+			Wall->FootprintSkew.Corner11 = FVector2D(-300.0, 0.0);
+		}
+		TArray<FDynamicMesh3> LODs;
+		Wall->BuildLODs(LODs);
+		return LODs.Num() > 0 ? LODs[0] : FDynamicMesh3();
+	};
+	const FDynamicMesh3 Square = Build(false), Mitred = Build(true);
+	const double B = FHutongCityWallParams().GetBaseWidth();
+
+	double OuterEnd = -1.0e9, InnerEnd = -1.0e9;
+	for (const int32 V : Mitred.VertexIndicesItr())
+	{
+		const FVector3d P = Mitred.GetVertex(V);
+		if (P.Z > 1.0) continue;
+		if (P.Y < 1.0) OuterEnd = FMath::Max(OuterEnd, P.X);
+		if (P.Y > B - 1.0) InnerEnd = FMath::Max(InnerEnd, P.X);
+	}
+	TestTrue(FString::Printf(TEXT("outer face runs to the mitre (%.0f)"), OuterEnd), FMath::IsNearlyEqual(OuterEnd, 1500.0, 1.0));
+	TestTrue(FString::Printf(TEXT("inner face stops short (%.0f)"), InnerEnd), FMath::IsNearlyEqual(InnerEnd, 900.0, 1.0));
+
+	// Away from the mitred end (the zone is at most half the leg), every point is where the square leg has it.
+	TSet<FIntVector> Built;
+	auto Key = [](const FVector3d& P) { return FIntVector(FMath::RoundToInt32(P.X * 10.0), FMath::RoundToInt32(P.Y * 10.0), FMath::RoundToInt32(P.Z * 10.0)); };
+	for (const int32 V : Square.VertexIndicesItr()) Built.Add(Key(Square.GetVertex(V)));
+	int32 Moved = 0, Checked = 0;
+	for (const int32 V : Mitred.VertexIndicesItr())
+	{
+		const FVector3d P = Mitred.GetVertex(V);
+		if (P.X > 500.0) continue;
+		++Checked;
+		if (!Built.Contains(Key(P))) ++Moved;
+	}
+	TestTrue(FString::Printf(TEXT("battlements checked (%d)"), Checked), Checked > 50);
+	TestEqual(TEXT("nothing moves away from the mitred end"), Moved, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCityWallStepBearingTest,
+	"HutongLayout.Snap.StepBearing",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongCityWallStepBearingTest::RunTest(const FString& Parameters)
+{
+	// The 15° step the run tools apply on hover and again on the click: nearest step off the base bearing,
+	// same distance, height kept.
+	const FVector Start(100.0, 200.0, 50.0);
+	const double R = FMath::DegreesToRadians(37.0);
+	const FVector Cursor = Start + FVector(FMath::Cos(R), FMath::Sin(R), 0.0) * 1000.0 + FVector(0, 0, 7.0);
+	auto Bearing = [&](const FVector& P) { return FMath::RadiansToDegrees(FMath::Atan2(P.Y - Start.Y, P.X - Start.X)); };
+	const FVector A = HutongSnap::StepBearing(Start, Cursor, 0.0, 15.0);
+	TestTrue(FString::Printf(TEXT("37° steps to 30° (%.2f)"), Bearing(A)), FMath::IsNearlyEqual(Bearing(A), 30.0, 1.0e-6));
+	TestTrue(TEXT("same distance"), FMath::IsNearlyEqual(FVector::Dist2D(Start, A), 1000.0, 1.0e-6));
+	TestEqual(TEXT("height kept"), A.Z, Cursor.Z);
+	const FVector B = HutongSnap::StepBearing(Start, Cursor, 10.0, 15.0);
+	TestTrue(FString::Printf(TEXT("off a 10° frame, 40° (%.2f)"), Bearing(B)), FMath::IsNearlyEqual(Bearing(B), 40.0, 1.0e-6));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCityWallChooseRankTest,
+	"HutongLayout.CityWall.ChooseRank",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongCityWallChooseRankTest::RunTest(const FString& Parameters)
+{
+	// A wall whose height was set by hand still takes the outer city's figures when City is changed in Details.
+	UHutongCityWallBuildingComponent* Wall = NewObject<UHutongCityWallBuildingComponent>(GetTransientPackage());
+	Wall->SetEditHeight(1300.0);
+	TestEqual(TEXT("hand height held"), Wall->Params.GetHeight(), 1300.0);
+	Wall->Params.Rank = EHutongCityWallRank::Outer;
+	FProperty* RankProp = FindFProperty<FProperty>(FHutongCityWallParams::StaticStruct(), GET_MEMBER_NAME_CHECKED(FHutongCityWallParams, Rank));
+	if (!TestNotNull(TEXT("the City field"), RankProp)) return false;
+	FPropertyChangedEvent Event(RankProp, EPropertyChangeType::ValueSet);
+	Wall->PostEditChangeProperty(Event);
+	TestEqual(TEXT("outer city height"), Wall->Params.GetHeight(), HutongCanon::CityWall::OuterHeightCm);
+	TestEqual(TEXT("outer city base"), Wall->Params.GetBaseWidth(), HutongCanon::CityWall::OuterBaseWidthCm);
 	return true;
 }
 

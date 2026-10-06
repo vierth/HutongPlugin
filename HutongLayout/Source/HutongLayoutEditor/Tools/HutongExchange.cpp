@@ -937,6 +937,12 @@ void Place(UWorld* World, const FSceneFile& File, const FTransform& SetToWorld,
 			if (UHutongBuildingComponent** Hit = Existing.Find(Id))
 			{
 				UHutongBuildingComponent* B = *Hit;
+				if (B && B->GetClass() == Class && B->bLocked)
+				{
+					OutResult.Problems.Add(FString::Printf(TEXT("%s: locked; left as it was."), *Name));
+					++OutResult.Skipped;
+					continue;
+				}
 				if (B && B->GetClass() == Class)
 				{
 					AActor* Actor = B->GetOwner();

@@ -7,6 +7,9 @@
 #include "Generation/HutongActorSpawn.h"
 
 #include "Editor.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
 #include "Engine/Level.h"
 #include "Engine/StaticMeshActor.h"
 #include "UObject/UObjectIterator.h"
@@ -24,6 +27,25 @@
 
 namespace HutongDetailOps
 {
+
+TArray<UHutongBuildingComponent*> Unlocked(const TArray<UHutongBuildingComponent*>& Buildings)
+{
+	TArray<UHutongBuildingComponent*> Out;
+	Out.Reserve(Buildings.Num());
+	int32 Kept = 0;
+	for (UHutongBuildingComponent* B : Buildings)
+	{
+		if (B && B->bLocked) ++Kept;
+		else Out.Add(B);
+	}
+	if (Kept > 0 && FSlateApplication::IsInitialized())
+	{
+		FNotificationInfo Info(FText::Format(LOCTEXT("LockedKept", "{0} locked {0}|plural(one=building was,other=buildings were) left as {0}|plural(one=it is,other=they are)."), Kept));
+		Info.ExpireDuration = 4.0f;
+		FSlateNotificationManager::Get().AddNotification(Info);
+	}
+	return Out;
+}
 
 TArray<UHutongBuildingComponent*> CollectSelected()
 {
@@ -90,8 +112,9 @@ TArray<UHutongBuildingComponent*> CollectLoaded(UWorld* World)
 	return Out;
 }
 
-int32 SetLevel(const TArray<UHutongBuildingComponent*>& Buildings, EHutongDetail Level)
+int32 SetLevel(const TArray<UHutongBuildingComponent*>& InBuildings, EHutongDetail Level)
 {
+	const TArray<UHutongBuildingComponent*> Buildings = Unlocked(InBuildings);
 	// Count first: slow-task total is right, and a no-op run opens no transaction.
 	TArray<UHutongBuildingComponent*> Work;
 	Work.Reserve(Buildings.Num());
@@ -125,8 +148,9 @@ int32 SetLevel(const TArray<UHutongBuildingComponent*>& Buildings, EHutongDetail
 	return Work.Num();
 }
 
-int32 Rebuild(const TArray<UHutongBuildingComponent*>& Buildings)
+int32 Rebuild(const TArray<UHutongBuildingComponent*>& InBuildings)
 {
+	const TArray<UHutongBuildingComponent*> Buildings = Unlocked(InBuildings);
 	TArray<UHutongBuildingComponent*> Work;
 	Work.Reserve(Buildings.Num());
 	for (UHutongBuildingComponent* B : Buildings)
@@ -155,8 +179,9 @@ int32 Rebuild(const TArray<UHutongBuildingComponent*>& Buildings)
 	return Work.Num();
 }
 
-int32 GeneratePlanned(const TArray<UHutongBuildingComponent*>& Buildings)
+int32 GeneratePlanned(const TArray<UHutongBuildingComponent*>& InBuildings)
 {
+	const TArray<UHutongBuildingComponent*> Buildings = Unlocked(InBuildings);
 	TArray<UHutongBuildingComponent*> Work;
 	Work.Reserve(Buildings.Num());
 	for (UHutongBuildingComponent* B : Buildings)
@@ -186,8 +211,9 @@ int32 GeneratePlanned(const TArray<UHutongBuildingComponent*>& Buildings)
 	return Work.Num();
 }
 
-int32 RevertToPlan(const TArray<UHutongBuildingComponent*>& Buildings)
+int32 RevertToPlan(const TArray<UHutongBuildingComponent*>& InBuildings)
 {
+	const TArray<UHutongBuildingComponent*> Buildings = Unlocked(InBuildings);
 	TArray<UHutongBuildingComponent*> Work;
 	Work.Reserve(Buildings.Num());
 	for (UHutongBuildingComponent* B : Buildings)
@@ -251,7 +277,7 @@ const TArray<FConvertTarget>& ConvertTargets()
 	static const TArray<FRank> Order = {
 		{ UHutongSiheyuanBuildingComponent::StaticClass(), 0, 0 }, { UHutongEarPassageBuildingComponent::StaticClass(), 0, 0 },
 		{ UHutongShopfrontBuildingComponent::StaticClass(), 0, 0 }, { UHutongStoreyBuildingComponent::StaticClass(), 0, 0 },
-		{ UHutongFrameBuildingComponent::StaticClass(), 0, 0 },
+		{ UHutongFrameBuildingComponent::StaticClass(), 0, 0 }, { UHutongSmallBuildingComponent::StaticClass(), 0, 0 },
 		{ UHutongGateHouseBuildingComponent::StaticClass(), 1, 0 }, { UHutongInnerGateBuildingComponent::StaticClass(), 1, 0 },
 		{ UHutongPaifangBuildingComponent::StaticClass(), 1, 0 },
 		{ UHutongHallBuildingComponent::StaticClass(), 4, 0 }, { UHutongPavilionBuildingComponent::StaticClass(), 4, 0 },
@@ -428,7 +454,7 @@ TArray<FString> CustomizedFields(const UHutongBuildingComponent* Building)
 
 bool ApplyPresetAsDrawn(UHutongBuildingComponent* Building, const FString& Preset)
 {
-	if (!Building || !UHutongPresetLibrary::Get()->GetPresetNames(Building->GetPresetKey()).Contains(Preset)) return false;
+	if (!Building || Building->bLocked || !UHutongPresetLibrary::Get()->GetPresetNames(Building->GetPresetKey()).Contains(Preset)) return false;
 	const UHutongBuildingComponent* Drawn = MakeAsDrawn(*Building, Building->GetClass(), OwnVariant(Building), Preset);
 	if (!Drawn) return false;
 	// The outline stays where it was drawn; the new values may read it differently (a corridor's walk).
@@ -460,7 +486,7 @@ namespace
 UHutongBuildingComponent* ConvertBuilding(UHutongBuildingComponent* Old,
 	const FConvertTarget& Target, const FString& Preset)
 {
-	if (!Old || !Target.IsValid()) return nullptr;
+	if (!Old || Old->bLocked || !Target.IsValid()) return nullptr;
 	AActor* Actor = Old->GetOwner();
 	if (!Actor) return nullptr;
 
@@ -547,8 +573,9 @@ TArray<FString> CustomizedAcross(const TArray<UHutongBuildingComponent*>& Buildi
 	return Out;
 }
 
-int32 ChangeTypeOrPreset(const TArray<UHutongBuildingComponent*>& Buildings, int32 TypeIndex, const FString& Preset)
+int32 ChangeTypeOrPreset(const TArray<UHutongBuildingComponent*>& InBuildings, int32 TypeIndex, const FString& Preset)
 {
+	const TArray<UHutongBuildingComponent*> Buildings = Unlocked(InBuildings);
 	const TArray<FConvertTarget>& Targets = ConvertTargets();
 	const FConvertTarget Target = Targets.IsValidIndex(TypeIndex) ? Targets[TypeIndex] : FConvertTarget();
 	int32 Changed = 0;
@@ -579,8 +606,9 @@ int32 ChangeTypeOrPreset(const TArray<UHutongBuildingComponent*>& Buildings, int
 	return Changed;
 }
 
-bool AdjustBays(const TArray<UHutongBuildingComponent*>& Buildings, int32 Delta)
+bool AdjustBays(const TArray<UHutongBuildingComponent*>& InBuildings, int32 Delta)
 {
+	const TArray<UHutongBuildingComponent*> Buildings = Unlocked(InBuildings);
 	TArray<UHutongBuildingComponent*> Work = Buildings;
 	Work.RemoveAll([](const UHutongBuildingComponent* B) { return GetBayCountOverride(B) == INDEX_NONE; });
 	if (Work.Num() == 0 || Delta == 0) return false;
@@ -601,9 +629,10 @@ bool AdjustBays(const TArray<UHutongBuildingComponent*>& Buildings, int32 Delta)
 	return true;
 }
 
-bool SetFacing(const TArray<UHutongBuildingComponent*>& Buildings, const FText& Title,
+bool SetFacing(const TArray<UHutongBuildingComponent*>& InBuildings, const FText& Title,
 	TFunctionRef<EHutongBaySide(const UHutongBuildingComponent&, EHutongBaySide)> NextSide)
 {
+	const TArray<UHutongBuildingComponent*> Buildings = Unlocked(InBuildings);
 	TArray<UHutongBuildingComponent*> Work;
 	for (UHutongBuildingComponent* B : Buildings)
 	{
@@ -642,8 +671,9 @@ bool FlipFacing(const TArray<UHutongBuildingComponent*>& Buildings)
 		[](const UHutongBuildingComponent&, EHutongBaySide Side) { return HutongGen::BaySide::Opposite(Side); });
 }
 
-bool ToggleGate(const TArray<UHutongBuildingComponent*>& Buildings)
+bool ToggleGate(const TArray<UHutongBuildingComponent*>& InBuildings)
 {
+	const TArray<UHutongBuildingComponent*> Buildings = Unlocked(InBuildings);
 	TArray<UHutongWallBuildingComponent*> Walls;
 	for (UHutongBuildingComponent* B : Buildings)
 	{
@@ -756,7 +786,7 @@ int32 GetBayCountOverride(const UHutongBuildingComponent* Building)
 
 bool SetBayCountOverride(UHutongBuildingComponent* Building, int32 Count)
 {
-	if (!Building) return false;
+	if (!Building || Building->bLocked) return false;
 	const FIntProperty* P = CastField<FIntProperty>(Building->GetClass()->FindPropertyByName(TEXT("BayCountOverride")));
 	if (!P) return false;
 	P->SetPropertyValue_InContainer(Building, FMath::Max(Count, 0));
@@ -765,7 +795,7 @@ bool SetBayCountOverride(UHutongBuildingComponent* Building, int32 Count)
 
 bool CanDivide(const UHutongBuildingComponent* Building)
 {
-	if (!Building || !Building->GetOwner() || GetBayCountOverride(Building) == INDEX_NONE || !Building->CanDivideOrFuse()) return false;
+	if (!Building || Building->bLocked || !Building->GetOwner() || GetBayCountOverride(Building) == INDEX_NONE || !Building->CanDivideOrFuse()) return false;
 	return BayLines(Building).Num() >= 3;
 }
 
@@ -854,6 +884,7 @@ bool CanFuse(const UHutongBuildingComponent* Building, const UHutongBuildingComp
 	const AActor* Owner = Building ? Building->GetOwner() : nullptr;
 	const AActor* OtherOwner = Other ? Other->GetOwner() : nullptr;
 	if (!Owner || !OtherOwner || Building == Other) return Refuse(LOCTEXT("FuseNeedsTwo", "Two different buildings are needed."));
+	if (Building->bLocked || Other->bLocked) return Refuse(LOCTEXT("FuseLocked", "A locked building is kept as it is: unlock it first."));
 	if (Building->GetClass() != Other->GetClass()) return Refuse(LOCTEXT("FuseTypes", "Only buildings of the same type fuse."));
 	if (GetBayCountOverride(Building) == INDEX_NONE || !Building->CanDivideOrFuse()) return Refuse(LOCTEXT("FuseNoBays", "This type has no bays to fuse."));
 

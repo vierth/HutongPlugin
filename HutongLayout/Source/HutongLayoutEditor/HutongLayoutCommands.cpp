@@ -156,6 +156,11 @@ void FHutongLayoutCommands::RegisterCommands()
 		"The blue outlines are the footprints it will lay down. Hold R to turn the set, Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord(EModifierKey::Shift | EModifierKey::Alt, EKeys::Seven));
 
+	UI_COMMAND(BeginSmallBuildingTool, "Small",
+		"Place a small freestanding building (小房): guard post, shed, lone room or shrine.\n"
+		"Click to anchor, move, click again to place. F turns the front, [ and ] set the bays.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
 	UI_COMMAND(BeginCityWallTool, "City Wall",
 		"Lay a city wall (城牆) on the Beijing inner city's pattern: battered brick, crenellated outer parapet (垛口).\n"
 		"Click to start, click to end each leg, click the last end to finish or the first point to close. F flips the battlements.",

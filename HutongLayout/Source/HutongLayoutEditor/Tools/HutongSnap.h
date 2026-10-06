@@ -9,6 +9,18 @@ class UHutongBuildingComponent;
 // Snapping placements to buildings already placed.
 namespace HutongSnap
 {
+	// Cursor turned about Start to the nearest StepDeg off BaseYawDeg, at the same distance (Shift on a run's
+	// segment). Z kept. Under a centimetre from Start, unchanged.
+	inline FVector StepBearing(const FVector& Start, const FVector& Cursor, double BaseYawDeg, double StepDeg)
+	{
+		const double dx = Cursor.X - Start.X, dy = Cursor.Y - Start.Y;
+		const double Len = FMath::Sqrt(dx * dx + dy * dy);
+		if (Len < 1.0 || StepDeg <= 0.0) return Cursor;
+		const double Angle = FMath::RadiansToDegrees(FMath::Atan2(dy, dx));
+		const double R = FMath::DegreesToRadians(BaseYawDeg + FMath::RoundToDouble((Angle - BaseYawDeg) / StepDeg) * StepDeg);
+		return FVector(Start.X + FMath::Cos(R) * Len, Start.Y + FMath::Sin(R) * Len, Cursor.Z);
+	}
+
 	// A placed building's four world footprint corners, never actor bounds (those include eaves, platform, 下鹼).
 	struct FFootprint
 	{

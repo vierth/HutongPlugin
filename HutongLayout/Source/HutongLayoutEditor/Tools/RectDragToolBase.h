@@ -394,6 +394,16 @@ protected:
 	virtual bool HasPlacement() const { return true; }
 	// False for a tool that only traces footprints: every placement is laid out, whatever the mode says.
 	virtual bool BuildsGeometry() const { return true; }
+
+	// Shift held, no point snap, not rotating: CurrentWorld turned to the nearest 15° off BaseYawDeg about
+	// StartWorld. A run tool calls it from its hover and again on the click, which re-reads the cursor
+	// (once only the preview stepped and the click saved the unstepped point).
+	void StepCursorBearing(double BaseYawDeg);
+
+	// The Scene tab's size step in cm; zero when off.
+	static double SizeStepCm();
+	// The free cursor end rounded so the drawn size is whole steps: a run's length, a rectangle's sides.
+	FVector StepDrawnSize(const FVector& World) const;
 	FVector PlanRotateHandleWorld(const class UHutongBuildingComponent* Building, FVector& OutEdgeMid) const;
 	// Handle, ring or inside hit by a ground point; INDEX_NONE for none.
 	int32 HitTestPlan(const class UHutongBuildingComponent* Building, const FVector& Ground) const;

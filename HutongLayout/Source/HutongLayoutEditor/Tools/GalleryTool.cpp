@@ -699,6 +699,35 @@ namespace
 				AddShop(TEXT("Shopfront (鋪面房) · Boarded Up"), 0, EHutongShopFront::Carved, EHutongShopScheme::BlueGreen);
 			}
 
+			// 小房, one of each built-in preset.
+			Cluster = TEXT("Small Buildings (小房)");
+			for (const TPair<const TCHAR*, FVector2D>& Small : {
+					TPair<const TCHAR*, FVector2D>(TEXT("Small House (小房)"), FVector2D(400.0, 360.0)),
+					TPair<const TCHAR*, FVector2D>(TEXT("Guard Post (堆撥房)"), FVector2D(560.0, 400.0)),
+					TPair<const TCHAR*, FVector2D>(TEXT("Shed (棚)"), FVector2D(600.0, 300.0)),
+					TPair<const TCHAR*, FVector2D>(TEXT("Shrine (土地廟)"), FVector2D(200.0, 200.0)) })
+			{
+				FHutongSmallBuildingParams P;
+				if (!UHutongPresetLibrary::Get()->LoadPreset(TEXT("Small"), Small.Key, FHutongSmallBuildingParams::StaticStruct(), &P)) continue;
+				const double SX = Small.Value.X, SY = Small.Value.Y;
+				FGalleryItem It;
+				It.Label = Small.Key;
+				It.Footprint = FVector2D(SX, SY);
+				It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
+				{
+					UHutongSmallBuildingComponent::BuildSmallBuildingMesh(P, Facing, 0, SX, SY, M, D);
+				};
+				const FString Preset = Small.Key;
+				It.Attach = MakeAttach<UHutongSmallBuildingComponent>(Palette,
+					[P, SX, SY, Preset](UHutongSmallBuildingComponent* C)
+					{
+						C->Params = P;
+						C->Preset = Preset;
+						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+					});
+				Add(MoveTemp(It));
+			}
+
 			auto AddStorey = [&](const FString& Label, bool bGallery)
 			{
 				FHutongStoreyParams P;

@@ -46,6 +46,9 @@ namespace HutongPlanColours
 	inline const FLinearColor FlowerBed(0.35f, 0.80f, 0.35f, 1.0f);  // 花池
 	inline const FLinearColor WaterJar(0.30f, 0.72f, 1.00f, 1.0f);   // 魚缸
 
+	// 小房: the house's blue, greyed — a building, but a minor one.
+	inline const FLinearColor SmallBuilding(0.45f, 0.55f, 0.72f, 1.0f); // 小房
+
 	// Traced, type not known: cool grey, no family's hue, cooler than the path.
 	inline const FLinearColor Unknown(0.60f, 0.60f, 0.68f, 1.0f);   // 未知
 
@@ -56,7 +59,7 @@ namespace HutongPlanColours
 	// so depth decides, not the engine's draw order. Like types share a colour, a tie there is not seen.
 	// Ground first, then buildings large to small, enclosure and garden on top.
 	inline const FLinearColor* const Layers[] = {
-		&Path, &Unknown, &CityWall, &Hall, &House, &Storey, &Shopfront, &Frame, &Pavilion, &Corridor, &EarPassage, &Passage,
+		&Path, &Unknown, &CityWall, &Hall, &House, &Storey, &Shopfront, &Frame, &SmallBuilding, &Pavilion, &Corridor, &EarPassage, &Passage,
 		&Gate, &InnerGate, &Paifang, &Screen, &Wall, &CourtWall, &FlowerBed, &WaterJar, &Building };
 	inline constexpr int32 LayerCount = UE_ARRAY_COUNT(Layers);
 

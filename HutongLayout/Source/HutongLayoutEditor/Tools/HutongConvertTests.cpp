@@ -455,6 +455,106 @@ bool FHutongConvertBayCountTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// A locked building is kept as it is: every automatic or bulk change leaves its mesh, type, size and
+// facing alone, and unlocking does not rebuild over the finished work.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongLockTest, "HutongLayout.Detail.Lock",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongLockTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
+	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
+
+	const FVector2D Footprint(1120.0, 640.0);
+	UHutongBuildingComponent* Locked = PlaceNamed(World, UHutongShopfrontBuildingComponent::StaticClass(),
+		Footprint, FTransform::Identity, TEXT("Locked"));
+	UHutongBuildingComponent* Free = PlaceNamed(World, UHutongShopfrontBuildingComponent::StaticClass(),
+		Footprint, FTransform(FVector(3000.0, 0.0, 0.0)), TEXT("Free"));
+	if (!TestNotNull(TEXT("placed"), Locked) || !TestNotNull(TEXT("placed"), Free)) { World->DestroyWorld(false); return false; }
+
+	AStaticMeshActor* LockedActor = Cast<AStaticMeshActor>(Locked->GetOwner());
+	UStaticMeshComponent* SMC = LockedActor->GetStaticMeshComponent();
+	const UStaticMesh* Mesh = SMC->GetStaticMesh();
+	// The student's own material on the mesh: a rebuild would put the palette's back.
+	UMaterialInterface* Theirs = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineMaterials/WorldGridMaterial.WorldGridMaterial"));
+	SMC->SetMaterial(0, Theirs);
+	Locked->bLocked = true;
+	EHutongBaySide Facing = EHutongBaySide::MinusY;
+	Locked->GetFacade(Facing);
+
+	const TArray<UHutongBuildingComponent*> Both = { Locked, Free };
+	HutongDetailOps::SetLevel(Both, EHutongDetail::Far);
+	HutongDetailOps::Rebuild(Both);
+	TestEqual(TEXT("detail level left alone"), Locked->DetailLevel, EHutongDetail::Massing);
+	TestEqual(TEXT("the other changes"), Free->DetailLevel, EHutongDetail::Far);
+	HutongDetailOps::TurnFacing(Both, 1);
+	EHutongBaySide Now = EHutongBaySide::MinusY;
+	Locked->GetFacade(Now);
+	TestEqual(TEXT("facing left alone"), Now, Facing);
+	HutongDetailOps::AdjustBays(Both, 1);
+	TestEqual(TEXT("bays left alone"), HutongDetailOps::GetBayCountOverride(Locked), 0);
+	TestEqual(TEXT("reverted none of it"), HutongDetailOps::RevertToPlan({ Locked }), 0);
+	TestFalse(TEXT("still built"), Locked->bPlanOnly);
+	const HutongDetailOps::FConvertTarget House = HutongDetailOps::FindConvertTarget(TEXT("House (房)"));
+	TestNull(TEXT("not converted"), HutongDetailOps::ConvertBuilding(Locked, House, FString()));
+	TestTrue(TEXT("still a shop"), Locked->IsA<UHutongShopfrontBuildingComponent>() && IsValid(Locked));
+
+	// Its own parameters edited in Details: nothing rebuilds while locked.
+	Locked->Modify();
+	Locked->SetFootprintSize(FVector2D(800.0, 600.0));
+	FPropertyChangedEvent Edit(nullptr);
+	Locked->PostEditChangeProperty(Edit);
+	TestTrue(TEXT("the mesh is the one it had"), SMC->GetStaticMesh() == Mesh);
+	TestTrue(TEXT("its own material stays"), SMC->GetMaterial(0) == Theirs);
+
+	// Unlocking rebuilds nothing by itself.
+	Locked->bLocked = false;
+	FProperty* LockProp = FindFProperty<FProperty>(UHutongBuildingComponent::StaticClass(), GET_MEMBER_NAME_CHECKED(UHutongBuildingComponent, bLocked));
+	FPropertyChangedEvent Unlock(LockProp, EPropertyChangeType::ValueSet);
+	Locked->PostEditChangeProperty(Unlock);
+	TestTrue(TEXT("unlocked, the work is still there"), SMC->GetStaticMesh() == Mesh && SMC->GetMaterial(0) == Theirs);
+
+	World->DestroyWorld(false);
+	return true;
+}
+
+// Make Mesh Unique, and locking: the building gets a copy of its mesh of its own (outered to it), the shared
+// mesh untouched, the student's materials kept.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongMakeMeshUniqueTest, "HutongLayout.Detail.MakeMeshUnique",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongMakeMeshUniqueTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
+	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
+	const FVector2D Footprint(1120.0, 640.0);
+	UHutongBuildingComponent* A = PlaceNamed(World, UHutongShopfrontBuildingComponent::StaticClass(), Footprint, FTransform::Identity, TEXT("UniqueA"));
+	UHutongBuildingComponent* B = PlaceNamed(World, UHutongShopfrontBuildingComponent::StaticClass(), Footprint, FTransform(FVector(3000.0, 0.0, 0.0)), TEXT("UniqueB"));
+	if (!TestNotNull(TEXT("placed"), A) || !TestNotNull(TEXT("placed"), B)) { World->DestroyWorld(false); return false; }
+	UStaticMeshComponent* SA = Cast<AStaticMeshActor>(A->GetOwner())->GetStaticMeshComponent();
+	UStaticMeshComponent* SB = Cast<AStaticMeshActor>(B->GetOwner())->GetStaticMeshComponent();
+	TestTrue(TEXT("identical buildings share one mesh"), SA->GetStaticMesh() == SB->GetStaticMesh());
+	UStaticMesh* Shared = SA->GetStaticMesh();
+	UMaterialInterface* Theirs = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineMaterials/WorldGridMaterial.WorldGridMaterial"));
+	SA->SetMaterial(0, Theirs);
+
+	A->MakeMeshUnique();
+	TestTrue(TEXT("A has its own mesh"), SA->GetStaticMesh() != Shared && SA->GetStaticMesh()->GetOuter() == A->GetOwner());
+	TestTrue(TEXT("B still shares"), SB->GetStaticMesh() == Shared);
+	TestTrue(TEXT("A's material kept"), SA->GetMaterial(0) == Theirs);
+	TestTrue(TEXT("A rebuilds its own from now on"), A->bBespokeMesh);
+
+	// Locking B makes it unique too.
+	B->bLocked = true;
+	FProperty* LockProp = FindFProperty<FProperty>(UHutongBuildingComponent::StaticClass(), GET_MEMBER_NAME_CHECKED(UHutongBuildingComponent, bLocked));
+	FPropertyChangedEvent Lock(LockProp, EPropertyChangeType::ValueSet);
+	B->PostEditChangeProperty(Lock);
+	TestTrue(TEXT("locked, B has its own mesh"), SB->GetStaticMesh() != Shared && SB->GetStaticMesh()->GetOuter() == B->GetOwner());
+
+	World->DestroyWorld(false);
+	return true;
+}
+
 #endif
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanSharedEdgeTest, "HutongLayout.Detail.PlanSharedEdge",

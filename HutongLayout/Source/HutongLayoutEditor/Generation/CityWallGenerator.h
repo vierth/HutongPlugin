@@ -19,7 +19,7 @@ struct FHutongCityWallParams
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(HutongBasic, DisplayName="City", ToolTip="Which city's wall: the inner city's or the lower outer city's."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(HutongBasic, DisplayName="City", ToolTip="Which city's wall: the inner city's or the lower outer city's. Choosing one takes its height, widths and parapet."))
 	EHutongCityWallRank Rank = EHutongCityWallRank::Inner;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wall", meta=(DisplayName="Derive From City", ToolTip="Uses the chosen city's height, widths and parapet."))
@@ -106,6 +106,13 @@ struct FHutongCityWallParams
 			? FRankDefaults{ OuterHeightCm, OuterBaseWidthCm, OuterTopWidthCm, OuterParapetHeightCm, OuterParapetThicknessCm, OuterBastionWidthCm, OuterBastionProjectionCm }
 			: FRankDefaults{ HeightCm, BaseWidthCm, TopWidthCm, ParapetHeightCm, ParapetThicknessCm, BastionWidthCm, BastionProjectionCm };
 	}
+	// Choosing a city takes its figures, over any pinned by hand (a pinned wall once ignored the choice).
+	void ChooseRank(EHutongCityWallRank InRank)
+	{
+		Rank = InRank;
+		bDeriveFromRank = true;
+	}
+
 	// Writes the rank's figures into the fields and stops deriving, so one can be changed by hand.
 	void PinFromRank()
 	{

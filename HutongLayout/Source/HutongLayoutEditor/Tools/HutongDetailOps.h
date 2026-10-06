@@ -11,6 +11,9 @@ class UWorld;
 namespace HutongDetailOps
 {
 	// The building components on the actors the level editor has selected.
+	// Buildings an automatic change may touch: the locked ones left out, a notice saying how many when any were.
+	TArray<UHutongBuildingComponent*> Unlocked(const TArray<UHutongBuildingComponent*>& Buildings);
+
 	TArray<UHutongBuildingComponent*> CollectSelected();
 
 	// Every building component in the world.

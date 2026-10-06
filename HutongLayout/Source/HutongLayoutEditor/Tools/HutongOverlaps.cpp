@@ -122,6 +122,8 @@ namespace
 			UHutongBuildingComponent* Drop = (D->Keep == EKeep::First ? D->Pair.Second : D->Pair.First).Get();
 			AActor* DropActor = Drop ? Drop->GetOwner() : nullptr;
 			if (!Keep || !DropActor || !IsValid(DropActor)) continue;
+			// A locked building is never the one removed.
+			if (Drop->bLocked) continue;
 			if (D->bTransfer)
 			{
 				Keep->Modify();

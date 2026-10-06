@@ -62,6 +62,7 @@ void FHutongLayoutStyle::Register()
 	AddToolIcon("HutongLayout.BeginWaterJarTool", TEXT("WaterJarTool"));
 	AddToolIcon("HutongLayout.BeginUnknownTool", TEXT("UnknownTool"));
 	AddToolIcon("HutongLayout.BeginCityWallTool", TEXT("CityWallTool"));
+	AddToolIcon("HutongLayout.BeginSmallBuildingTool", TEXT("SmallBuildingTool"));
 	AddToolIcon("HutongLayout.BeginMeasureTool", TEXT("MeasureTool"));
 	AddToolIcon("HutongLayout.BeginHeightsTool", TEXT("HeightsTool"));
 	AddToolIcon("HutongLayout.BeginCourtsTool", TEXT("CourtsTool"));

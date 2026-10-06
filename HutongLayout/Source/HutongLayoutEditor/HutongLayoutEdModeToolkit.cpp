@@ -180,6 +180,7 @@ void FHutongLayoutEdModeToolkit::BuildToolPalette(FName PaletteName, FToolBarBui
 		ToolbarBuilder.AddToolBarButton(Commands.BeginHallTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginPavilionTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginFrameTool);
+		ToolbarBuilder.AddToolBarButton(Commands.BeginSmallBuildingTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginStreetRowTool);
 		ToolbarBuilder.AddToolBarButton(Commands.BeginCompoundTool);
 	}

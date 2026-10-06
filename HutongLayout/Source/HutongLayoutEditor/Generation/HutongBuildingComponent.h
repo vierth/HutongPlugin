@@ -24,6 +24,7 @@
 #include "Generation/StoreyGenerator.h"
 #include "Generation/EarPassageGenerator.h"
 #include "Generation/CityWallGenerator.h"
+#include "Generation/SmallBuildingGenerator.h"
 #include "Generation/HutongDetail.h"
 #include "Generation/HutongMetadata.h"
 #include "Generation/HutongGateRow.h"
@@ -77,7 +78,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="Detail", meta=(HutongAdvanced, DisplayName="Detail Level", ToolTip="How much of the building's geometry is built."))
 	EHutongDetail DetailLevel = EHutongDetail::Near;
 
-	UPROPERTY(EditAnywhere, Category="Detail", meta=(HutongAdvanced, DisplayName="Bespoke Mesh", ToolTip="Keeps a mesh of its own instead of a shared library mesh."))
+	UPROPERTY(EditAnywhere, Category="Detail", meta=(HutongAdvanced, DisplayName="Unique Mesh", ToolTip="Keeps a mesh of its own instead of sharing one with every identical building."))
 	bool bBespokeMesh = false;
 
 	UPROPERTY(EditAnywhere, Category="Detail", meta=(HutongAdvanced, DisplayName="Build LOD Chain", ToolTip="Bakes the cheaper detail levels as the mesh's LODs."))
@@ -88,6 +89,17 @@ public:
 
 	UPROPERTY(VisibleAnywhere, Category="Identity", meta=(DisplayName="Building Id", ToolTip="Unique identifier of this placement."))
 	FGuid BuildingId;
+
+	// Hand-finished work (materials, models placed inside, a tuned mesh) kept from every automatic change:
+	// no rebuild, revert, generate, detail change, conversion, preset, bay or facing key, heights, sync,
+	// resize or neighbour join touches it. Moving and turning it by hand still work; metadata stays editable.
+	UPROPERTY(EditAnywhere, Category="Lock", meta=(DisplayName="Lock This Building (保留)", ToolTip="Keeps this building exactly as it is: nothing rebuilds, reverts, converts or resizes it until unlocked. It can still be moved and turned by hand."))
+	bool bLocked = false;
+
+	// Gives this building a copy of its mesh of its own, so editing the mesh (in the Static Mesh Editor)
+	// changes no other building; its materials stay. Locking does it too.
+	UFUNCTION(CallInEditor, Category="Lock", meta=(DisplayName="Make Mesh Unique", ToolTip="Gives this building its own copy of its mesh, so editing the mesh changes no other building."))
+	void MakeMeshUnique();
 
 	// Generators build the rectangle; BuildLODs warps each LOD to these corners. Under Footprint so
 	// a layout-only export carries it.
@@ -151,6 +163,9 @@ public:
 	// A gate's eave whose ridge stands at TargetRidge, under the named preset (empty = its own
 	// parameters); negative for every other type.
 	virtual double EaveForRidge(double TargetRidge, const FString& PresetName) const { return -1.0; }
+
+	// The run's axis for corner offsets where the type knows it (0 = X, 1 = Y); -1 judges by the longer side.
+	virtual int32 GetSkewRunAxis() const { return -1; }
 
 	// The offsets as the warp, outline and handles read them: under Ends on a building with bays
 	// along its run, each end zone is its end bay, so a slid corner moves that bay alone.
@@ -1357,6 +1372,13 @@ public:
 	}
 	virtual int32 FacadeTurnStep() const override { return 2; }
 
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
+
+	// A leg runs along X however short: the chain's mitres are along-X offsets.
+	virtual int32 GetSkewRunAxis() const override { return 0; }
+
 	// The ramp's mark: just inside the inner edge, half way up it, pointing the way it rises.
 	virtual void GetPlanArrows(TArray<FVector4>& Out) const override;
 
@@ -1378,6 +1400,79 @@ public:
 		Params.PinFromRank();
 		Params.BaseWidth = Params.GetBaseWidth() + Delta;
 		Params.TopWidth = FMath::Max(Params.GetTopWidth() + Delta, 150.0);
+	}
+
+protected:
+	virtual void BuildMesh(UE::Geometry::FDynamicMesh3& OutMesh, EHutongDetail Level) const override;
+};
+
+// 小房: a small freestanding building — guard post, shed, lone room, wayside shrine. PROVISIONAL (open-todos).
+UCLASS(ClassGroup=Hutong, meta=(BlueprintSpawnableComponent, DisplayName="Hutong Small Building", PrioritizeCategories="Preset Footprint"))
+class UHutongSmallBuildingComponent : public UHutongBuildingComponent
+{
+	GENERATED_BODY()
+
+public:
+	virtual FText GetTypeLabel() const override
+	{
+		return NSLOCTEXT("Hutong", "TypeSmallBuilding", "Small Building (小房)");
+	}
+
+	virtual FLinearColor GetPlanColour() const override { return HutongPlanColours::SmallBuilding; }
+
+	UPROPERTY(EditAnywhere, Category="Small Building", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the small building generator."))
+	FHutongSmallBuildingParams Params;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="100", ClampMin="60", Units="cm", ToolTip="Extent of the footprint along the actor's local X, in cm."))
+	double FootprintX = 400.0;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(UIMin="100", ClampMin="60", Units="cm", ToolTip="Extent of the footprint along the actor's local Y, in cm."))
+	double FootprintY = 360.0;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(ToolTip="Which side of the footprint is the front."))
+	EHutongBaySide BaySide = EHutongBaySide::MinusY;
+
+	UPROPERTY(EditAnywhere, Category="Footprint", meta=(DisplayName="Bay Count Override", UIMin="0", UIMax="5", ClampMin="0", ClampMax="8", ToolTip="Number of bays; zero chooses automatically."))
+	int32 BayCountOverride = 0;
+
+	// Params with the footprint filled in, across and along the front.
+	FHutongSmallBuildingParams SizedParams() const
+	{
+		FHutongSmallBuildingParams P = Params;
+		const bool bAlongX = HutongGen::BaySide::IsAlongX(BaySide);
+		P.Width = bAlongX ? FootprintX : FootprintY;
+		P.Depth = bAlongX ? FootprintY : FootprintX;
+		P.BayCountOverride = BayCountOverride;
+		return P;
+	}
+
+	virtual double GetEaveHeight() const override { return Params.GetEaveHeight(); }
+	virtual bool CanSetEditHeight() const override { return true; }
+	virtual bool SetEditHeight(double Cm) override { Params.EaveHeight = Cm; return true; }
+	virtual double GetRidgeHeight() const override { return HutongGen::Ridge::Small(SizedParams()); }
+
+	virtual bool GetFacade(EHutongBaySide& OutSide) const override { OutSide = BaySide; return true; }
+	virtual bool SetFacade(EHutongBaySide Side) override { BaySide = Side; return true; }
+	virtual int32 GetMaxBayCount() const override { return 8; }
+
+	virtual void GetPlanBays(FHutongPlanBays& Out) const override
+	{
+		const FHutongSmallBuildingParams P = SizedParams();
+		const int32 N = P.GetBayCount();
+		for (int32 i = 0; i <= N; ++i) Out.Boundaries.Add(P.GetBayBoundary(i, N));
+		Out.DoorBay = P.Front == EHutongSmallFront::Door ? P.GetDoorBay(N) : INDEX_NONE;
+		HutongGen::PlanBays::OntoFacade(Out, BaySide, FootprintX, FootprintY);
+	}
+
+	static void BuildSmallBuildingMesh(const FHutongSmallBuildingParams& InParams, EHutongBaySide Side,
+		int32 InBayCountOverride, double SizeX, double SizeY, UE::Geometry::FDynamicMesh3& OutMesh,
+		EHutongDetail Detail = EHutongDetail::Near);
+
+	virtual FVector2D GetFootprintSize() const override { return FVector2D(FootprintX, FootprintY); }
+	virtual void SetFootprintSize(const FVector2D& S) override
+	{
+		FootprintX = FMath::Max(S.X, 60.0);
+		FootprintY = FMath::Max(S.Y, 60.0);
 	}
 
 protected:

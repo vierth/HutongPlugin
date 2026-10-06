@@ -49,4 +49,5 @@ public:
 	TSharedPtr<FUICommandInfo> BeginWaterJarTool;
 	TSharedPtr<FUICommandInfo> BeginUnknownTool;
 	TSharedPtr<FUICommandInfo> BeginCityWallTool;
+	TSharedPtr<FUICommandInfo> BeginSmallBuildingTool;
 };

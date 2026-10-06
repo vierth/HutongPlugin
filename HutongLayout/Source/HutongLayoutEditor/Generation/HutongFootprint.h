@@ -40,6 +40,11 @@ struct FHutongFootprintSkew
 	// never saved or compared.
 	double EndBayReach[2] = { 0.0, 0.0 };
 
+	// The run's axis where the type knows it (0 = X, 1 = Y), filled with EndBayReach; -1 = the longer side.
+	// A city wall leg shorter than its 20 m width still runs along X: read off the proportions, its mitres
+	// were taken across the run and the ends sheared. Derived, never saved or compared.
+	int32 RunAxis = -1;
+
 	FVector2D Get(int32 Corner) const
 	{
 		switch (Corner)
@@ -80,6 +85,10 @@ namespace HutongFootprint
 {
 	// The run is the long axis; bias cuts apply at its ends.
 	inline bool RunAlongX(const FVector2D& Size) { return Size.X >= Size.Y; }
+	inline bool RunAlongX(const FVector2D& Size, const FHutongFootprintSkew& Skew)
+	{
+		return Skew.RunAxis >= 0 ? Skew.RunAxis == 0 : RunAlongX(Size);
+	}
 
 	// Corner offset as the mode reads it. Both modes keep both components; the seam a future mode would narrow.
 	inline FVector2D EffectiveOffset(const FVector2D& Size, const FHutongFootprintSkew& Skew, int32 Corner)
@@ -107,19 +116,22 @@ namespace HutongFootprint
 	}
 
 	// Ends: the two corners at one end, across == 0 first, then across == T. bStart = origin end.
+	inline void EndCorners(bool bRunAlongX, bool bStart, int32& OutA, int32& OutB)
+	{
+		OutA = bStart ? 0 : (bRunAlongX ? 1 : 3);
+		OutB = bStart ? (bRunAlongX ? 3 : 1) : 2;
+	}
 	inline void EndCorners(const FVector2D& Size, bool bStart, int32& OutA, int32& OutB)
 	{
-		const bool bX = RunAlongX(Size);
-		OutA = bStart ? 0 : (bX ? 1 : 3);
-		OutB = bStart ? (bX ? 3 : 1) : 2;
+		EndCorners(RunAlongX(Size), bStart, OutA, OutB);
 	}
 
 	// Ends: along-run offsets at one end, in EndCorners order.
 	inline void EndOffsets(const FVector2D& Size, const FHutongFootprintSkew& Skew, bool bStart, double& OutA, double& OutB)
 	{
+		const bool bX = RunAlongX(Size, Skew);
 		int32 CornerA, CornerB;
-		EndCorners(Size, bStart, CornerA, CornerB);
-		const bool bX = RunAlongX(Size);
+		EndCorners(bX, bStart, CornerA, CornerB);
 		OutA = bX ? Skew.Get(CornerA).X : Skew.Get(CornerA).Y;
 		OutB = bX ? Skew.Get(CornerB).X : Skew.Get(CornerB).Y;
 	}
@@ -127,9 +139,9 @@ namespace HutongFootprint
 	// Across-run offsets; positive toward across == T.
 	inline void EndAcrossOffsets(const FVector2D& Size, const FHutongFootprintSkew& Skew, bool bStart, double& OutA, double& OutB)
 	{
+		const bool bX = RunAlongX(Size, Skew);
 		int32 CornerA, CornerB;
-		EndCorners(Size, bStart, CornerA, CornerB);
-		const bool bX = RunAlongX(Size);
+		EndCorners(bX, bStart, CornerA, CornerB);
 		OutA = bX ? Skew.Get(CornerA).Y : Skew.Get(CornerA).X;
 		OutB = bX ? Skew.Get(CornerB).Y : Skew.Get(CornerB).X;
 	}
@@ -138,8 +150,8 @@ namespace HutongFootprint
 	// bay alone), else across size plus 1.5× the largest offset there; capped at mid-run.
 	inline double EndZone(const FVector2D& Size, const FHutongFootprintSkew& Skew, bool bStart)
 	{
-		const double L = RunAlongX(Size) ? Size.X : Size.Y;
-		const double T = RunAlongX(Size) ? Size.Y : Size.X;
+		const double L = RunAlongX(Size, Skew) ? Size.X : Size.Y;
+		const double T = RunAlongX(Size, Skew) ? Size.Y : Size.X;
 		double A, B, AA, AB;
 		EndOffsets(Size, Skew, bStart, A, B);
 		EndAcrossOffsets(Size, Skew, bStart, AA, AB);
@@ -158,7 +170,7 @@ namespace HutongFootprint
 			Corners(Size, Skew, C);
 			return MapWhole(Size, C, X, Y);
 		}
-		const bool bX = RunAlongX(Size);
+		const bool bX = RunAlongX(Size, Skew);
 		const double L = bX ? Size.X : Size.Y;
 		const double T = bX ? Size.Y : Size.X;
 		const double R = bX ? X : Y;
