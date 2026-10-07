@@ -834,11 +834,7 @@ void UHutongFlowerBedBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHuton
 void UHutongSmallBuildingComponent::BuildSmallBuildingMesh(const FHutongSmallBuildingParams& InParams, EHutongBaySide Side,
 	int32 InBayCountOverride, double SizeX, double SizeY, FDynamicMesh3& OutMesh, EHutongDetail Detail)
 {
-	const bool bAlongX = HutongGen::BaySide::IsAlongX(Side);
-	FHutongSmallBuildingParams P = InParams;
-	P.Width = bAlongX ? SizeX : SizeY;
-	P.Depth = bAlongX ? SizeY : SizeX;
-	P.BayCountOverride = InBayCountOverride;
+	FHutongSmallBuildingParams P = Sized(InParams, Side, InBayCountOverride, SizeX, SizeY);
 	// Tile courses only close up, as on every roof.
 	if (Detail != EHutongDetail::Near && Detail != EHutongDetail::Hero) P.bHasTileRuns = false;
 	HutongGen::BuildSmallBuilding(OutMesh, P, Detail != EHutongDetail::Massing);

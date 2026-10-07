@@ -44,7 +44,7 @@ namespace
 	}
 
 	// Faced types are built facing -Y.
-	constexpr EHutongBaySide Facing = EHutongBaySide::MinusY;
+	constexpr EHutongBaySide GalleryFacing = EHutongBaySide::MinusY;
 
 	template <typename TComponent, typename TSetup>
 	TFunction<void(AStaticMeshActor*)> MakeAttach(const FHutongPalette& Palette, TSetup&& Setup)
@@ -221,7 +221,7 @@ namespace
 				It.Footprint = FVector2D(SX, SY);
 				It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 				{
-					UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(P, Facing, 0, SX, SY, M, D);
+					UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(P, GalleryFacing, 0, SX, SY, M, D);
 				};
 				// The preset is named, so the piece reads as that preset and not as customized.
 				It.Attach = MakeAttach<UHutongSiheyuanBuildingComponent>(Palette,
@@ -229,7 +229,7 @@ namespace
 					{
 						C->Params = P;
 						C->Preset = Name;
-						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = GalleryFacing;
 					});
 				Add(MoveTemp(It));
 			}
@@ -251,13 +251,13 @@ namespace
 					It.Footprint = FVector2D(SX, SY);
 					It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 					{
-						UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(P, Facing, 0, SX, SY, M, D);
+						UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(P, GalleryFacing, 0, SX, SY, M, D);
 					};
 					It.Attach = MakeAttach<UHutongSiheyuanBuildingComponent>(Palette,
 						[P, SX, SY](UHutongSiheyuanBuildingComponent* C)
 						{
 							C->Params = P;
-							C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+							C->FootprintX = SX; C->FootprintY = SY; C->BaySide = GalleryFacing;
 						});
 					Add(MoveTemp(It));
 
@@ -270,13 +270,13 @@ namespace
 					Fr.Footprint = FVector2D(SX, SY);
 					Fr.Build = [F, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 					{
-						UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(F, Facing, 0, SX, SY, M, D);
+						UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(F, GalleryFacing, 0, SX, SY, M, D);
 					};
 					Fr.Attach = MakeAttach<UHutongSiheyuanBuildingComponent>(Palette,
 						[F, SX, SY](UHutongSiheyuanBuildingComponent* C)
 						{
 							C->Params = F;
-							C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+							C->FootprintX = SX; C->FootprintY = SY; C->BaySide = GalleryFacing;
 						});
 					Add(MoveTemp(Fr));
 				}
@@ -295,13 +295,13 @@ namespace
 					It.Footprint = FVector2D(SX, SY);
 					It.Build = [V, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 					{
-						UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(V, Facing, 0, SX, SY, M, D);
+						UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(V, GalleryFacing, 0, SX, SY, M, D);
 					};
 					It.Attach = MakeAttach<UHutongSiheyuanBuildingComponent>(Palette,
 						[V, SX, SY](UHutongSiheyuanBuildingComponent* C)
 						{
 							C->Params = V;
-							C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+							C->FootprintX = SX; C->FootprintY = SY; C->BaySide = GalleryFacing;
 						});
 					Add(MoveTemp(It));
 				};
@@ -345,13 +345,13 @@ namespace
 				It.Footprint = FVector2D(SX, SY);
 				It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 				{
-					UHutongGateHouseBuildingComponent::BuildGateHouseMesh(P, Facing, SX, SY, M, D);
+					UHutongGateHouseBuildingComponent::BuildGateHouseMesh(P, GalleryFacing, SX, SY, M, D);
 				};
 				It.Attach = MakeAttach<UHutongGateHouseBuildingComponent>(Palette,
 					[P, SX, SY](UHutongGateHouseBuildingComponent* C)
 					{
 						C->Params = P;
-						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = GalleryFacing;
 					});
 				Add(MoveTemp(It));
 
@@ -361,13 +361,13 @@ namespace
 				Fr.Footprint = FVector2D(SX, SY);
 				Fr.Build = [F, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 				{
-					UHutongGateHouseBuildingComponent::BuildGateHouseMesh(F, Facing, SX, SY, M, D);
+					UHutongGateHouseBuildingComponent::BuildGateHouseMesh(F, GalleryFacing, SX, SY, M, D);
 				};
 				Fr.Attach = MakeAttach<UHutongGateHouseBuildingComponent>(Palette,
 					[F, SX, SY](UHutongGateHouseBuildingComponent* C)
 					{
 						C->Params = F;
-						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = GalleryFacing;
 					});
 				Add(MoveTemp(Fr));
 			};
@@ -390,13 +390,13 @@ namespace
 					It.Footprint = FVector2D(SX, SY);
 					It.Build = [Gate, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 					{
-						UHutongGateHouseBuildingComponent::BuildGateHouseMesh(Gate, Facing, SX, SY, M, D);
+						UHutongGateHouseBuildingComponent::BuildGateHouseMesh(Gate, GalleryFacing, SX, SY, M, D);
 					};
 					It.Attach = MakeAttach<UHutongGateHouseBuildingComponent>(Palette,
 						[Gate, SX, SY](UHutongGateHouseBuildingComponent* C)
 						{
 							C->Params = Gate;
-							C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+							C->FootprintX = SX; C->FootprintY = SY; C->BaySide = GalleryFacing;
 						});
 					Add(MoveTemp(It));
 				};
@@ -455,13 +455,13 @@ namespace
 				It.Footprint = FVector2D(SX, SY);
 				It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 				{
-					UHutongInnerGateBuildingComponent::BuildInnerGateMesh(P, Facing, SX, SY, M, D);
+					UHutongInnerGateBuildingComponent::BuildInnerGateMesh(P, GalleryFacing, SX, SY, M, D);
 				};
 				It.Attach = MakeAttach<UHutongInnerGateBuildingComponent>(Palette,
 					[P, SX, SY](UHutongInnerGateBuildingComponent* C)
 					{
 						C->Params = P;
-						C->Width = SX; C->Depth = SY; C->BaySide = Facing;
+						C->Width = SX; C->Depth = SY; C->BaySide = GalleryFacing;
 					});
 				Add(MoveTemp(It));
 			}
@@ -597,14 +597,14 @@ namespace
 				It.Footprint = FVector2D(SX, SY);
 				It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 				{
-					UHutongEarPassageBuildingComponent::BuildEarPassageMesh(P, Facing, SX, SY, M, D);
+					UHutongEarPassageBuildingComponent::BuildEarPassageMesh(P, GalleryFacing, SX, SY, M, D);
 				};
 				It.Attach = MakeAttach<UHutongEarPassageBuildingComponent>(Palette,
 					[P, SX, SY, Name](UHutongEarPassageBuildingComponent* C)
 					{
 						C->Params = P;
 						C->Preset = Name;
-						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = GalleryFacing;
 					});
 				Add(MoveTemp(It));
 			}
@@ -644,13 +644,13 @@ namespace
 				Fr.Footprint = FVector2D(FX, FY);
 				Fr.Build = [Fp, FX, FY](FDynamicMesh3& M, EHutongDetail D)
 				{
-					UHutongFrameBuildingComponent::BuildFrameMesh(Fp, Facing, 0, FX, FY, M, D);
+					UHutongFrameBuildingComponent::BuildFrameMesh(Fp, GalleryFacing, 0, FX, FY, M, D);
 				};
 				Fr.Attach = MakeAttach<UHutongFrameBuildingComponent>(Palette,
 					[Fp, FX, FY](UHutongFrameBuildingComponent* C)
 					{
 						C->Params = Fp;
-						C->FootprintX = FX; C->FootprintY = FY; C->BaySide = Facing;
+						C->FootprintX = FX; C->FootprintY = FY; C->BaySide = GalleryFacing;
 					});
 				Add(MoveTemp(Fr));
 			}
@@ -678,13 +678,13 @@ namespace
 				It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 				{
 					UHutongShopfrontBuildingComponent::BuildShopfrontMesh(
-						P, Facing, P.BayCountOverride, SX, SY, M, D);
+						P, GalleryFacing, P.BayCountOverride, SX, SY, M, D);
 				};
 				It.Attach = MakeAttach<UHutongShopfrontBuildingComponent>(Palette,
 					[P, SX, SY](UHutongShopfrontBuildingComponent* C)
 					{
 						C->Params = P;
-						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = GalleryFacing;
 					});
 				Add(MoveTemp(It));
 			};
@@ -715,7 +715,7 @@ namespace
 				It.Footprint = FVector2D(SX, SY);
 				It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 				{
-					UHutongSmallBuildingComponent::BuildSmallBuildingMesh(P, Facing, 0, SX, SY, M, D);
+					UHutongSmallBuildingComponent::BuildSmallBuildingMesh(P, GalleryFacing, 0, SX, SY, M, D);
 				};
 				const FString Preset = Small.Key;
 				It.Attach = MakeAttach<UHutongSmallBuildingComponent>(Palette,
@@ -723,7 +723,7 @@ namespace
 					{
 						C->Params = P;
 						C->Preset = Preset;
-						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = GalleryFacing;
 					});
 				Add(MoveTemp(It));
 			}
@@ -741,13 +741,13 @@ namespace
 				It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 				{
 					UHutongStoreyBuildingComponent::BuildStoreyMesh(
-						P, Facing, P.BayCountOverride, SX, SY, M, D);
+						P, GalleryFacing, P.BayCountOverride, SX, SY, M, D);
 				};
 				It.Attach = MakeAttach<UHutongStoreyBuildingComponent>(Palette,
 					[P, SX, SY](UHutongStoreyBuildingComponent* C)
 					{
 						C->Params = P;
-						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = GalleryFacing;
 					});
 				Add(MoveTemp(It));
 			};
@@ -845,14 +845,14 @@ namespace
 				It.Footprint = FVector2D(SX, SY);
 				It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 				{
-					UHutongHallBuildingComponent::BuildHallMesh(P, Facing, 0, SX, SY, M, D);
+					UHutongHallBuildingComponent::BuildHallMesh(P, GalleryFacing, 0, SX, SY, M, D);
 				};
 				It.Attach = MakeAttach<UHutongHallBuildingComponent>(Palette,
 					[P, SX, SY](UHutongHallBuildingComponent* C)
 					{
 						C->Params = P;
 						C->FootprintX = SX; C->FootprintY = SY;
-						C->BaySide = Facing;
+						C->BaySide = GalleryFacing;
 					});
 				Add(MoveTemp(It));
 			}
@@ -870,13 +870,13 @@ namespace
 				It.Footprint = FVector2D(SX, SY);
 				It.Build = [P, SX, SY](FDynamicMesh3& M, EHutongDetail D)
 				{
-					UHutongHallBuildingComponent::BuildHallMesh(P, Facing, 0, SX, SY, M, D);
+					UHutongHallBuildingComponent::BuildHallMesh(P, GalleryFacing, 0, SX, SY, M, D);
 				};
 				It.Attach = MakeAttach<UHutongHallBuildingComponent>(Palette,
 					[P, SX, SY](UHutongHallBuildingComponent* C)
 					{
 						C->Params = P;
-						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = Facing;
+						C->FootprintX = SX; C->FootprintY = SY; C->BaySide = GalleryFacing;
 					});
 				Add(MoveTemp(It));
 			};

@@ -3,6 +3,7 @@
 #include "Containers/Ticker.h"
 #include "DynamicMeshBuilder.h"
 #include "Engine/CollisionProfile.h"
+#include "Engine/Selection.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -25,7 +26,6 @@
 #include "Misc/ConfigCacheIni.h"
 #include "UObject/ObjectKey.h"
 #include "UObject/UObjectIterator.h"
-#include <atomic>
 
 namespace
 {
@@ -33,8 +33,6 @@ namespace
 	// Selected: fill this strong, outline in HutongPlanColours::Selected this thick. Every type
 	// colour is a hue; white is none of them, so a selected plan reads apart from its neighbours.
 	constexpr float SelectedFillAlpha = 0.38f;
-	// The layer has already drawn the selected plan's own fill under the overlay's.
-	constexpr float SelectedOverlayFillAlpha = 1.0f - (1.0f - SelectedFillAlpha) / (1.0f - FillAlpha);
 	constexpr float SelectedOutlineThickness = 7.0f;
 	// Hatch ticks along the facade: this far apart, this long, standing this far in off the edge
 	// (on it they fought the neighbours' lines).
@@ -123,11 +121,6 @@ namespace HutongPlanOutline
 
 namespace
 {
-	// Bumped whenever a plan's drawing may have changed; a layer behind it rebuilds on the next tick.
-	std::atomic<uint32> GPlanVersion{ 1 };
-
-	void BumpPlanVersion() { GPlanVersion.fetch_add(1, std::memory_order_relaxed); }
-
 	struct FPlanWorld
 	{
 		TSet<TWeakObjectPtr<UHutongPlanOutlineComponent>> Plans;
@@ -136,15 +129,36 @@ namespace
 	TMap<TObjectKey<UWorld>, FPlanWorld> GPlanWorlds;
 	FTSTicker::FDelegateHandle GLayerTicker;
 	FDelegateHandle GWorldCleanupHandle;
+	FDelegateHandle GSelectionChangedHandle;
+	FDelegateHandle GSelectObjectHandle;
+
+	// Worlds whose plans' drawing may have changed since the last tick; their layers rebuild on the next.
+	// Render state is created off the game thread, hence the lock.
+	FCriticalSection GDirtyWorldsLock;
+	TSet<TObjectKey<UWorld>> GDirtyWorlds;
+
+	void MarkWorldDirty(const UWorld* World)
+	{
+		if (!World) return;
+		FScopeLock Lock(&GDirtyWorldsLock);
+		GDirtyWorlds.Add(TObjectKey<UWorld>(World));
+	}
+
+	// The layer leaves selected plans to their own proxies, so a selection change redraws it.
+	void OnPlanSelectionChanged(UObject*)
+	{
+		FScopeLock Lock(&GDirtyWorldsLock);
+		for (const TPair<TObjectKey<UWorld>, FPlanWorld>& Pair : GPlanWorlds) GDirtyWorlds.Add(Pair.Key);
+	}
 
 	UMaterial* GPlanMaterial = nullptr;
 
 	// Translucent, unlit, vertex colour; a line's corners carry their offset from the centre line in
 	// pixels (UV0) and the vertex shader turns it into world units for this view: depth over the
-	// projection's focal length in perspective, the ortho width per pixel in ortho.
-	void EnsurePlanMaterial()
+	// projection's focal length in perspective, the ortho width per pixel in ortho. True when made now.
+	bool EnsurePlanMaterial()
 	{
-		if (GPlanMaterial || GUsingNullRHI) return;
+		if (GPlanMaterial || GUsingNullRHI) return false;
 		UMaterial* M = NewObject<UMaterial>(GetTransientPackage(), TEXT("HutongPlanOutlineMaterial"), RF_Transient);
 		M->BlendMode = BLEND_Translucent;
 		M->SetShadingModel(MSM_Unlit);
@@ -181,6 +195,7 @@ namespace
 			UE_LOG(LogTemp, Error, TEXT("Hutong plan material: %s"), *Error);
 		}
 		GPlanMaterial = M;
+		return true;
 	}
 
 	// Under -nullrhi there is no plan material; the debug mesh material stands in for the hit-proxy fill.
@@ -344,7 +359,7 @@ namespace
 
 		// Faint fill: a street of them reads as a tint.
 		FLinearColor Fill = P.Colour;
-		Fill.A = bSelected ? SelectedOverlayFillAlpha : FillAlpha;
+		Fill.A = bSelected ? SelectedFillAlpha : FillAlpha;
 		Under.Quad(World, Fill);
 
 		if (bSelected)
@@ -461,7 +476,8 @@ namespace
 	struct FPlanEdgeKey
 	{
 		FVector Quad[4];
-		double Area = 0.0;
+		// Whole cm², so float noise in a transform cannot reorder like plans and the order stays strict.
+		int64 Area = 0;
 		FBox Box;
 		FString Path;
 
@@ -470,15 +486,20 @@ namespace
 			, Path(C.GetPathName())
 		{
 			C.GetWorldQuad(Quad);
-			Area = QuadArea(Quad);
+			Area = FMath::RoundToInt64(QuadArea(Quad));
 		}
 
 		FBox Near() const { return Box.ExpandBy(FVector(SharedEdgeTolerance, SharedEdgeTolerance, 100.0)); }
 
+		// Larger first, then by name: the layer's draw order within a type.
+		bool DrawsBefore(const FPlanEdgeKey& Other) const
+		{
+			return Area != Other.Area ? Area > Other.Area : Path < Other.Path;
+		}
+
 		bool YieldsTo(const FPlanEdgeKey& Other) const
 		{
-			if (!Other.Box.Intersect(Near())) return false;
-			return !FMath::IsNearlyEqual(Other.Area, Area, 1.0) ? Other.Area < Area : Other.Path < Path;
+			return Other.Box.Intersect(Near()) && DrawsBefore(Other);
 		}
 
 		void AddEdgesTo(TArray<TPair<FVector, FVector>>& Edges) const
@@ -494,6 +515,13 @@ namespace
 		const AActor* Owner = C.GetOwner();
 		// IsVisible() folds in bHiddenInGame, which every plan sets; game views skip the layer itself.
 		return C.IsRegistered() && C.IsVisibleInEditor() && HasFootprint(C) && !(Owner && Owner->IsHiddenEd());
+	}
+
+	// What the world's layer draws: a selected plan is drawn whole by its own proxy instead, so moving it
+	// redraws nothing else and nothing of it is drawn twice.
+	bool IsPlanInLayer(const UHutongPlanOutlineComponent& C)
+	{
+		return IsPlanDrawn(C) && !C.ShouldRenderSelected();
 	}
 
 	FPlanWorld* FindPlanWorld(const UWorld* World)
@@ -512,10 +540,26 @@ namespace
 		}
 	}
 
-	// A layer per world with plans in it, rebuilt (render state) when any plan's drawing changed.
+	// A layer per world with plans in it, rebuilt (render state) when any of its plans' drawing changed.
 	bool TickLayers(float)
 	{
-		const uint32 Version = GPlanVersion.load(std::memory_order_relaxed);
+		// Plans that registered before the material existed hold the fallback in their proxies.
+		if (EnsurePlanMaterial())
+		{
+			for (const TPair<TObjectKey<UWorld>, FPlanWorld>& Pair : GPlanWorlds)
+			{
+				for (const TWeakObjectPtr<UHutongPlanOutlineComponent>& Plan : Pair.Value.Plans)
+				{
+					if (Plan.IsValid()) Plan->MarkRenderStateDirty();
+				}
+			}
+		}
+		TSet<TObjectKey<UWorld>> Dirty;
+		{
+			FScopeLock Lock(&GDirtyWorldsLock);
+			Dirty = MoveTemp(GDirtyWorlds);
+			GDirtyWorlds.Reset();
+		}
 		for (auto It = GPlanWorlds.CreateIterator(); It; ++It)
 		{
 			UWorld* World = It.Key().ResolveObjectPtr();
@@ -529,14 +573,13 @@ namespace
 			if (!PlanWorld.Layer)
 			{
 				// Until its shaders are in, the material draws as the default checker.
-				EnsurePlanMaterial();
 				if (!IsPlanMaterialReady() || !World->Scene || World->bIsTearingDown) continue;
 				UHutongPlanLayerComponent* Layer = NewObject<UHutongPlanLayerComponent>(GetTransientPackage(), NAME_None, RF_Transient);
 				Layer->AddToRoot();
 				Layer->RegisterComponentWithWorld(World);
 				PlanWorld.Layer = Layer;
 			}
-			else if (PlanWorld.Layer->DrawnVersion != Version)
+			else if (Dirty.Contains(It.Key()))
 			{
 				PlanWorld.Layer->MarkRenderStateDirty();
 			}
@@ -560,6 +603,8 @@ namespace HutongPlanOutline
 	{
 		GLayerTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&TickLayers));
 		GWorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddStatic(&OnWorldCleanup);
+		GSelectionChangedHandle = USelection::SelectionChangedEvent.AddStatic(&OnPlanSelectionChanged);
+		GSelectObjectHandle = USelection::SelectObjectEvent.AddStatic(&OnPlanSelectionChanged);
 	}
 
 	UMaterial* GetPlanMaterial()
@@ -571,14 +616,17 @@ namespace HutongPlanOutline
 	bool IsLayerCurrent(const UWorld* World)
 	{
 		const FPlanWorld* PlanWorld = FindPlanWorld(World);
-		return PlanWorld && PlanWorld->Layer && PlanWorld->Layer->IsRegistered() && !PlanWorld->Layer->IsRenderStateDirty()
-			&& PlanWorld->Layer->DrawnVersion == GPlanVersion.load(std::memory_order_relaxed);
+		if (!PlanWorld || !PlanWorld->Layer || !PlanWorld->Layer->IsRegistered() || PlanWorld->Layer->IsRenderStateDirty()) return false;
+		FScopeLock Lock(&GDirtyWorldsLock);
+		return !GDirtyWorlds.Contains(TObjectKey<UWorld>(World));
 	}
 
 	void StopLayers()
 	{
 		FTSTicker::GetCoreTicker().RemoveTicker(GLayerTicker);
 		FWorldDelegates::OnWorldCleanup.Remove(GWorldCleanupHandle);
+		USelection::SelectionChangedEvent.Remove(GSelectionChangedHandle);
+		USelection::SelectObjectEvent.Remove(GSelectObjectHandle);
 		// At editor exit modules unload after every UObject is gone, rooted or not: forget, never touch.
 		const bool bObjectsAlive = UObjectInitialized() && !IsEngineExitRequested();
 		if (bObjectsAlive)
@@ -587,6 +635,7 @@ namespace HutongPlanOutline
 			if (GPlanMaterial) GPlanMaterial->RemoveFromRoot();
 		}
 		GPlanWorlds.Empty();
+		GDirtyWorlds.Empty();
 		GPlanMaterial = nullptr;
 	}
 }
@@ -846,12 +895,12 @@ TArray<TPair<FVector, FVector>> UHutongPlanOutlineComponent::CollectWinningNeigh
 {
 	TArray<TPair<FVector, FVector>> Edges;
 	const FPlanWorld* PlanWorld = FindPlanWorld(GetWorld());
-	if (!PlanWorld || !HasFootprint(*this)) return Edges;
+	if (!PlanWorld || !IsPlanInLayer(*this)) return Edges;
 	const FPlanEdgeKey Mine(*this);
 	for (const TWeakObjectPtr<UHutongPlanOutlineComponent>& Weak : PlanWorld->Plans)
 	{
 		const UHutongPlanOutlineComponent* Other = Weak.Get();
-		if (!Other || Other == this || !Other->IsRegistered() || !HasFootprint(*Other)) continue;
+		if (!Other || Other == this || !IsPlanInLayer(*Other)) continue;
 		const FPlanEdgeKey Theirs(*Other);
 		if (Mine.YieldsTo(Theirs)) Theirs.AddEdgesTo(Edges);
 	}
@@ -860,13 +909,14 @@ TArray<TPair<FVector, FVector>> UHutongPlanOutlineComponent::CollectWinningNeigh
 
 void UHutongPlanOutlineComponent::OnRegister()
 {
-	EnsurePlanMaterial();
 	Super::OnRegister();
-	if (UWorld* World = GetWorld())
+	// Plans are hidden in game: a game world (PIE) gets no layer.
+	UWorld* World = GetWorld();
+	if (World && !World->IsGameWorld())
 	{
 		GPlanWorlds.FindOrAdd(TObjectKey<UWorld>(World)).Plans.Add(this);
+		MarkWorldDirty(World);
 	}
-	BumpPlanVersion();
 }
 
 void UHutongPlanOutlineComponent::OnUnregister()
@@ -875,14 +925,15 @@ void UHutongPlanOutlineComponent::OnUnregister()
 	{
 		PlanWorld->Plans.Remove(this);
 	}
-	BumpPlanVersion();
+	MarkWorldDirty(GetWorld());
 	Super::OnUnregister();
 }
 
 void UHutongPlanOutlineComponent::OnUpdateTransform(EUpdateTransformFlags UpdateTransformFlags, ETeleportType Teleport)
 {
 	Super::OnUpdateTransform(UpdateTransformFlags, Teleport);
-	BumpPlanVersion();
+	// A selected plan is not in the layer: dragging it redraws only its own proxy.
+	if (!ShouldRenderSelected()) MarkWorldDirty(GetWorld());
 }
 
 // Every path that changes what a plan draws (SetPlan, hiding, the visibility switches) recreates its
@@ -890,13 +941,13 @@ void UHutongPlanOutlineComponent::OnUpdateTransform(EUpdateTransformFlags Update
 void UHutongPlanOutlineComponent::CreateRenderState_Concurrent(FRegisterComponentContext* Context)
 {
 	Super::CreateRenderState_Concurrent(Context);
-	BumpPlanVersion();
+	MarkWorldDirty(GetWorld());
 }
 
 void UHutongPlanOutlineComponent::DestroyRenderState_Concurrent()
 {
 	Super::DestroyRenderState_Concurrent();
-	BumpPlanVersion();
+	MarkWorldDirty(GetWorld());
 }
 
 FBoxSphereBounds UHutongPlanOutlineComponent::CalcBounds(const FTransform& LocalToWorld) const
@@ -922,7 +973,6 @@ UHutongPlanLayerComponent::UHutongPlanLayerComponent()
 
 FPrimitiveSceneProxy* UHutongPlanLayerComponent::CreateSceneProxy()
 {
-	DrawnVersion = GPlanVersion.load(std::memory_order_relaxed);
 	const FPlanWorld* PlanWorld = FindPlanWorld(GetWorld());
 	if (!PlanWorld || !GPlanMaterial || !HutongPlanOutline::ArePlansVisible()) return nullptr;
 
@@ -930,7 +980,7 @@ FPrimitiveSceneProxy* UHutongPlanLayerComponent::CreateSceneProxy()
 	for (const TWeakObjectPtr<UHutongPlanOutlineComponent>& Weak : PlanWorld->Plans)
 	{
 		const UHutongPlanOutlineComponent* C = Weak.Get();
-		if (C && IsPlanDrawn(*C)) Drawn.Add(C);
+		if (C && IsPlanInLayer(*C)) Drawn.Add(C);
 	}
 	TArray<FPlanEdgeKey> Keys;
 	Keys.Reserve(Drawn.Num());
@@ -947,8 +997,7 @@ FPrimitiveSceneProxy* UHutongPlanLayerComponent::CreateSceneProxy()
 	Order.Sort([&](int32 L, int32 R)
 	{
 		if (Levels[L] != Levels[R]) return Levels[L] < Levels[R];
-		if (!FMath::IsNearlyEqual(Keys[L].Area, Keys[R].Area, 1.0)) return Keys[L].Area > Keys[R].Area;
-		return Keys[L].Path < Keys[R].Path;
+		return Keys[L].DrawsBefore(Keys[R]);
 	});
 
 	// Shared edges: each plan asks only the plans in the grid squares its bounds touch.

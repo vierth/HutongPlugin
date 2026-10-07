@@ -1436,15 +1436,16 @@ public:
 	int32 BayCountOverride = 0;
 
 	// Params with the footprint filled in, across and along the front.
-	FHutongSmallBuildingParams SizedParams() const
+	static FHutongSmallBuildingParams Sized(FHutongSmallBuildingParams P, EHutongBaySide Side, int32 InBayCountOverride,
+		double SizeX, double SizeY)
 	{
-		FHutongSmallBuildingParams P = Params;
-		const bool bAlongX = HutongGen::BaySide::IsAlongX(BaySide);
-		P.Width = bAlongX ? FootprintX : FootprintY;
-		P.Depth = bAlongX ? FootprintY : FootprintX;
-		P.BayCountOverride = BayCountOverride;
+		const bool bAlongX = HutongGen::BaySide::IsAlongX(Side);
+		P.Width = bAlongX ? SizeX : SizeY;
+		P.Depth = bAlongX ? SizeY : SizeX;
+		P.BayCountOverride = InBayCountOverride;
 		return P;
 	}
+	FHutongSmallBuildingParams SizedParams() const { return Sized(Params, BaySide, BayCountOverride, FootprintX, FootprintY); }
 
 	virtual double GetEaveHeight() const override { return Params.GetEaveHeight(); }
 	virtual bool CanSetEditHeight() const override { return true; }

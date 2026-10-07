@@ -74,12 +74,12 @@ namespace HutongGen::Ridge
 	// 小房: the two-slope fold, or a lean-to's slab top at its back edge.
 	inline double Small(const FHutongSmallBuildingParams& P)
 	{
-		const double D = FMath::Max(P.Depth, 60.0);
+		const double D = P.GetDepth();
 		if (P.Roof == EHutongSmallRoof::LeanTo)
 		{
 			return P.GetEaveHeight() + P.GetRoofRise() * (D + FHutongSmallBuildingParams::LeanToRearOverhang) / D + FHutongSmallBuildingParams::LeanToSlab;
 		}
-		return P.GetRoofBaseHeight() + P.GetRoofRise() * Crown(EHutongPurlins::Three, 0.5 * D, FMath::Max(P.RoofOverhang, 0.0), 0.0);
+		return P.GetRoofBaseHeight() + P.GetRoofRise() * Crown(EHutongPurlins::Three, 0.5 * D, P.GetRoofOverhang(), 0.0);
 	}
 	// Taller of room and passage ridges (the room's in practice); a passage over the whole frontage
 	// under its own roof has only that one.

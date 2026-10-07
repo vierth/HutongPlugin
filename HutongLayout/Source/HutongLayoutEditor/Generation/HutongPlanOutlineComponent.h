@@ -133,9 +133,9 @@ namespace HutongPlanOutline
 	bool IsLayerCurrent(const UWorld* World);
 }
 
-// A building that has been laid out but not built. Its own proxy draws only while selected (over the
-// rest) and in the hit-proxy pass (a click selects the building); every plan in the world is drawn by
-// the world's one UHutongPlanLayerComponent — a drawing proxy per plan took the frame on a city map
+// A building that has been laid out but not built. Its own proxy draws only while selected (the layer then
+// leaves it out) and in the hit-proxy pass (a click selects the building); every other plan in the world
+// is drawn by the world's one UHutongPlanLayerComponent — a drawing proxy per plan took the frame on a city map
 // from 8 to 67 ms, all render and RHI thread (user, 2026-10-06).
 UCLASS(ClassGroup=Hutong, meta=(DisplayName="Hutong Plan Outline"))
 class UHutongPlanOutlineComponent : public UPrimitiveComponent
@@ -224,7 +224,4 @@ public:
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 	// A mesh batch whose material the proxy did not declare is dropped (with an ensure).
 	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
-
-	// The plans' version this layer last drew; the ticker rebuilds when they have moved on.
-	uint32 DrawnVersion = 0;
 };

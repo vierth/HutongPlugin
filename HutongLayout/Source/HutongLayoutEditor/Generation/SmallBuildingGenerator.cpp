@@ -14,13 +14,13 @@ namespace HutongGen
 	{
 		using namespace HutongMeshUtils;
 
-		const double W = FMath::Max(P.Width, 60.0);
-		const double D = FMath::Max(P.Depth, 60.0);
-		const double T = FMath::Clamp(P.WallThickness, 8.0, 0.25 * FMath::Min(W, D));
+		const double W = P.GetWidth();
+		const double D = P.GetDepth();
+		const double T = P.GetWallThickness();
 		const double Floor = P.GetFloorHeight();
 		const double Eave = P.GetEaveHeight();
 		const double Rise = P.GetRoofRise();
-		const double Ov = FMath::Max(P.RoofOverhang, 0.0);
+		const double Ov = P.GetRoofOverhang();
 		const bool bLeanTo = P.Roof == EHutongSmallRoof::LeanTo;
 		// A lean-to's underside: the eave at the front wall, rising to the back.
 		const double Slope = Rise / D;
@@ -139,7 +139,8 @@ namespace HutongGen
 				AppendBox(Mesh, FVector3d(WX0, 0.0, Floor), FVector3d(WX1, T, Sill));
 				AppendBox(Mesh, FVector3d(WX0, 0.0, Head), FVector3d(WX1, T, FrontTop));
 				Tag.Close();
-				// Lattice of two bars each way over a paper pane, mid-wall.
+				// Lattice of two bars each way over a paper pane, mid-wall; the cross bars stand back
+				// so their front face is buried in the uprights where they cross.
 				const double Y = 0.5 * T;
 				{
 					FSlotScope LatticeTag(Mesh, MatSlot_Lattice);
@@ -147,7 +148,7 @@ namespace HutongGen
 					{
 						const double BX = FMath::Lerp(WX0, WX1, k / 3.0), BZ = FMath::Lerp(Sill, Head, k / 3.0);
 						AppendBox(Mesh, FVector3d(BX - 1.5, Y - 3.0, Sill), FVector3d(BX + 1.5, Y, Head));
-						AppendBox(Mesh, FVector3d(WX0, Y - 3.0, BZ - 1.5), FVector3d(WX1, Y, BZ + 1.5));
+						AppendBox(Mesh, FVector3d(WX0, Y - 2.5, BZ - 1.5), FVector3d(WX1, Y, BZ + 1.5));
 					}
 				}
 				FSlotScope PaperTag(Mesh, MatSlot_Paper);

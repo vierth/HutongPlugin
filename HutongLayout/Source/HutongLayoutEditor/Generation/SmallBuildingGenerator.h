@@ -78,18 +78,23 @@ struct FHutongSmallBuildingParams
 	double GetRoofLift() const { return 0.0; }
 	double GetRoofBaseHeight() const { return GetEaveHeight() + GetRoofLift(); }
 	double GetRoofRise() const { return FMath::Max(RoofRise, 10.0); }
+	double GetRoofOverhang() const { return FMath::Max(RoofOverhang, 0.0); }
 
 	// Set by the component from its footprint, along and across the front.
 	double Width = 400.0;
 	double Depth = 360.0;
 	int32 BayCountOverride = 0;
 
+	double GetWidth() const { return FMath::Max(Width, 60.0); }
+	double GetDepth() const { return FMath::Max(Depth, 60.0); }
+	double GetWallThickness() const { return FMath::Clamp(WallThickness, 8.0, 0.25 * FMath::Min(GetWidth(), GetDepth())); }
+
 	int32 GetBayCount() const
 	{
-		return BayCountOverride > 0 ? BayCountOverride : HutongGen::ComputeBayCount(FMath::Max(Width, 1.0), MinBayWidth, FMath::Max(MaxBayWidth, MinBayWidth));
+		return BayCountOverride > 0 ? BayCountOverride : HutongGen::ComputeBayCount(GetWidth(), MinBayWidth, FMath::Max(MaxBayWidth, MinBayWidth));
 	}
 	// Even bays: a humble building has no 明間 wider than the rest.
-	double GetBayBoundary(int32 i, int32 BayCount) const { return FMath::Max(Width, 1.0) * i / FMath::Max(BayCount, 1); }
+	double GetBayBoundary(int32 i, int32 BayCount) const { return GetWidth() * i / FMath::Max(BayCount, 1); }
 	int32 GetDoorBay(int32 BayCount) const { return BayCount / 2; }
 };
 

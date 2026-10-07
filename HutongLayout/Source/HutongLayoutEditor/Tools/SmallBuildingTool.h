@@ -32,6 +32,7 @@ public:
 
 protected:
 	virtual void RegisterToolSettings() override;
+	virtual void OnPlacementStarted(const FVector& HitWorld) override;
 	virtual void BuildMeshForRect(double SizeX, double SizeY, UE::Geometry::FDynamicMesh3& OutMesh,
 		EHutongDetail Level) override;
 	virtual void AttachBuildingComponent(AStaticMeshActor* Actor, double SizeX, double SizeY) override;

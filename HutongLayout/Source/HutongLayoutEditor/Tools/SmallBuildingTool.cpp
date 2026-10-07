@@ -24,12 +24,8 @@ void UHutongSmallBuildingTool::RegisterToolSettings()
 
 FHutongSmallBuildingParams UHutongSmallBuildingTool::SizedParams(double SizeX, double SizeY) const
 {
-	FHutongSmallBuildingParams P = Settings ? Settings->Params : FHutongSmallBuildingParams();
-	const bool bAlongX = HutongGen::BaySide::IsAlongX(BaySide);
-	P.Width = bAlongX ? SizeX : SizeY;
-	P.Depth = bAlongX ? SizeY : SizeX;
-	P.BayCountOverride = BayCountOverride;
-	return P;
+	return UHutongSmallBuildingComponent::Sized(Settings ? Settings->Params : FHutongSmallBuildingParams(),
+		BaySide, BayCountOverride, SizeX, SizeY);
 }
 
 void UHutongSmallBuildingTool::BuildMeshForRect(double SizeX, double SizeY, FDynamicMesh3& OutMesh, EHutongDetail Level)
@@ -77,6 +73,13 @@ void UHutongSmallBuildingTool::AdjustBracketValue(int32 Delta, bool bFine, bool 
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
 	const int32 Drawn = SizedParams(MaxX - MinX, MaxY - MinY).GetBayCount();
 	BayCountOverride = FMath::Clamp((BayCountOverride > 0 ? BayCountOverride : Drawn) + Delta, 1, 8);
+}
+
+void UHutongSmallBuildingTool::OnPlacementStarted(const FVector& HitWorld)
+{
+	BaySide = ComputeDefaultBaySide();
+	// Bay count depends on the frontage drawn, so it never carries between placements.
+	BayCountOverride = 0;
 }
 
 void UHutongSmallBuildingTool::CancelPlacement()
