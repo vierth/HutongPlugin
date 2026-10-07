@@ -9,6 +9,15 @@
 #include "Engine/World.h"
 #include "Components/StaticMeshComponent.h"
 #include "Editor.h"
+#include "MaterialShared.h"
+#include "Tests/AutomationCommon.h"
+#include "Algo/Count.h"
+#include "ImageUtils.h"
+#include "Misc/FileHelper.h"
+#include "UObject/UObjectIterator.h"
+#include "Components/SceneCaptureComponent2D.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "Materials/Material.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -636,5 +645,138 @@ bool FHutongOverlapsTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("court filled where empty"), Old->Court, FString(TEXT("East court")));
 
 	World->DestroyWorld(false);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanMaterialTest, "HutongLayout.Detail.PlanMaterial",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongPlanMaterialTest::RunTest(const FString& Parameters)
+{
+	// The plan layer's material is made in code, its line widening a custom HLSL node: a compile error
+	// shows only with shaders, so under -nullrhi this says so and passes. Waits for the background compile.
+	UMaterial* Material = HutongPlanOutline::GetPlanMaterial();
+	if (!Material)
+	{
+		AddInfo(TEXT("No RHI: the plan material is not compiled."));
+		return true;
+	}
+	const double Start = FPlatformTime::Seconds();
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Material, Start]()
+	{
+		const FMaterialResource* Resource = Material->GetMaterialResource(GShaderPlatformForFeatureLevel[GMaxRHIFeatureLevel]);
+		const bool bDone = Resource && Resource->IsCompilationFinished() && Resource->GetGameThreadShaderMap();
+		if (!bDone && FPlatformTime::Seconds() - Start < 600.0) return false;
+		if (!TestNotNull(TEXT("a material resource for this platform"), Resource)) return true;
+		for (const FString& Error : Resource->GetCompileErrors()) AddError(Error);
+		TestTrue(TEXT("compiled, with a complete shader map"), bDone && Resource->IsGameThreadShaderMapComplete());
+		UE_LOG(LogTemp, Display, TEXT("Plan material: %d shaders after %.1f s"),
+			Resource->GetGameThreadShaderMap() ? Resource->GetGameThreadShaderMap()->GetShaderNum() : 0, FPlatformTime::Seconds() - Start);
+		return true;
+	}));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanLayerDrawsTest, "HutongLayout.Detail.PlanLayerDraws",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongPlanLayerDrawsTest::RunTest(const FString& Parameters)
+{
+	// Two plans seen from above by a scene capture: the layer's fills and lines must reach the picture.
+	// Needs shaders: under -nullrhi this says so and passes.
+	if (!HutongPlanOutline::GetPlanMaterial())
+	{
+		AddInfo(TEXT("No RHI: plans are not drawn."));
+		return true;
+	}
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
+	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
+	for (const FVector& At : { FVector::ZeroVector, FVector(900.0, 0.0, 0.0) })
+	{
+		UHutongBuildingComponent* B = PlaceNamed(World, UHutongSiheyuanBuildingComponent::StaticClass(),
+			FVector2D(900.0, 600.0), FTransform(At), At.IsZero() ? TEXT("DrawnHouseA") : TEXT("DrawnHouseB"));
+		if (!TestNotNull(TEXT("a house places"), B)) { World->DestroyWorld(false); return false; }
+		// Laid out: no mesh over the plan (the house would hide it).
+		B->bPlanOnly = true;
+		B->Rebuild();
+		B->ApplyPlacementAttachments();
+	}
+
+	AActor* Camera = World->SpawnActor<AActor>();
+	USceneCaptureComponent2D* Capture = NewObject<USceneCaptureComponent2D>(Camera);
+	Camera->SetRootComponent(Capture);
+	// Perspective, 90° from 12 m up: 24 m across at the ground.
+	Capture->FOVAngle = 90.0f;
+	Capture->bCaptureEveryFrame = false;
+	Capture->bCaptureOnMovement = false;
+	// Final colour: translucency is composited after scene colour. No exposure, so a colour stays a colour.
+	Capture->CaptureSource = SCS_FinalColorHDR;
+	Capture->ShowFlags.SetEyeAdaptation(false);
+	Capture->ShowFlags.SetBloom(false);
+	UTextureRenderTarget2D* Target = NewObject<UTextureRenderTarget2D>(GetTransientPackage());
+	Target->RenderTargetFormat = RTF_RGBA16f;
+	Target->ClearColor = FLinearColor::Black;
+	Target->InitAutoFormat(256, 256);
+	Target->UpdateResourceImmediate(true);
+	Capture->TextureTarget = Target;
+	Capture->RegisterComponent();
+	Camera->SetActorLocationAndRotation(FVector(900.0, 300.0, 1200.0), FRotator(-90.0, 0.0, 0.0));
+
+	const double Start = FPlatformTime::Seconds();
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Capture, Target, Start]()
+	{
+		World->SendAllEndOfFrameUpdates();
+		if (!HutongPlanOutline::IsLayerCurrent(World))
+		{
+			if (FPlatformTime::Seconds() - Start < 300.0) return false;
+			AddError(TEXT("The world's plan layer never came up."));
+			World->DestroyWorld(false);
+			return true;
+		}
+		// A scene capture is a game view, and plans are hidden in game (PIE): show this world's layer to it.
+		for (TObjectIterator<UHutongPlanLayerComponent> It; It; ++It)
+		{
+			if (It->GetWorld() == World && It->bHiddenInGame)
+			{
+				It->SetHiddenInGame(false);
+				World->SendAllEndOfFrameUpdates();
+			}
+		}
+		Capture->CaptureScene();
+		TArray<FLinearColor> Pixels;
+		Target->GameThread_GetRenderTargetResource()->ReadLinearColorPixels(Pixels);
+		// HUTONG_PLAN_CAPTURE=<dir>: the picture as PNGs, perspective and ortho, to look at.
+		const FString Dump = FPlatformMisc::GetEnvironmentVariable(TEXT("HUTONG_PLAN_CAPTURE"));
+		if (!Dump.IsEmpty())
+		{
+			auto Save = [&](const TCHAR* Name)
+			{
+				TArray<FLinearColor> Shot;
+				Capture->CaptureScene();
+				Target->GameThread_GetRenderTargetResource()->ReadLinearColorPixels(Shot);
+				TArray<FColor> Colours;
+				for (const FLinearColor& P : Shot) Colours.Add(FLinearColor(P.R, P.G, P.B, 1.0f).ToFColor(true));
+				TArray64<uint8> Png;
+				FImageUtils::PNGCompressImageArray(256, 256, Colours, Png);
+				FFileHelper::SaveArrayToFile(Png, *(Dump / Name));
+			};
+			Save(TEXT("plan_perspective.png"));
+			Capture->ProjectionType = ECameraProjectionMode::Orthographic;
+			Capture->OrthoWidth = 2400.0f;
+			Save(TEXT("plan_ortho.png"));
+			Capture->OrthoWidth = 1200.0f;
+			Save(TEXT("plan_ortho_zoomed.png"));
+		}
+		// The house colour is dark blue: blue well over red, and over the black of the empty world.
+		const int32 Blue = Algo::CountIf(Pixels, [](const FLinearColor& P) { return P.B > 0.01f && P.B > 2.0f * P.R; });
+		const int32 Lit = Algo::CountIf(Pixels, [](const FLinearColor& P) { return P.R + P.G + P.B > 0.001f; });
+		float MaxBlue = 0.0f;
+		for (const FLinearColor& P : Pixels) MaxBlue = FMath::Max(MaxBlue, P.B);
+		UE_LOG(LogTemp, Display, TEXT("Plan layer: %d of %d pixels in the house blue, %d not black, brightest blue %.3f"),
+			Blue, Pixels.Num(), Lit, MaxBlue);
+		TestTrue(TEXT("the plans' lines and fills reach the picture"), Blue > 200);
+		World->DestroyWorld(false);
+		return true;
+	}));
 	return true;
 }

@@ -122,9 +122,21 @@ namespace HutongPlanOutline
 	// Off (default): plans draw in the world's depth, so a built building hides those behind it.
 	bool ArePlansOverBuildings();
 	void SetPlansOverBuildings(bool bOver);
+
+	// Module startup and shutdown: the per-world plan layers (UHutongPlanLayerComponent) follow the plans.
+	void StartLayers();
+	void StopLayers();
+
+	// The layers' material, made on first use; null under -nullrhi.
+	UMaterial* GetPlanMaterial();
+	// Whether World's layer is up and has drawn every change so far (tests).
+	bool IsLayerCurrent(const UWorld* World);
 }
 
-// The drawing of a building that has been laid out but not built.
+// A building that has been laid out but not built. Its own proxy draws only while selected (over the
+// rest) and in the hit-proxy pass (a click selects the building); every plan in the world is drawn by
+// the world's one UHutongPlanLayerComponent — a drawing proxy per plan took the frame on a city map
+// from 8 to 67 ms, all render and RHI thread (user, 2026-10-06).
 UCLASS(ClassGroup=Hutong, meta=(DisplayName="Hutong Plan Outline"))
 class UHutongPlanOutlineComponent : public UPrimitiveComponent
 {
@@ -178,22 +190,41 @@ public:
 
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+	// A mesh batch whose material the proxy did not declare is dropped (with an ensure).
+	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
 
 	// This plan's footprint in world space, corners in order.
 	void GetWorldQuad(FVector OutCorners[4]) const;
 	// Drawing height step: the type's layer (HutongPlanColours::Layers).
 	int32 GetStackLevel() const;
-	// Neighbours' edges that win over this plan's where they coincide: two plans drawing one edge
-	// leave the winner to the engine's draw order, which reshuffles now and then (the edge flickers).
+	// Neighbours' edges that win over this plan's where they coincide: a shared edge is drawn once,
+	// in the winner's colour.
 	TArray<TPair<FVector, FVector>> CollectWinningNeighbourEdges() const;
 
 protected:
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
 	virtual void OnUpdateTransform(EUpdateTransformFlags UpdateTransformFlags, ETeleportType Teleport) override;
+	virtual void CreateRenderState_Concurrent(FRegisterComponentContext* Context) override;
+	virtual void DestroyRenderState_Concurrent() override;
+};
 
-private:
-	// Plans touching Box redraw, so a shared edge is handed over when this one appears, moves or goes.
-	void DirtyNeighbours(const FBox& Box) const;
-	FBox LastDrawnBox = FBox(ForceInit);
+// Every plan of one world in one proxy: fills and lines in one vertex buffer, built when a plan changes
+// and drawn as one batch. Lines are quads widened to their pixel width in the vertex shader, so the
+// buffer holds at any zoom. Transient, owned by no actor, registered with the world like its line batcher.
+UCLASS(Transient)
+class UHutongPlanLayerComponent : public UPrimitiveComponent
+{
+	GENERATED_BODY()
+
+public:
+	UHutongPlanLayerComponent();
+
+	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
+	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+	// A mesh batch whose material the proxy did not declare is dropped (with an ensure).
+	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
+
+	// The plans' version this layer last drew; the ticker rebuilds when they have moved on.
+	uint32 DrawnVersion = 0;
 };

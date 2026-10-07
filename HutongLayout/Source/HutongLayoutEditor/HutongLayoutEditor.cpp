@@ -24,6 +24,7 @@ void FHutongLayoutEditorModule::StartupModule()
 
 	// Plans draw whether or not the mode is active, so load their visibility before anyone enters it.
 	HutongPlanOutline::LoadVisibilityFromConfig();
+	HutongPlanOutline::StartLayers();
 
 	// New library meshes are saved once their background build is done (and all before a level save).
 	HutongGen::StartLibrarySaver();
@@ -32,6 +33,7 @@ void FHutongLayoutEditorModule::StartupModule()
 void FHutongLayoutEditorModule::ShutdownModule()
 {
 	HutongGen::StopLibrarySaver();
+	HutongPlanOutline::StopLayers();
 	HutongContextMenu::Unregister();
 	HutongPanelCustomizations::Unregister();
 	FHutongLayoutCommands::Unregister();
