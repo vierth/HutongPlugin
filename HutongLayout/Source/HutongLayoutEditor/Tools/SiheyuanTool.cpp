@@ -27,10 +27,8 @@ void UHutongSiheyuanTool::GetEffectiveRectBounds(
 	double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const
 {
 	Super::GetEffectiveRectBounds(OutMinX, OutMinY, OutMaxX, OutMaxY);
-	// Suggested-footprint snap obeys the snapping switch.
 	if (!Settings || !SnappingActive()) return;
 
-	// One end is the anchor; the far end moves.
 	auto SnapSide = [&](double& Lo, double& Hi)
 	{
 		const double Want = Settings->Params.SnapExtent(Hi - Lo);
@@ -57,7 +55,6 @@ void UHutongSiheyuanTool::RegisterToolSettings()
 	ApplyDefaultPreset(Presets, HutongPresets::DefaultSiheyuanName());
 }
 
-// Settings' params with Width and Depth from the drag.
 FHutongSiheyuanParams UHutongSiheyuanTool::GetResolvedParams() const
 {
 	FHutongSiheyuanParams P = Settings ? Settings->Params : FHutongSiheyuanParams();
@@ -80,7 +77,6 @@ FHutongSiheyuanParams UHutongSiheyuanTool::GetResolvedParams() const
 	return P;
 }
 
-// Veranda depth as built, clamped against the drag depth.
 double UHutongSiheyuanTool::GetEffectiveVerandaDepth() const
 {
 	if (!Settings) return 0.0;
@@ -106,7 +102,6 @@ FString UHutongSiheyuanTool::GetPlacementDetail() const
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
 	const double FacadeLen = HutongGen::BaySide::IsAlongX(BaySide) ? (MaxX - MinX) : (MaxY - MinY);
 
-	// Whether the footprint sits on the preset's suggestion.
 	auto TargetText = [this, MinX, MinY, MaxX, MaxY]()
 	{
 		if (!Settings) return FString();
@@ -128,14 +123,12 @@ FString UHutongSiheyuanTool::GetPlacementDetail() const
 			: FString::Printf(TEXT(" · suggested %.0f x %.0f"), P.SuggestedFrontage, P.GetSuggestedDepth());
 	};
 
-	// Veranda clamps to the drag depth, so built value may differ from the parameter.
 	auto VerandaText = [this]()
 	{
 		const double V = GetEffectiveVerandaDepth();
 		return V > 0.0 ? FString::Printf(TEXT(" · veranda (廊) %.0f cm"), V) : FString();
 	};
 
-	// Bays unequal once 明間/次間 applies.
 	if (Settings && Settings->Params.bDeriveProportions && N > 1)
 	{
 		const int32 Central = Settings->Params.GetDoorBayIndex(N);
@@ -189,7 +182,6 @@ int32 UHutongSiheyuanTool::ComputeBayCountForSide(HutongGen::EBaySide Side) cons
 
 void UHutongSiheyuanTool::AdjustBracketValue(int32 Delta, bool /*bFine*/, bool /*bCoarse*/)
 {
-	// First press steps off the derived count.
 	const int32 Current = ComputeBayCountForSide(BaySide);
 	BayCountOverride = FMath::Clamp(Current + Delta, 1, MaxBayCount);
 }
@@ -199,10 +191,8 @@ void UHutongSiheyuanTool::AdjustHeight(double DeltaCm)
 	if (!Settings) return;
 	FHutongSiheyuanParams& P = Settings->Params;
 
-	// Move the eave, keep the roof rise.
 	if (P.bDeriveProportions && P.bDeriveEaveFromBays)
 	{
-		// Seeded from the resolved params.
 		P.EaveHeight = GetResolvedParams().GetEaveHeight();
 		P.bDeriveEaveFromBays = false;
 	}
@@ -212,7 +202,6 @@ void UHutongSiheyuanTool::AdjustHeight(double DeltaCm)
 
 double UHutongSiheyuanTool::GetPreviewHeight() const
 {
-	// Eave, not ridge: the keys move it, and corner posts stand where walls meet the eave line.
 	return Settings ? GetResolvedParams().GetEaveHeight() : 0.0;
 }
 
@@ -251,13 +240,11 @@ TArray<FText> UHutongSiheyuanTool::GetStageNames() const
 
 FText UHutongSiheyuanTool::GetStagePromptText() const
 {
-	// Committed stage is the facade-side pick, not "click to place".
 	if (bIsDragging && bRectCommitted && !bRotateModeActive)
 	{
 		return NSLOCTEXT("HutongSiheyuanTool", "PromptBaySide",
 			"Move to pick the side that gets the bay facade (green ticks), [ and ] change the bay count, then click to place.");
 	}
-	// Preset names the building type.
 	if (!bIsDragging && Presets && !Presets->Preset.IsEmpty() && GetPlanEditPromptText().IsEmpty())
 	{
 		return FText::Format(NSLOCTEXT("HutongSiheyuanTool", "PromptAnchorPreset",
@@ -280,14 +267,12 @@ void UHutongSiheyuanTool::Render(IToolsContextRenderAPI* RenderAPI)
 	const double SizeY = MaxY - MinY;
 	if (SizeX < 1.0 || SizeY < 1.0) return;
 
-	// Preset's suggested footprint, ghosted from the anchor as a drag target.
 	if (!bRectCommitted)
 	{
 		const FHutongSiheyuanParams& P = Settings ? Settings->Params : FHutongSiheyuanParams();
 		if (P.bSnapToSuggested && SnappingActive()
 			&& (P.SuggestedFrontage > 0.0 || P.GetSuggestedDepth() > 0.0))
 		{
-			// Suggested extent per axis, laid out from the anchor in the drag direction.
 			const double GX = P.SnapExtent(SizeX);
 			const double GY = P.SnapExtent(SizeY);
 			const double GhostMinX = (MaxX > 0.0) ? MinX : MaxX - GX;
@@ -298,7 +283,6 @@ void UHutongSiheyuanTool::Render(IToolsContextRenderAPI* RenderAPI)
 			const FVector G2 = LocalRectToWorld(GhostMinX + GX, GhostMinY + GY);
 			const FVector G3 = LocalRectToWorld(GhostMinX,      GhostMinY + GY);
 
-			// Cool, dashed, vs the footprint's solid warm yellow: the height preview's cues for "projection".
 			const FLinearColor Ghost(0.35f, 0.75f, 1.0f, 1.0f);
 			DrawDashedPreviewLine(PDI, G0, G1, Ghost, 2.5f, 28.0);
 			DrawDashedPreviewLine(PDI, G1, G2, Ghost, 2.5f, 28.0);
@@ -317,7 +301,7 @@ void UHutongSiheyuanTool::Render(IToolsContextRenderAPI* RenderAPI)
 	const double Span = Edge.bAlongX ? SizeX : SizeY;
 	const double SpanMin = Edge.bAlongX ? MinX : MinY;
 
-	// Same params helper as the generator (明間/次間 included), turned like the mesh: +Y and -X reverse the frontage and the door bay.
+	// +Y and -X reverse the frontage and the door bay.
 	FHutongPlanBays Bays;
 	for (int32 i = 0; i <= N; ++i)
 	{
@@ -329,11 +313,9 @@ void UHutongSiheyuanTool::Render(IToolsContextRenderAPI* RenderAPI)
 
 	DrawRectBaysAndFacing(PDI, BaySide, MinX, MinY, MaxX, MaxY, Bays.Boundaries, Bays.DoorBay);
 
-	// 前廊: columns on the footprint edge, wall set back behind them.
 	const double VerandaDepth = GetEffectiveVerandaDepth();
 	if (VerandaDepth > 0.0)
 	{
-		// Inward = minus the edge's outward normal.
 		const FVector2D In(-Edge.OutDir.X, -Edge.OutDir.Y);
 		const double WallCoord = Edge.FixedCoord + (Edge.bAlongX ? In.Y : In.X) * VerandaDepth;
 
@@ -348,7 +330,6 @@ void UHutongSiheyuanTool::Render(IToolsContextRenderAPI* RenderAPI)
 void UHutongSiheyuanTool::BuildMeshForRect(double SizeX, double SizeY, FDynamicMesh3& OutMesh,
 	EHutongDetail Level)
 {
-	// Same entry point the placed actor rebuilds through.
 	UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(
 		Settings ? Settings->Params : FHutongSiheyuanParams(),
 		BaySide, BayCountOverride, SizeX, SizeY, OutMesh, Level);
@@ -372,10 +353,10 @@ void UHutongSiheyuanTool::AttachBuildingComponent(AStaticMeshActor* Actor, doubl
 
 	StampDetail(Building);
 
-	// AddInstanceComponent, not just RegisterComponent: else absent from Details and not saved.
+	// AddInstanceComponent so it shows in Details and is saved.
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
 
-	// After registration: lights attach to the actor root, which needs the component live.
+	// After registration: attachments need the component live.
 	Building->ApplyPlacementAttachments();
 }

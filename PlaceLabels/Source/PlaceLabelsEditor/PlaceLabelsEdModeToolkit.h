@@ -14,9 +14,7 @@ public:
 	virtual FText GetToolPaletteDisplayName(FName PaletteName) const override;
 	virtual void BuildToolPalette(FName PaletteName, FToolBarBuilder& ToolbarBuilder) override;
 
-	// Place Labels panel on top of the default mode and tool details.
 	virtual TSharedPtr<SWidget> GetInlineContent() const override;
 
-	// "Plugin last updated <time>": the last commit to change this plugin, in local time.
 	static FText PluginUpdatedText();
 };

@@ -5,65 +5,51 @@
 #include "Components/PrimitiveComponent.h"
 #include "Generation/BaySide.h"
 #include "Generation/HutongFootprint.h"
+#include "UObject/ObjectKey.h"
 #include "HutongPlanOutlineComponent.generated.h"
 
-// Plan outline colour per type, the only thing telling plans apart. Grouped like the palette
-// tabs: houses warm, gates hot, enclosure cool, garden green.
+// Dark and saturated to read on the light paper map.
 namespace HutongPlanColours
 {
-	// Selection, drawn under the type colour's outline: white is no type's hue.
 	inline const FLinearColor Selected(1.00f, 1.00f, 1.00f, 1.0f);
 
-	// Buildings.
-	inline const FLinearColor House(0.05f, 0.12f, 0.45f, 1.0f);      // 正房 and its family: dark blue, reads on the paper
-	inline const FLinearColor Shopfront(1.00f, 0.70f, 0.30f, 1.0f);  // 鋪面房
-	// Shopfront hue, warmer: on a plan the two are the same rectangle.
-	inline const FLinearColor Storey(1.00f, 0.55f, 0.15f, 1.0f);     // 樓
-	inline const FLinearColor Hall(0.78f, 0.55f, 1.00f, 1.0f);       // 殿
-	inline const FLinearColor Pavilion(0.62f, 0.68f, 1.00f, 1.0f);   // 亭
-	// Bare timber.
-	inline const FLinearColor Frame(0.80f, 0.62f, 0.40f, 1.0f);      // 構架
-	// Yellow toward the passage's green.
-	inline const FLinearColor EarPassage(0.88f, 0.90f, 0.35f, 1.0f); // 耳房過道
+	inline const FLinearColor House(0.04f, 0.09f, 0.36f, 1.0f);
+	inline const FLinearColor Shopfront(0.80f, 0.38f, 0.00f, 1.0f);
+	inline const FLinearColor Storey(0.60f, 0.22f, 0.00f, 1.0f);
+	inline const FLinearColor Hall(0.42f, 0.12f, 0.62f, 1.0f);
+	inline const FLinearColor Pavilion(0.25f, 0.25f, 0.72f, 1.0f);
+	inline const FLinearColor Frame(0.42f, 0.27f, 0.12f, 1.0f);
+	inline const FLinearColor EarPassage(0.45f, 0.45f, 0.00f, 1.0f);
 
-	// Gates and screens.
-	inline const FLinearColor Gate(1.00f, 0.45f, 0.20f, 1.0f);       // 大門
-	inline const FLinearColor InnerGate(1.00f, 0.60f, 0.50f, 1.0f);  // 垂花門
-	inline const FLinearColor Paifang(0.95f, 0.40f, 0.80f, 1.0f);    // 牌坊
-	inline const FLinearColor Screen(0.25f, 0.85f, 0.80f, 1.0f);     // 影壁
+	inline const FLinearColor Gate(0.85f, 0.00f, 0.00f, 1.0f);
+	inline const FLinearColor InnerGate(0.72f, 0.00f, 0.36f, 1.0f);
+	inline const FLinearColor Paifang(0.58f, 0.00f, 0.58f, 1.0f);
+	inline const FLinearColor Screen(0.00f, 0.40f, 0.36f, 1.0f);
 
-	// Enclosure.
-	inline const FLinearColor Wall(0.55f, 0.72f, 0.95f, 1.0f);       // 院牆, onto the lane
-	// Same generator as 院牆, told apart only by colour; greener than its blue, same family.
-	inline const FLinearColor CourtWall(0.35f, 0.85f, 0.88f, 1.0f);  // 隔牆, inside the compound
-	// 城牆: the lane wall's blue, darker and greyer — the same family at city scale.
-	inline const FLinearColor CityWall(0.40f, 0.48f, 0.78f, 1.0f);   // 城牆
-	inline const FLinearColor Corridor(0.40f, 0.90f, 0.55f, 1.0f);   // 遊廊
-	inline const FLinearColor Passage(0.60f, 0.85f, 0.45f, 1.0f);    // 過道
-	inline const FLinearColor Path(0.78f, 0.78f, 0.72f, 1.0f);       // 甬路
+	inline const FLinearColor Wall(0.10f, 0.22f, 0.62f, 1.0f);
+	inline const FLinearColor CourtWall(0.00f, 0.42f, 0.68f, 1.0f);
+	inline const FLinearColor CityWall(0.20f, 0.24f, 0.40f, 1.0f);
+	inline const FLinearColor PalaceWall(0.48f, 0.08f, 0.16f, 1.0f);
+	inline const FLinearColor ImperialWall(0.62f, 0.20f, 0.06f, 1.0f);
+	inline const FLinearColor Corridor(0.00f, 0.45f, 0.22f, 1.0f);
+	inline const FLinearColor Passage(0.30f, 0.45f, 0.00f, 1.0f);
+	inline const FLinearColor Path(0.33f, 0.31f, 0.28f, 1.0f);
 
-	// Garden.
-	inline const FLinearColor FlowerBed(0.35f, 0.80f, 0.35f, 1.0f);  // 花池
-	inline const FLinearColor WaterJar(0.30f, 0.72f, 1.00f, 1.0f);   // 魚缸
+	inline const FLinearColor FlowerBed(0.15f, 0.55f, 0.00f, 1.0f);
+	inline const FLinearColor WaterJar(0.00f, 0.30f, 0.80f, 1.0f);
 
-	// 小房: the house's blue, greyed — a building, but a minor one.
-	inline const FLinearColor SmallBuilding(0.45f, 0.55f, 0.72f, 1.0f); // 小房
+	inline const FLinearColor SmallBuilding(0.20f, 0.26f, 0.44f, 1.0f);
 
-	// Traced, type not known: cool grey, no family's hue, cooler than the path.
-	inline const FLinearColor Unknown(0.60f, 0.60f, 0.68f, 1.0f);   // 未知
+	inline const FLinearColor Unknown(0.28f, 0.28f, 0.33f, 1.0f);
 
-	// Fallback for a type with no colour.
-	inline const FLinearColor Building(1.00f, 0.85f, 0.20f, 1.0f);
+	inline const FLinearColor Building(0.60f, 0.50f, 0.00f, 1.0f);
 
-	// Drawing layer per type, bottom first: plans of two types on one spot are drawn apart in height,
-	// so depth decides, not the engine's draw order. Like types share a colour, a tie there is not seen.
-	// Ground first, then buildings large to small, enclosure and garden on top.
+	// Plans of two types on one spot are drawn apart in height by this order, bottom first.
 	inline const FLinearColor* const Layers[] = {
-		&Path, &Unknown, &CityWall, &Hall, &House, &Storey, &Shopfront, &Frame, &SmallBuilding, &Pavilion, &Corridor, &EarPassage, &Passage,
+		&Path, &Unknown, &CityWall, &PalaceWall, &ImperialWall, &Hall, &House, &Storey, &Shopfront, &Frame, &SmallBuilding, &Pavilion, &Corridor, &EarPassage, &Passage,
 		&Gate, &InnerGate, &Paifang, &Screen, &Wall, &CourtWall, &FlowerBed, &WaterJar, &Building };
 	inline constexpr int32 LayerCount = UE_ARRAY_COUNT(Layers);
 
-	// A colour on no list draws on top.
 	inline int32 LayerOf(const FLinearColor& Colour)
 	{
 		for (int32 i = 0; i < LayerCount; ++i)
@@ -75,11 +61,9 @@ namespace HutongPlanColours
 }
 
 // Bay boundaries along the bay axis in footprint coords, both ends included (bays = boundaries - 1).
-// Read from the generators' BayBoundary so the plan matches the build.
 struct FHutongPlanBays
 {
 	TArray<double> Boundaries;
-	// The bay the front door is in, as an index into the spans between boundaries.
 	int32 DoorBay = INDEX_NONE;
 	// Column radius: the end-bay skew seam stops at the first inner column's face.
 	double ColumnRadius = 0.0;
@@ -87,8 +71,7 @@ struct FHutongPlanBays
 
 namespace HutongGen::PlanBays
 {
-	// Generators build front on -Y and the mesh is turned; boundaries go through the same
-	// RotateVertex, reversed (with the door index) when the turn reverses their order.
+	// Boundaries take the mesh's RotateVertex turn, reversed with the door index when it flips their order.
 	inline void OntoFacade(FHutongPlanBays& Bays, EHutongBaySide Side, double SizeX, double SizeY)
 	{
 		const bool bAlongX = BaySide::IsAlongX(Side);
@@ -108,35 +91,28 @@ namespace HutongGen::PlanBays
 	}
 }
 
-// Editor-wide switch for plan outlines, not per placement. Mirrored by the cvar
-// hutong.ShowPlanOutlines (lets other plugins toggle it without linking); saved in the per-project ini.
-// Hidden also removes the hit proxy, deliberately: a hidden outline must not swallow clicks.
+// Mirrored by the cvar hutong.ShowPlanOutlines so other plugins toggle it without linking.
 namespace HutongPlanOutline
 {
 	bool ArePlansVisible();
 	void SetPlansVisible(bool bVisible);
 
-	// Called once at module startup; the cvar defaults to on.
 	void LoadVisibilityFromConfig();
 
-	// Off (default): plans draw in the world's depth, so a built building hides those behind it.
 	bool ArePlansOverBuildings();
 	void SetPlansOverBuildings(bool bOver);
 
-	// Module startup and shutdown: the per-world plan layers (UHutongPlanLayerComponent) follow the plans.
 	void StartLayers();
 	void StopLayers();
 
-	// The layers' material, made on first use; null under -nullrhi.
 	UMaterial* GetPlanMaterial();
-	// Whether World's layer is up and has drawn every change so far (tests).
 	bool IsLayerCurrent(const UWorld* World);
 }
 
 // A building that has been laid out but not built. Its own proxy draws only while selected (the layer then
-// leaves it out) and in the hit-proxy pass (a click selects the building); every other plan in the world
-// is drawn by the world's one UHutongPlanLayerComponent — a drawing proxy per plan took the frame on a city map
-// from 8 to 67 ms, all render and RHI thread (user, 2026-10-06).
+// hides it) and takes the clicks then; every other plan in the world is drawn, and hit-tested, by the world's
+// one UHutongPlanLayerComponent — a drawing proxy per plan took the frame on a city map from 8 to 67 ms, all
+// render and RHI thread (user, 2026-10-06), and one hit-proxy mesh per plan drew 10k of them on every mouse move.
 UCLASS(ClassGroup=Hutong, meta=(DisplayName="Hutong Plan Outline"))
 class UHutongPlanOutlineComponent : public UPrimitiveComponent
 {
@@ -145,7 +121,6 @@ class UHutongPlanOutlineComponent : public UPrimitiveComponent
 public:
 	UHutongPlanOutlineComponent();
 
-	// Editor-module class: stripped at cook, like the building component.
 	virtual bool IsEditorOnly() const override { return true; }
 
 	UPROPERTY(VisibleAnywhere, Category="Plan", meta=(ToolTip="Size of the footprint in the actor's local frame, in cm."))
@@ -193,12 +168,9 @@ public:
 	// A mesh batch whose material the proxy did not declare is dropped (with an ensure).
 	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
 
-	// This plan's footprint in world space, corners in order.
 	void GetWorldQuad(FVector OutCorners[4]) const;
-	// Drawing height step: the type's layer (HutongPlanColours::Layers).
 	int32 GetStackLevel() const;
-	// Neighbours' edges that win over this plan's where they coincide: a shared edge is drawn once,
-	// in the winner's colour.
+	// A shared edge is drawn once, in the winner's colour.
 	TArray<TPair<FVector, FVector>> CollectWinningNeighbourEdges() const;
 
 protected:
@@ -224,4 +196,8 @@ public:
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 	// A mesh batch whose material the proxy did not declare is dropped (with an ensure).
 	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
+
+	void SendSelection();
+
+	TMap<TObjectKey<UHutongPlanOutlineComponent>, int32> PlanIndices;
 };

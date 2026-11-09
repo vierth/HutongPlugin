@@ -40,8 +40,6 @@ namespace
 		return Action;
 	}
 
-	// ---- A field reached from the component through nested structs ----
-
 	struct FField
 	{
 		TArray<const FProperty*> Chain;	// from the component's own property down to the field
@@ -55,20 +53,17 @@ namespace
 		return Data;
 	}
 
-	// The marked basics (HutongBasic) that are switches or choices, nested params walked.
 	void CollectOptions(const UStruct* Struct, const TArray<const FProperty*>& Chain, const FString& Prefix, int32 Depth, TArray<FField>& Out)
 	{
 		for (TFieldIterator<FProperty> It(Struct); It; ++It)
 		{
 			const FProperty* P = *It;
 			if (!P->HasAnyPropertyFlags(CPF_Edit)) continue;
-			// Fields the enclosing struct says do not apply here (an ear room's verandas).
 			if (Chain.Num() > 0 && HutongPanel::IsHiddenBy(*P, Chain.Last())) continue;
 			TArray<const FProperty*> Next = Chain;
 			Next.Add(P);
 			const FString Name = Prefix + P->GetDisplayNameText().ToString();
-			// Only what the panel's simple view shows: a nested group opens only when marked basic, so
-			// an ear room's closing and outer walls do not offer a wall's choices.
+			// Only what the panel's simple view shows: a nested group opens only when marked basic.
 			if (!HutongPanel::PassesSimple(*P)) continue;
 			if (const FStructProperty* S = CastField<FStructProperty>(P))
 			{
@@ -101,16 +96,13 @@ namespace
 		else CastField<FByteProperty>(P)->SetPropertyValue(Value, (uint8)New);
 	}
 
-	// Sets the field on every one of the class, through the component's own edit hook (clamps, rebuild).
 	void SetField(const TArray<UHutongBuildingComponent*>& Buildings, const FField& F, TFunctionRef<void(const FProperty*, void*)> Write)
 	{
 		const FScopedTransaction Transaction(FText::Format(LOCTEXT("SetField", "Set {0}"), F.Label));
-		// A field of the base (metadata) is on every building; a Params field only on its own class.
 		const UClass* Owner = F.Chain[0]->GetOwnerClass();
 		for (UHutongBuildingComponent* B : Buildings)
 		{
 			if (!Owner || !B->GetClass()->IsChildOf(Owner)) continue;
-			// Locked: metadata yes, the building's own options no.
 			if (B->bLocked && Owner != UHutongBuildingComponent::StaticClass()) continue;
 			if (B->GetOwner()) B->GetOwner()->Modify();
 			B->Modify();
@@ -121,7 +113,6 @@ namespace
 		}
 	}
 
-	// A choice field as a submenu of its values, the first building's checked.
 	void AddEnumMenu(FMenuBuilder& Menu, const TArray<UHutongBuildingComponent*>& Buildings, const FField& F)
 	{
 		const UEnum* Enum = EnumOf(F.Chain.Last());
@@ -155,8 +146,6 @@ namespace
 		const FProperty* P = UHutongBuildingComponent::StaticClass()->FindPropertyByName(Name);
 		return { { P }, P ? P->GetDisplayNameText() : FText::FromName(Name) };
 	}
-
-	// ---- Notes, in a small window of their own ----
 
 	void EditNotes(const TArray<UHutongBuildingComponent*>& Buildings)
 	{
@@ -196,8 +185,6 @@ namespace
 		}
 	}
 
-	// ---- The section ----
-
 	void FillSection(UToolMenu* Menu)
 	{
 		const TArray<UHutongBuildingComponent*> Buildings = HutongDetailOps::CollectSelected();
@@ -225,7 +212,6 @@ namespace
 		Sub(TEXT("HutongPreset"), LOCTEXT("Preset", "Preset"), LOCTEXT("PresetTip", "Another preset of the building's type, as if drawn here with it."),
 			[Buildings](FMenuBuilder& M) { FillPresetMenu(M, Buildings, &ChangeSelectionAsked); });
 
-		// Switches and choices the panel marks as basic, for one type at a time.
 		TArray<FField> Options;
 		if (bOneClass) Options = OptionsOf(First);
 		if (Options.Num() > 0)
@@ -252,7 +238,6 @@ namespace
 				});
 		}
 
-		// Facade and bays: what F, Shift+[ ] and [ ] do in a tool.
 		EHutongBaySide Side;
 		if (Buildings.ContainsByPredicate([&Side](const UHutongBuildingComponent* B) { return B->GetFacade(Side); }))
 		{
@@ -273,13 +258,21 @@ namespace
 			Entry(TEXT("HutongBayMore"), LOCTEXT("BayMore", "One Bay More (])"), FText::GetEmpty(), [Buildings]() { HutongDetailOps::AdjustBays(Buildings, 1); });
 			Entry(TEXT("HutongBayFewer"), LOCTEXT("BayFewer", "One Bay Fewer ([)"), FText::GetEmpty(), [Buildings]() { HutongDetailOps::AdjustBays(Buildings, -1); });
 		}
+		if (Buildings.ContainsByPredicate([](const UHutongBuildingComponent* B) { return B->CanMoveDoorBay(); }))
+		{
+			Entry(TEXT("HutongDoorLeft"), LOCTEXT("DoorLeft", "Door One Bay Left (Ctrl+[)"), LOCTEXT("DoorSideTip", "Seen from the front."),
+				[Buildings]() { HutongDetailOps::MoveDoorBay(Buildings, -1); });
+			Entry(TEXT("HutongDoorRight"), LOCTEXT("DoorRight", "Door One Bay Right (Ctrl+])"), LOCTEXT("DoorSideTip", "Seen from the front."),
+				[Buildings]() { HutongDetailOps::MoveDoorBay(Buildings, 1); });
+		}
 		if (Buildings.ContainsByPredicate([](const UHutongBuildingComponent* B) { return B->IsA<UHutongWallBuildingComponent>(); }))
 		{
 			Entry(TEXT("HutongGate"), LOCTEXT("Gate", "Gate In Or Out (G)"), LOCTEXT("GateTip", "Takes the wall's opening out, or puts a gate (牆垣門) in."),
 				[Buildings]() { HutongDetailOps::ToggleGate(Buildings); });
+			Entry(TEXT("HutongAddGate"), LOCTEXT("AddGate", "Add A Gate (Shift+G)"), LOCTEXT("AddGateTip", "Puts another gate (牆垣門) in the wall's widest clear stretch."),
+				[Buildings]() { HutongDetailOps::AddGate(Buildings); });
 		}
 
-		// Metadata: what the map says and what the student thinks of it.
 		Sub(TEXT("HutongMetadata"), LOCTEXT("Metadata", "Metadata"), LOCTEXT("MetadataTip", "Confidence and notes."),
 			[Buildings](FMenuBuilder& M)
 			{
@@ -288,7 +281,6 @@ namespace
 					FUIAction(FExecuteAction::CreateLambda([Buildings]() { EditNotes(Buildings); })));
 			});
 
-		// How much is built.
 		Sub(TEXT("HutongDetail"), LOCTEXT("Detail", "Detail Level"), LOCTEXT("DetailTip", "How much of the building's geometry is built, or only its plan."),
 			[Buildings](FMenuBuilder& M)
 			{
@@ -408,7 +400,6 @@ void Register()
 	{
 		FToolMenuOwnerScoped Owner(OwnerName);
 		UToolMenu* Menu = UToolMenus::Get()->ExtendMenu("LevelEditor.ActorContextMenu");
-		// First in the menu: the building's own choices before the editor's generic ones.
 		Menu->AddDynamicSection(TEXT("HutongBuildingDynamic"), FNewToolMenuDelegate::CreateStatic(&FillSection),
 			FToolMenuInsert(NAME_None, EToolMenuInsertType::First));
 	}));

@@ -30,7 +30,6 @@ public:
 		meta = (DisplayName = "On Left All Regions"))
 	void OnLeftAllRegions();
 
-	// Called by UPlaceLabelSubsystem. Not Blueprint-callable: this widget is a view.
 	virtual void SetChain(const TArray<FPlaceLabelEntry>& InChain);
 };
 

@@ -13,12 +13,10 @@ namespace PlaceLabelsFootprint
 
 namespace
 {
-	// Resolved once and cached.
 	const TCHAR* BuildingComponentPath = TEXT("/Script/HutongLayoutEditor.HutongBuildingComponent");
 	const TCHAR* FootprintFunctionName = TEXT("GetFootprintSize");
 
-	// Shared with HutongLayout's panel: hidden plans withdraw the trace offer. Unregistered without
-	// HutongLayout; the class lookup then answers.
+	// Shared with HutongLayout's panel: hidden plans withdraw the trace offer.
 	bool ArePlansShown()
 	{
 		static IConsoleVariable* Var =
@@ -28,7 +26,7 @@ namespace
 
 	UClass* ResolveBuildingComponentClass()
 	{
-		// Static: without HutongLayout, one failed lookup, not one per hover tick.
+		// Static: one lookup per session, even when it fails without HutongLayout.
 		static bool bResolved = false;
 		static TWeakObjectPtr<UClass> Cached;
 
@@ -47,7 +45,7 @@ namespace
 	};
 
 	// Mirrors `void GetFootprintCornersLocal(FVector2D& C0, FVector2D& C1, FVector2D& C2, FVector2D& C3) const`:
-	// skewed corners. Missing on older HutongLayout → rectangle.
+	// skewed corners; a rectangle when the function is missing.
 	struct FGetFootprintCornersParams
 	{
 		FVector2D C0 = FVector2D::ZeroVector;

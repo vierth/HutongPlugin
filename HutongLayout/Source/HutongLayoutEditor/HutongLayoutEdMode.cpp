@@ -26,6 +26,10 @@
 #include "Tools/WaterJarTool.h"
 #include "Tools/UnknownTool.h"
 #include "Tools/CityWallTool.h"
+#include "Tools/WallCornerTool.h"
+#include "Tools/ArrowTowerTool.h"
+#include "Tools/CityGateTool.h"
+#include "Tools/GateComplexTool.h"
 #include "Tools/SmallBuildingTool.h"
 #include "Tools/FrameTool.h"
 #include "Tools/PavilionTool.h"
@@ -43,6 +47,9 @@
 #include "InputCoreTypes.h"
 #include "Framework/Application/IInputProcessor.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Tools/HutongDetailOps.h"
+#include "Widgets/Notifications/SNotificationList.h"
+#include "Framework/Notifications/NotificationManager.h"
 
 class FHutongInputProcessor : public IInputProcessor
 {
@@ -59,8 +66,7 @@ public:
 		return Cast<URectDragToolBase>(TM->GetActiveTool(EToolSide::Left));
 	}
 
-	// Typing into a field (the heights window's eaves, a Details number): Esc, -, = and the letters
-	// are the text's, not the tool's.
+	// While typing into a field, Esc, -, = and the letters belong to the text.
 	static bool IsTyping(FSlateApplication& SlateApp)
 	{
 		const TSharedPtr<SWidget> Focused = SlateApp.GetKeyboardFocusedWidget();
@@ -70,29 +76,34 @@ public:
 	virtual bool HandleKeyDownEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
 	{
 		URectDragToolBase* Tool = GetActiveRectTool();
-		if (!Tool || IsTyping(SlateApp)) return false;
+		if (IsTyping(SlateApp)) return false;
+		if (!Tool) return false;
 
 		const FKey Key = InKeyEvent.GetKey();
 		const bool bIdle = !Tool->IsPlacingActive() && !Tool->IsEditingPlan();
 		if (Key == EKeys::Escape && bIdle && Tool->CancelSelectedCycle()) return true;
 		if (Key == EKeys::P || Key == EKeys::T)
 		{
-			// Selection's preset / type, chosen but not applied; Ctrl+P and the like stay the editor's,
-			// and with no building selected the viewport keeps the key.
+			// With no building selected the viewport keeps the key.
 			const FModifierKeysState& Mods = InKeyEvent.GetModifierKeys();
 			if (!bIdle || InKeyEvent.IsRepeat() || Mods.IsControlDown() || Mods.IsCommandDown() || Mods.IsAltDown()) return false;
-			// Plain: a menu at the cursor to pick from; Shift: the next one along, Enter applies.
 			if (Mods.IsShiftDown()) return Key == EKeys::P ? Tool->CycleSelectedPreset(1) : Tool->CycleSelectedType(1);
 			return Tool->OpenSelectedMenu(Key == EKeys::T, SlateApp.GetCursorPos());
 		}
 		if (Key == EKeys::Enter)
 		{
-			return bIdle && !InKeyEvent.IsRepeat() && Tool->ConfirmSelectedCycle();
+			if (InKeyEvent.IsRepeat()) return false;
+			if (Tool->IsPlacingActive()) return Tool->FinishPlacement();
+			return bIdle && Tool->ConfirmSelectedCycle();
+		}
+		if (Key == EKeys::Escape && Tool->IsTurning() && !Tool->IsEditingPlan())
+		{
+			Tool->EndTurnMode();
+			return true;
 		}
 		if (Key == EKeys::Escape)
 		{
-			// Cancel what is in hand first (half-drawn rect or plan edit); with nothing in hand, put the
-			// tool down so the preview stops following the cursor.
+			// With nothing in hand, put the tool down so the preview stops following the cursor.
 			if (Tool->IsPlacingActive() || Tool->IsEditingPlan())
 			{
 				Tool->CancelPlacement();
@@ -105,7 +116,7 @@ public:
 		}
 		if (Key == EKeys::Hyphen || Key == EKeys::Equals)
 		{
-			// Height edits the tool's persisted params, so unlike the bay keys it works before a placement starts.
+			// Height edits the tool's persisted params, so it works before a placement starts.
 			const FModifierKeysState& Mods = InKeyEvent.GetModifierKeys();
 			const double Step = Mods.IsShiftDown() ? 5.0 : (Mods.IsControlDown() ? 100.0 : 20.0);
 			Tool->AdjustHeight(Key == EKeys::Equals ? Step : -Step);
@@ -116,11 +127,11 @@ public:
 			// Repeats wanted: holding a bracket key walks the value.
 			if (!Tool->IsPlacingActive())
 			{
-				// Nothing being placed: the selected buildings' bay count; with Shift, their facade a step round.
 				if (InKeyEvent.IsRepeat() || Tool->IsEditingPlan()) return false;
 				const int32 Delta = Key == EKeys::RightBracket ? 1 : -1;
-				return InKeyEvent.GetModifierKeys().IsShiftDown()
-					? Tool->TurnSelectedFacing(Delta) : Tool->AdjustSelectedBays(Delta);
+				const FModifierKeysState& Mods = InKeyEvent.GetModifierKeys();
+				if (Mods.IsControlDown()) return Tool->MoveSelectedDoorBay(Delta);
+				return Mods.IsShiftDown() ? Tool->TurnSelectedFacing(Delta) : Tool->AdjustSelectedBays(Delta);
 			}
 			const FModifierKeysState& Mods = InKeyEvent.GetModifierKeys();
 			Tool->AdjustBracketValue(Key == EKeys::RightBracket ? 1 : -1,
@@ -129,8 +140,16 @@ public:
 		}
 		if (Key == EKeys::R)
 		{
-			// Hold R to rotate the in-progress placement around the first click point.
-			if (!Tool->IsPlacingActive()) return false;
+			// Nothing being placed: turn mode on the selection (with nothing to turn the editor keeps R).
+			if (!Tool->IsPlacingActive())
+			{
+				// Mid plan drag: swallowed, so the editor's scale gizmo stays out.
+				if (Tool->IsEditingPlan()) return true;
+				if (InKeyEvent.IsRepeat()) return Tool->IsTurning();
+				const FModifierKeysState& Mods = InKeyEvent.GetModifierKeys();
+				if (Mods.IsControlDown() || Mods.IsCommandDown() || Mods.IsAltDown()) return false;
+				return Tool->ToggleTurnMode();
+			}
 			if (!InKeyEvent.IsRepeat())
 			{
 				Tool->BeginRotateMode();
@@ -140,19 +159,18 @@ public:
 		if (Key == EKeys::F)
 		{
 			if (InKeyEvent.IsRepeat()) return false;
-			// Nothing being placed: flips the selected building's facade; with no such building the
-			// viewport keeps F for focus.
+			// With no such building the viewport keeps F for focus.
 			if (!Tool->IsPlacingActive()) return !Tool->IsEditingPlan() && Tool->FlipSelectedFacing();
 			Tool->FlipFacing();
 			return true;
 		}
 		if (Key == EKeys::G)
 		{
-			// Toggles the gate on the wall segment being drawn, or with nothing being placed on the
-			// selected walls; with neither the viewport keeps G for game view.
+			// With nothing placed and no wall selected the viewport keeps G for game view.
 			if (!Tool->IsPlacingActive())
 			{
-				return !InKeyEvent.IsRepeat() && !Tool->IsEditingPlan() && Tool->ToggleSelectedGate();
+				if (InKeyEvent.IsRepeat() || Tool->IsEditingPlan()) return false;
+				return InKeyEvent.GetModifierKeys().IsShiftDown() ? Tool->AddSelectedGate() : Tool->ToggleSelectedGate();
 			}
 			if (!InKeyEvent.IsRepeat()) Tool->ToggleOpeningMark();
 			return true;
@@ -250,6 +268,18 @@ void UHutongLayoutEdMode::Enter()
 		NewObject<UHutongSmallBuildingToolBuilder>(this));
 	RegisterTool(Commands.BeginCityWallTool, TEXT("HutongCityWallTool"),
 		NewObject<UHutongCityWallToolBuilder>(this));
+	RegisterTool(Commands.BeginPalaceWallTool, TEXT("HutongPalaceWallTool"),
+		NewObject<UHutongPalaceWallToolBuilder>(this));
+	RegisterTool(Commands.BeginImperialWallTool, TEXT("HutongImperialWallTool"),
+		NewObject<UHutongImperialWallToolBuilder>(this));
+	RegisterTool(Commands.BeginWallCornerTool, TEXT("HutongWallCornerTool"),
+		NewObject<UHutongWallCornerToolBuilder>(this));
+	RegisterTool(Commands.BeginArrowTowerTool, TEXT("HutongArrowTowerTool"),
+		NewObject<UHutongArrowTowerToolBuilder>(this));
+	RegisterTool(Commands.BeginCityGateTool, TEXT("HutongCityGateTool"),
+		NewObject<UHutongCityGateToolBuilder>(this));
+	RegisterTool(Commands.BeginGateComplexTool, TEXT("HutongGateComplexTool"),
+		NewObject<UHutongGateComplexToolBuilder>(this));
 	RegisterTool(Commands.BeginUnknownTool, TEXT("HutongUnknownTool"),
 		NewObject<UHutongUnknownToolBuilder>(this));
 	RegisterTool(Commands.BeginCompoundTool, TEXT("HutongCompoundTool"),
@@ -258,7 +288,6 @@ void UHutongLayoutEdMode::Enter()
 		NewObject<UHutongStreetRowToolBuilder>(this));
 	RegisterTool(Commands.BeginGalleryTool, TEXT("HutongGalleryTool"),
 		NewObject<UHutongGalleryToolBuilder>(this));
-	// One gallery per category, the same tool with its builder's category.
 	{
 		UHutongGalleryToolBuilder* Builder = NewObject<UHutongGalleryToolBuilder>(this);
 		Builder->Category = EHutongGalleryCategory::Walls;
@@ -298,12 +327,9 @@ void UHutongLayoutEdMode::Enter()
 	RegisterTool(Commands.BeginImportTool, TEXT("HutongImportTool"),
 		NewObject<UHutongImportToolBuilder>(this));
 
-	// The default (UndoToExit) pushes an "Activate Tool" undo entry per activation, so Ctrl+Z
-	// cancels the tool instead of undoing: with click-to-edit, a dead Ctrl+Z per click and a
-	// Generate that could not be undone. Esc leaves a tool.
+	// The default (UndoToExit) pushes an "Activate Tool" undo entry per activation that Ctrl+Z would pop.
 	GetToolManager()->ConfigureChangeTrackingMode(EToolChangeTrackingMode::NoChangeTracking);
 
-	// The house is the usual first tool, so it starts active.
 	GetToolManager()->SelectActiveToolType(EToolSide::Left, TEXT("HutongSiheyuanTool"));
 	GetToolManager()->ActivateTool(EToolSide::Left);
 
@@ -361,6 +387,7 @@ TMap<FName, TArray<TSharedPtr<FUICommandInfo>>> UHutongLayoutEdMode::GetModeComm
 		  Commands.BeginPaifangTool, Commands.BeginScreenWallTool });
 	Result.Add(FName("Enclosure"),
 		{ Commands.BeginWallTool, Commands.BeginCourtWallTool, Commands.BeginCityWallTool,
+		  Commands.BeginImperialWallTool, Commands.BeginPalaceWallTool, Commands.BeginWallCornerTool, Commands.BeginArrowTowerTool, Commands.BeginCityGateTool, Commands.BeginGateComplexTool,
 		  Commands.BeginCorridorTool, Commands.BeginPathTool });
 	Result.Add(FName("Courtyard"),
 		{ Commands.BeginFlowerBedTool, Commands.BeginWaterJarTool });
@@ -418,8 +445,7 @@ void UHutongLayoutEdMode::PutToolDown()
 	UInteractiveToolManager* Manager = GetToolManager();
 	if (!Manager || !Manager->HasActiveTool(EToolSide::Left)) return;
 
-	// Next tick, never inside the key event: the tool being shut down would be handling it
-	// (as in FollowSelection).
+	// Next tick: inside the key event the tool being shut down would be handling it.
 	if (!GEditor) return;
 	GEditor->GetTimerManager()->SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
 	{
@@ -436,7 +462,16 @@ FString UHutongLayoutEdMode::ToolIdentifierFor(const UHutongBuildingComponent* B
 	if (!Building) return FString();
 	if (const UHutongWallBuildingComponent* Wall = Cast<UHutongWallBuildingComponent>(Building))
 	{
-		return Wall->Params.Role == EHutongWallRole::Courtyard ? TEXT("HutongCourtWallTool") : TEXT("HutongWallTool");
+		switch (Wall->Params.Role)
+		{
+		case EHutongWallRole::Courtyard:    return TEXT("HutongCourtWallTool");
+		case EHutongWallRole::ImperialCity: return TEXT("HutongImperialWallTool");
+		default:                            return TEXT("HutongWallTool");
+		}
+	}
+	if (const UHutongCityWallBuildingComponent* City = Cast<UHutongCityWallBuildingComponent>(Building))
+	{
+		if (City->Params.Rank == EHutongCityWallRank::Palace) return TEXT("HutongPalaceWallTool");
 	}
 	static const TMap<UClass*, FString> Tools = {
 		{ UHutongSiheyuanBuildingComponent::StaticClass(),   TEXT("HutongSiheyuanTool") },
@@ -456,6 +491,9 @@ FString UHutongLayoutEdMode::ToolIdentifierFor(const UHutongBuildingComponent* B
 		{ UHutongFrameBuildingComponent::StaticClass(),      TEXT("HutongFrameTool") },
 		{ UHutongUnknownBuildingComponent::StaticClass(),    TEXT("HutongUnknownTool") },
 		{ UHutongCityWallBuildingComponent::StaticClass(),   TEXT("HutongCityWallTool") },
+		{ UHutongWallCornerBuildingComponent::StaticClass(), TEXT("HutongWallCornerTool") },
+		{ UHutongArrowTowerBuildingComponent::StaticClass(), TEXT("HutongArrowTowerTool") },
+		{ UHutongCityGateBuildingComponent::StaticClass(),   TEXT("HutongCityGateTool") },
 		{ UHutongSmallBuildingComponent::StaticClass(),      TEXT("HutongSmallBuildingTool") },
 	};
 	for (const UClass* Class = Building->GetClass(); Class; Class = Class->GetSuperClass())
@@ -468,8 +506,7 @@ FString UHutongLayoutEdMode::ToolIdentifierFor(const UHutongBuildingComponent* B
 void UHutongLayoutEdMode::OnEditorSelectionChanged(UObject* Selection)
 {
 	if (!GEditor || Selection != GEditor->GetSelectedActors() || bFollowSelectionQueued) return;
-	// Next tick: the broadcast may be our own tool's press selecting what it will drag; never swap
-	// a tool out from under its own press.
+	// Next tick: the broadcast may be our own tool's press selecting what it will drag.
 	bFollowSelectionQueued = true;
 	GEditor->GetTimerManager()->SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]() { FollowSelection(); }));
 }
@@ -485,10 +522,8 @@ void UHutongLayoutEdMode::FollowSelection()
 	const UHutongBuildingComponent* Building = Actor ? Actor->FindComponentByClass<UHutongBuildingComponent>() : nullptr;
 	const FString Wanted = ToolIdentifierFor(Building);
 	if (Wanted.IsEmpty()) return;
-	// On the Scene tab a selection is what the Selection settings act on: no tool, no tab change.
 	if (Toolkit.IsValid() && Toolkit->GetCurrentPalette() == FName(TEXT("Scene"))) return;
-	// An active tool stays: every tool edits any selected building, and a stray house click while
-	// drawing walls must not drop the wall tool. Only an empty hand gets a tool.
+	// Every tool edits any selected building, so an active tool stays; only an empty hand gets one.
 	if (!ToolManager->GetActiveToolName(EToolSide::Left).IsEmpty()) return;
 
 	// A drag in hand keeps its tool; asked again on release.
@@ -504,7 +539,7 @@ void UHutongLayoutEdMode::FollowSelection()
 
 	ToolManager->SelectActiveToolType(EToolSide::Left, Wanted);
 	if (!ToolManager->ActivateTool(EToolSide::Left)) return;
-	// Tab after the tool is up: the toolkit closes a tool not on the tab it switches to.
+	// Tab after the tool is up: the toolkit closes a tool missing from the tab it switches to.
 	const FName Palette = PaletteOfTool(Wanted);
 	if (!Palette.IsNone() && Toolkit.IsValid() && Toolkit->GetCurrentPalette() != Palette)
 	{

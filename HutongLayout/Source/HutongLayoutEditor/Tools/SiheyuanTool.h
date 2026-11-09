@@ -18,7 +18,7 @@ public:
 
 
 
-	// Generators silently clamp contradictory values (sill above window top, min > max bays); clamp here so the panel matches the mesh.
+	// Clamps contradictory values (sill above window top, min > max bays) so the panel matches the mesh.
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 };
 
@@ -36,7 +36,6 @@ public:
 	virtual void CancelPlacement() override;
 
 protected:
-	// Snaps each dragged extent to the preset's suggested footprint when it comes close.
 	virtual void GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const override;
 
 	virtual void RegisterToolSettings() override;
@@ -48,10 +47,8 @@ protected:
 	virtual TArray<FText> GetToolHelpLines() const override;
 	virtual FText GetKeyHintText() const override;
 
-	// Veranda depth after the footprint-dependent clamp (see definition).
 	double GetEffectiveVerandaDepth() const;
 
-	// Settings' params with the footprint filled in from the drag (see definition).
 	FHutongSiheyuanParams GetResolvedParams() const;
 
 	virtual void OnPlacementStarted(const FVector& HitWorld) override;
@@ -68,10 +65,9 @@ protected:
 
 	HutongGen::EBaySide BaySide = HutongGen::EBaySide::MinusY;
 
-	// Bay count from the bracket keys; 0 = derive from Min/Max Bay Width.
+	// 0 = derive from Min/Max Bay Width.
 	int32 BayCountOverride = 0;
 
-	// Manual count ceiling.
 	static constexpr int32 MaxBayCount = 32;
 };
 

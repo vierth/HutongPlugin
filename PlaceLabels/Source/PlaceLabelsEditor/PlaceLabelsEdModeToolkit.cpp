@@ -35,7 +35,6 @@ FText FPlaceLabelsEdModeToolkit::GetToolPaletteDisplayName(FName PaletteName) co
 
 void FPlaceLabelsEdModeToolkit::BuildToolPalette(FName PaletteName, FToolBarBuilder& ToolbarBuilder)
 {
-	// Select first: the mode opens in it.
 	ToolbarBuilder.AddToolBarButton(FPlaceLabelsCommands::Get().BeginSelectTool);
 	ToolbarBuilder.AddToolBarButton(FPlaceLabelsCommands::Get().BeginPenTool);
 	ToolbarBuilder.AddToolBarButton(FPlaceLabelsCommands::Get().BeginEditTool);
@@ -43,7 +42,6 @@ void FPlaceLabelsEdModeToolkit::BuildToolPalette(FName PaletteName, FToolBarBuil
 
 TSharedPtr<SWidget> FPlaceLabelsEdModeToolkit::GetInlineContent() const
 {
-	// The panel reads the active tool's prompt from the mode manager itself.
 	return SNew(SVerticalBox)
 
 		+ SVerticalBox::Slot()
@@ -63,7 +61,6 @@ TSharedPtr<SWidget> FPlaceLabelsEdModeToolkit::GetInlineContent() const
 			DetailsView.ToSharedRef()
 		]
 
-		// The last commit to change this plugin, written into the source by .githooks/pre-commit.
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(4.0f, 6.0f, 4.0f, 4.0f)
@@ -78,7 +75,6 @@ TSharedPtr<SWidget> FPlaceLabelsEdModeToolkit::GetInlineContent() const
 FText FPlaceLabelsEdModeToolkit::PluginUpdatedText()
 {
 	const FDateTime Utc = FDateTime::FromUnixTimestamp(PLACELABELS_PLUGIN_UPDATED_UTC);
-	// Shown in the machine's own time.
 	const FText When = FText::FromString((Utc + (FDateTime::Now() - FDateTime::UtcNow())).ToString(TEXT("%Y-%m-%d %H:%M")));
 	return FText::Format(LOCTEXT("Version", "Plugin last updated {0}"), When);
 }

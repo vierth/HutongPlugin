@@ -2,13 +2,15 @@
 #include "Generation/HutongMeshUtils.h"
 #include "Generation/HutongPalette.h"
 #include "DynamicMesh/DynamicMeshAttributeSet.h"
+#include "Tools/HutongWallChain.h"
+#include "DynamicMeshEditor.h"
 
 using UE::Geometry::FDynamicMesh3;
 
 namespace
 {
-	// The walk is the body's top face: retagged rather than laid as a slab on it, which would share
-	// that face and z-fight. Pre-bake winding: GetTriNormal points inward, so up is Z ≤ -0.9.
+	// The walk is the body's top face, retagged: a slab on it would z-fight.
+	// Pre-bake winding: GetTriNormal points inward, so up is Z ≤ -0.9.
 	void CityWallTagWalk(FDynamicMesh3& Mesh, int32 FirstTri, int32 EndTri, int32 Slot)
 	{
 		HutongMeshUtils::FSlotScope::FlushCurrent(Mesh);
@@ -18,6 +20,80 @@ namespace
 		for (int32 T = FirstTri; T < EndTri; ++T)
 		{
 			if (Mesh.IsTriangle(T) && Mesh.GetTriNormal(T).Z <= -0.9) MatIDs->SetValue(T, Slot);
+		}
+	}
+
+	// Brick facing into the corner's city (+X or +Y), in a range. Pre-bake normals point inward.
+	void CityWallTagFacingIn(FDynamicMesh3& Mesh, int32 FirstTri, int32 EndTri, int32 Slot)
+	{
+		HutongMeshUtils::FSlotScope::FlushCurrent(Mesh);
+		UE::Geometry::FDynamicMeshMaterialAttribute* MatIDs = Mesh.Attributes()->GetMaterialID();
+		for (int32 T = FirstTri; T < EndTri; ++T)
+		{
+			if (!Mesh.IsTriangle(T) || MatIDs->GetValue(T) != HutongGen::MatSlot_CityBrick) continue;
+			const FVector3d N = -Mesh.GetTriNormal(T);
+			if (N.X > 0.5 || N.Y > 0.5) MatIDs->SetValue(T, Slot);
+		}
+	}
+
+	// Brick facing +Y beyond the wall's centre line: the inner face, 宇牆, ramp and its gate. Pre-bake normals point inward.
+	void CityWallTagInnerFace(FDynamicMesh3& Mesh, double CentreY, int32 Slot)
+	{
+		HutongMeshUtils::FSlotScope::FlushCurrent(Mesh);
+		UE::Geometry::FDynamicMeshMaterialAttribute* MatIDs = Mesh.Attributes()->GetMaterialID();
+		for (int32 T : Mesh.TriangleIndicesItr())
+		{
+			if (MatIDs->GetValue(T) != HutongGen::MatSlot_CityBrick || Mesh.GetTriNormal(T).Y > -0.5) continue;
+			if (Mesh.GetTriCentroid(T).Y > CentreY) MatIDs->SetValue(T, Slot);
+		}
+	}
+
+	// One straight run of 垛口牆 from A0 to A1 along X (or Y), C0..C1 across, standing on the walk.
+	void AppendCityBattlement(FDynamicMesh3& Mesh, const FHutongCityWallParams& P, bool bAlongY,
+		double A0, double A1, double C0, double C1, bool bLoopholes)
+	{
+		using namespace HutongMeshUtils;
+		const double H = P.GetHeight();
+		const double Top = H + P.GetParapetHeight();
+		const double Sill = Top - P.GetCrenelDepth();
+		auto Box = [&](double X0, double X1, double Z0, double Z1)
+		{
+			if (bAlongY) AppendBox(Mesh, FVector3d(C0, X0, Z0), FVector3d(C1, X1, Z1));
+			else AppendBox(Mesh, FVector3d(X0, C0, Z0), FVector3d(X1, C1, Z1));
+		};
+		const double Len = A1 - A0;
+		if (Len < 10.0) return;
+		const int32 N = P.GetMerlonCount(Len);
+		const double Cw = N > 1 ? FMath::Min(P.GetCrenelWidth(), 0.5 * Len / (N - 1)) : 0.0;
+		const double Mw = (Len - (N - 1) * Cw) / N;
+		const double HoleW = FMath::Min(P.GetLoopholeWidth(), 0.5 * Mw);
+		const double HoleH = FMath::Min(P.GetLoopholeHeight(), 0.6 * (Sill - H));
+		const double HoleZ0 = H + 0.5 * (Sill - H) - 0.5 * HoleH;
+		// The top step's underside stands on the merlon's top (opposite normals).
+		const double StepH = P.GetMerlonTopHeight();
+		const double StepW = FMath::Min(P.GetMerlonTopWidth(), Mw - 10.0);
+		const double Body = StepW > 0.0 ? Top - StepH : Top;
+		for (int32 i = 0; i < N; ++i)
+		{
+			const double X0 = A0 + i * (Mw + Cw), X1 = X0 + Mw;
+			if (bLoopholes && HoleW > 4.0 && HoleH > 4.0)
+			{
+				const double HX0 = 0.5 * (X0 + X1) - 0.5 * HoleW, HX1 = HX0 + HoleW;
+				Box(X0, HX0, H, Body);
+				Box(HX1, X1, H, Body);
+				Box(HX0, HX1, H, HoleZ0);
+				Box(HX0, HX1, HoleZ0 + HoleH, Body);
+			}
+			else
+			{
+				Box(X0, X1, H, Body);
+			}
+			if (StepW > 0.0 && StepH > 0.0)
+			{
+				const double Mid = 0.5 * (X0 + X1);
+				Box(Mid - 0.5 * StepW, Mid + 0.5 * StepW, Body, Top);
+			}
+			if (i + 1 < N) Box(X1, X1 + Cw, H, Sill);
 		}
 	}
 }
@@ -34,7 +110,6 @@ namespace HutongGen
 		const double Margin = RampParapetThicknessCm + 20.0;
 		if (!P.bRamp || L - 2.0 * Margin < Total) return false;
 		Out.Dir = P.bRampRisesTowardStart ? -1.0 : 1.0;
-		// Top end along the run, held so the whole ramp and its gateway stay on this length of wall.
 		const double Lo = Out.Dir > 0.0 ? Total + Margin : Margin;
 		const double Hi = Out.Dir > 0.0 ? L - Margin : L - Total - Margin;
 		Out.XTop = FMath::Clamp(P.RampPosition * L, Lo, Hi);
@@ -55,10 +130,8 @@ namespace HutongGen
 		const double Bat = P.GetBatter();
 		const double S = bBattlements ? P.GetFootingHeight() : 0.0;
 		const double BatS = Bat * S / H;
-		// Each face sets in by Bat over the height.
 		auto In = [&](double Z) { return Bat * Z / H; };
 
-		// Footing, then the brick body above it on the same batter: one section split at the stone line.
 		if (S > 1.0)
 		{
 			FSlotScope Tag(Mesh, MatSlot_Stone);
@@ -72,8 +145,7 @@ namespace HutongGen
 			CityWallTagWalk(Mesh, FirstTri, Mesh.MaxTriangleID(), MatSlot_Floor);
 		}
 
-		// 馬面 along the outer face, evenly spaced and clear of each end (the mitre's zone). Battered on all three
-		// faces; the inner face lies on the wall's own face (opposite normals), the top level with the walk.
+		// The 馬面's inner face lies on the wall's own face (opposite normals).
 		struct FBastion { double X0, X1; };
 		TArray<FBastion> Bastions;
 		const double Pj = P.GetBastionProjection();
@@ -117,7 +189,6 @@ namespace HutongGen
 			Block(S, H, MatSlot_CityBrick);
 		}
 
-		// 馬道 against the inner face: incline, a level landing at the top, the 宇牆 opened over the landing.
 		double GapX0 = 0.0, GapX1 = 0.0;
 		const double RW = FMath::Max(P.RampWidth, 150.0);
 		const double Tr = RampParapetThicknessCm;
@@ -126,7 +197,6 @@ namespace HutongGen
 		const double D = Ramp.Dir;
 		const double XT = Ramp.XTop, XLand = Ramp.XLand, XFoot = Ramp.XFoot, XGate = Ramp.XGate;
 		const double Hr = P.GetRampRise();
-		// The ramp's inner face on the wall's battered face, 5 cm into it.
 		auto YIn = [&](double Z) { return B - In(Z) - 5.0; };
 		const double Yo = B + RW;
 		if (bRamp)
@@ -148,45 +218,14 @@ namespace HutongGen
 		{
 			FSlotScope Tag(Mesh, MatSlot_CityBrick);
 
-			// 垛口牆 along one straight run (X or Y), Cross0..Cross1 across it: merlons (with a 射眼) and
-			// crenels side by side, faces between them opposite, a merlon at each end.
 			const double Tp = P.GetParapetThickness();
 			const double Top = H + P.GetParapetHeight();
 			const double Sill = Top - P.GetCrenelDepth();
-			auto Box = [&](bool bAlongY, double A0, double A1, double C0, double C1, double Z0, double Z1)
-			{
-				if (bAlongY) AppendBox(Mesh, FVector3d(C0, A0, Z0), FVector3d(C1, A1, Z1));
-				else AppendBox(Mesh, FVector3d(A0, C0, Z0), FVector3d(A1, C1, Z1));
-			};
 			auto Battlement = [&](bool bAlongY, double A0, double A1, double C0, double C1)
 			{
-				const double Len = A1 - A0;
-				if (Len < 10.0) return;
-				const int32 N = P.GetMerlonCount(Len);
-				const double Cw = N > 1 ? FMath::Min(FMath::Max(P.CrenelWidth, 10.0), 0.5 * Len / (N - 1)) : 0.0;
-				const double Mw = (Len - (N - 1) * Cw) / N;
-				const double Hole = FMath::Min(FMath::Max(P.LoopholeSize, 5.0), 0.5 * FMath::Min(Mw, Sill - H));
-				const double HoleZ0 = H + 0.5 * (Sill - H) - 0.5 * Hole;
-				for (int32 i = 0; i < N; ++i)
-				{
-					const double X0 = A0 + i * (Mw + Cw), X1 = X0 + Mw;
-					if (bLoopholes && Hole > 4.0)
-					{
-						const double HX0 = 0.5 * (X0 + X1) - 0.5 * Hole, HX1 = HX0 + Hole;
-						Box(bAlongY, X0, HX0, C0, C1, H, Top);
-						Box(bAlongY, HX1, X1, C0, C1, H, Top);
-						Box(bAlongY, HX0, HX1, C0, C1, H, HoleZ0);
-						Box(bAlongY, HX0, HX1, C0, C1, HoleZ0 + Hole, Top);
-					}
-					else
-					{
-						Box(bAlongY, X0, X1, C0, C1, H, Top);
-					}
-					if (i + 1 < N) Box(bAlongY, X1, X1 + Cw, C0, C1, H, Sill);
-				}
+				AppendCityBattlement(Mesh, P, bAlongY, A0, A1, C0, C1, bLoopholes);
 			};
 
-			// Along the outer edge, broken at each bastion's mouth; round each bastion's three sides.
 			double From = 0.0;
 			for (const FBastion& Bs : Bastions)
 			{
@@ -199,7 +238,6 @@ namespace HutongGen
 			}
 			Battlement(false, From, L, Bat, Bat + Tp);
 
-			// 宇牆 on the inner edge, open where the ramp arrives.
 			if (P.bInnerParapet)
 			{
 				const double Y0 = B - Bat - P.GetInnerParapetThickness(), Y1 = B - Bat, Z1 = H + P.GetInnerParapetHeight();
@@ -216,7 +254,6 @@ namespace HutongGen
 
 			if (bRamp)
 			{
-				// Parapet up the open side, along the landing and across its end to the 宇牆.
 				const double Hp = RampParapetHeightCm;
 				const double Yp0 = Yo - Tr;
 				const FVector3d Rail[8] = {
@@ -227,7 +264,6 @@ namespace HutongGen
 				AppendBox(Mesh, FVector3d(FMath::Min(XT, XT - D * Tr), B - Bat - P.GetInnerParapetThickness(), Hr),
 					FVector3d(FMath::Max(XT, XT - D * Tr), Yp0, Hr + Hp));
 
-				// 馬道門: a wall across the foot with a doorway, its inner pier on the battered face.
 				const double Hg = RampGateHeightCm;
 				const double Cg = 0.5 * (B + Yo);
 				const double Ow = FMath::Min(RampGateOpeningWidthCm, RW - 60.0);
@@ -240,6 +276,118 @@ namespace HutongGen
 				AppendBox(Mesh, FVector3d(GX0, Cg + 0.5 * Ow, 0.0), FVector3d(GX1, Yo, Hg));
 				AppendBox(Mesh, FVector3d(GX0, Cg - 0.5 * Ow, Oh), FVector3d(GX1, Cg + 0.5 * Ow, Hg));
 			}
+		}
+
+		if (P.HasRedInnerFace()) CityWallTagInnerFace(Mesh, 0.5 * B, MatSlot_RedWall);
+	}
+
+	void BuildWallCorner(FDynamicMesh3& Mesh, const FHutongCityWallParams& P, double PlatformSize, bool bBattlements, bool bLoopholes, bool bOuterParapet)
+	{
+		using namespace HutongMeshUtils;
+		const double H = P.GetHeight();
+		const double B = P.GetBaseWidth();
+		const double Bat = P.GetBatter();
+		const double S = FMath::Max(PlatformSize, B + 2.0 * Bat + 10.0);
+		const double Foot = bBattlements ? P.GetFootingHeight() : 0.0;
+		auto In = [&](double Z) { return Bat * Z / H; };
+		// The plan at height Z: outer faces on X = 0 and Y = 0, ports at X = S and Y = S as wide as a leg, the platform's
+		// inner faces battered; a leg's inner face runs on into the re-entrant corner (a point at the foot).
+		auto Ring = [&](double Z)
+		{
+			const double I = In(Z);
+			return TArray<FVector3d>{ {I, I, Z}, {S, I, Z}, {S, B - I, Z}, {S - I, B - I, Z}, {S - I, S - I, Z},
+				{B - I, S - I, Z}, {B - I, S, Z}, {I, S, Z} };
+		};
+		if (Foot > 1.0)
+		{
+			FSlotScope Tag(Mesh, MatSlot_Stone);
+			AppendLoft(Mesh, Ring(0.0), Ring(Foot));
+		}
+		const int32 BodyFirst = Mesh.MaxTriangleID();
+		{
+			FSlotScope Tag(Mesh, MatSlot_CityBrick);
+			AppendLoft(Mesh, Ring(Foot), Ring(H));
+			Tag.Close();
+			CityWallTagWalk(Mesh, BodyFirst, Mesh.MaxTriangleID(), MatSlot_Floor);
+		}
+		const int32 BodyEnd = Mesh.MaxTriangleID();
+		if (!bBattlements)
+		{
+			if (P.HasRedInnerFace()) CityWallTagFacingIn(Mesh, BodyFirst, BodyEnd, MatSlot_RedWall);
+			return;
+		}
+
+		FSlotScope Tag(Mesh, MatSlot_CityBrick);
+		const double Tp = P.GetParapetThickness();
+		if (bOuterParapet)
+		{
+			AppendCityBattlement(Mesh, P, false, Bat, S, Bat, Bat + Tp, bLoopholes);
+			AppendCityBattlement(Mesh, P, true, Bat + Tp, S, Bat, Bat + Tp, bLoopholes);
+		}
+
+		int32 ParapetFirst = Mesh.MaxTriangleID();
+		if (P.bInnerParapet)
+		{
+			// Round the re-entrant edge of the walk, a thickness inside it.
+			const double Ti = P.GetInnerParapetThickness(), Z1 = H + P.GetInnerParapetHeight();
+			const double E = S - Bat, F = B - Bat;
+			AppendBox(Mesh, FVector3d(E, F - Ti, H), FVector3d(S, F, Z1));
+			AppendBox(Mesh, FVector3d(E - Ti, F - Ti, H), FVector3d(E, E, Z1));
+			AppendBox(Mesh, FVector3d(F, E - Ti, H), FVector3d(E - Ti, E, Z1));
+			AppendBox(Mesh, FVector3d(F - Ti, E - Ti, H), FVector3d(F, S, Z1));
+		}
+		const int32 ParapetEnd = Mesh.MaxTriangleID();
+		Tag.Close();
+		if (P.HasRedInnerFace())
+		{
+			CityWallTagFacingIn(Mesh, BodyFirst, BodyEnd, MatSlot_RedWall);
+			CityWallTagFacingIn(Mesh, ParapetFirst, ParapetEnd, MatSlot_RedWall);
+		}
+	}
+
+	void BuildRoundedCorner(FDynamicMesh3& Mesh, const FHutongCityWallParams& P, double Size, bool bBattlements, bool bLoopholes)
+	{
+		const double B = P.GetBaseWidth();
+		const double S = FMath::Max(Size, B + 10.0);
+		const double R = S - 0.5 * B;
+		// About 4 m a leg, so a fitted merlon or two each; from the Y port round to the X port, the outside on the right.
+		const int32 Legs = FMath::Clamp(FMath::CeilToInt32(0.5 * UE_DOUBLE_PI * R / 400.0), 3, 24);
+		TArray<FVector2D> Points;
+		for (int32 i = 0; i <= Legs; ++i)
+		{
+			const double A = UE_DOUBLE_PI * (1.0 + 0.5 * i / Legs);
+			Points.Add(FVector2D(S + R * FMath::Cos(A), S + R * FMath::Sin(A)));
+		}
+		// The end legs cut on the port planes, where the straight legs abut square.
+		HutongWallChain::FEndFace StartFace, EndFace;
+		StartFace.bSet = EndFace.bSet = true;
+		StartFace.Point = Points[0];
+		StartFace.Dir = FVector2D(1.0, 0.0);
+		EndFace.Point = Points.Last();
+		EndFace.Dir = FVector2D(0.0, 1.0);
+		TArray<HutongWallChain::FSegment> Segments;
+		if (!HutongWallChain::Build(Points, B, 0.5 * B, StartFace, EndFace, Segments)) return;
+		HutongMeshUtils::FSlotScope::FlushCurrent(Mesh);
+		Mesh.EnableAttributes();
+		Mesh.Attributes()->EnableMaterialID();
+		for (const HutongWallChain::FSegment& Seg : Segments)
+		{
+			FHutongCityWallParams Q = P;
+			Q.Length = Seg.Length;
+			Q.bBastions = false;
+			Q.bRamp = false;
+			FDynamicMesh3 Leg;
+			Leg.EnableAttributes();
+			Leg.Attributes()->EnableMaterialID();
+			BuildCityWall(Leg, Q, bBattlements, bLoopholes);
+			FHutongFootprintSkew Skew = Seg.Skew;
+			Skew.RunAxis = 0;
+			if (!Skew.IsZero()) HutongMeshUtils::WarpFootprint(Leg, Seg.Length, B, Skew);
+			const FTransform Xf(FRotator(0.0, Seg.YawDeg, 0.0), FVector(Seg.Origin.X, Seg.Origin.Y, 0.0));
+			for (const int32 V : Leg.VertexIndicesItr()) Leg.SetVertex(V, FVector3d(Xf.TransformPosition(FVector(Leg.GetVertex(V)))));
+			HutongMeshUtils::FSlotScope::FlushCurrent(Leg);
+			UE::Geometry::FMeshIndexMappings Mappings;
+			UE::Geometry::FDynamicMeshEditor(&Mesh).AppendMesh(&Leg, Mappings);
 		}
 	}
 }

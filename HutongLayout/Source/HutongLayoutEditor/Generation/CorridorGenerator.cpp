@@ -15,7 +15,6 @@ namespace HutongGen
 
 		const double L = FMath::Max(P.Length, 1.0);
 		const double Eave = P.GetEaveHeight();
-		// Roof on the frame's line; the back wall to the ceiling under it; posts at the column top.
 		const double RoofZ = Eave + P.GetRoofLift();
 		const double CeilZ = RoofZ + P.GetUndersideRise();
 		const double ColR = P.GetColumnRadius();
@@ -26,7 +25,6 @@ namespace HutongGen
 		const bool bClosed = P.bClosedSide;
 		const double WallT = (bClosed && P.bBuildBackWall) ? FMath::Max(P.WallThickness, 1.0) : 0.0;
 
-		// Across the rect: platform lip, open column line, walk, back wall if any.
 		const double OpenY = FloorO + ColR;
 		const double BackY = OpenY + Walk;
 		const double Depth = OpenY + Walk + WallT + FloorO;
@@ -34,13 +32,11 @@ namespace HutongGen
 		const int32 Bays = P.GetBayCount(L);
 		auto BoundaryX = [&](int32 i) { return P.GetBayBoundary(i, Bays, L); };
 
-		// 1) 臺基, whole footprint.
 		if (Floor > 0.0)
 		{
 			AppendBox(Mesh, FVector3d(0.0, 0.0, 0.0), FVector3d(L, Depth, Floor));
 		}
 
-		// 2) Back wall.
 		if (WallT > 0.0)
 		{
 			AppendBox(Mesh,
@@ -53,7 +49,6 @@ namespace HutongGen
 		const double PT = FMath::Max(2.0 * ColR * 0.7, 6.0);  // inside the 方柱 face at its tapered top
 		const double LintelBottom = Eave - 1.6 * PT;
 
-		// 3) Open column line, plus one at the back wall when open both sides.
 		auto AppendPosts = [&](double CY)
 		{
 			for (int32 i = 0; i <= Bays; ++i)
@@ -65,14 +60,12 @@ namespace HutongGen
 		AppendPosts(OpenY);
 		if (!bClosed) AppendPosts(BackY);
 
-		// 4) 額枋 per column line, ends buried in the end posts.
 		Frame::AppendArchitrave(Mesh, BoundaryX(0), BoundaryX(Bays), OpenY, PT, LintelBottom, Eave);
 		if (!bClosed)
 		{
 			Frame::AppendArchitrave(Mesh, BoundaryX(0), BoundaryX(Bays), BackY, PT, LintelBottom, Eave);
 		}
 
-		// 倒掛楣子 under the 額枋 per bay: head rail with short drops.
 		const double BarT = FMath::Max(P.FriezeBarSection, 1.0);
 		if (P.bHasFrieze && P.FriezeBars > 0 && P.FriezeDrop > BarT)
 		{
@@ -88,7 +81,6 @@ namespace HutongGen
 			if (!bClosed) AppendFrieze(BackY);
 		}
 
-		// 6) 坐凳楣子 on the open side: lattice panel in the column line, seat if asked.
 		if ((P.bHasBench || P.bHasBenchLattice) && Floor >= 0.0)
 		{
 			const double BenchZ = Floor + FMath::Max(P.BenchHeight, 10.0);
@@ -111,7 +103,6 @@ namespace HutongGen
 
 		WoodTag.Close();
 
-		// 墊板 and 檐檁 on each column line under the lifted roof.
 		if (RoofZ > Eave)
 		{
 			// 懸山: each 檁 out to the 博縫板 (1 cm into it), a 燕尾枋 under the overhang.
@@ -121,7 +112,6 @@ namespace HutongGen
 			if (!bClosed) Frame::AppendEaveStack(Mesh, 0.0, L, BackY, FMath::Max(P.ColumnDiameter, 2.0), Eave, BoardH, PurlinD, Reach, true);
 		}
 
-		// 7) Roof.
 		Shell::FRoofParams Roof;
 		Roof.FrontOverhang = FMath::Max(P.RoofOverhang, 0.0);
 		Roof.RearOverhang = FMath::Max(P.RoofOverhang, 0.0);
@@ -142,10 +132,8 @@ namespace HutongGen
 		Roof.RafterSection = P.RafterEndSection;
 		Roof.RafterSpacing = P.RafterEndSpacing;
 
-		// Roof spans column line to column line.
 		const double RoofSpan = (WallT > 0.0) ? (BackY + WallT - OpenY) : (BackY - OpenY);
 		const int32 RoofFirstVert = Mesh.MaxVertexID();
-		// Open colonnade bearing into its neighbours: no 山牆, no rake.
 		Roof.RakeDepth = 0.0;
 		Roof.bTileRuns = P.bHasTileRuns;
 		Shell::AppendGableRoof(Mesh, L, RoofSpan, RoofZ, Roof);
@@ -165,7 +153,6 @@ namespace HutongGen
 			FrameLayout::FLayout Layout = FrameLayout::Make(ColD, Eave, Floor, RoofSpan, EHutongPurlins::Three, false, false);
 			if (P.RoofApexRoll > 0.0)
 			{
-				// Heights come from the shell (Underside); the layout only places the lines.
 				const double Eaves = 0.4 * RoofSpan;
 				Layout.Y = { 0.0, Eaves, RoofSpan - Eaves, RoofSpan };
 				Layout.Support = { Eave, Eave + RoofSpan, Eave + RoofSpan, Eave };

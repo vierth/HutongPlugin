@@ -34,7 +34,6 @@ struct FHutongPathParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Path", meta=(DisplayName="Joint Width", EditCondition="CourseSpacing > 0", UIMin="1", UIMax="10", ClampMin="0", Units="cm", ToolTip="Width of each cross joint cut into the paving, in cm."))
 	double JointWidth = 3.0;
 
-	// Set by the tool from the drag rect.
 	double Length = 600.0;
 	double Width = 130.0;
 
@@ -42,7 +41,6 @@ struct FHutongPathParams
 
 	double GetFootprintDepth() const { return FMath::Max(Width, 1.0) + 2.0 * GetKerbWidth(); }
 
-	// Clear paving width for a dragged footprint depth, held inside the band.
 	double WidthFromFootprint(double FootprintDepth) const
 	{
 		const double Lo = FMath::Max(WidthMin, 10.0);

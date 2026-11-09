@@ -21,7 +21,6 @@ namespace HutongGen
 		// One 壟, which sets the 勾頭 pitch along an eave.
 		inline constexpr double DefaultRowSpacing = 20.0;
 
-		// Sides on one 勾頭.
 		inline constexpr int32 EaveCapSides = 10;
 	}
 }

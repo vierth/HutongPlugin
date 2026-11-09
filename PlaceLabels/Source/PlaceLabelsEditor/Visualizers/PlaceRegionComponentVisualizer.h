@@ -5,7 +5,6 @@
 
 class UPlaceRegionComponent;
 
-// A corner of the polygon. Dragging one moves that vertex.
 struct HPlaceRegionVertexProxy : public HComponentVisProxy
 {
 	DECLARE_HIT_PROXY();
@@ -19,7 +18,6 @@ struct HPlaceRegionVertexProxy : public HComponentVisProxy
 	int32 VertexIndex;
 };
 
-// An edge.
 struct HPlaceRegionEdgeProxy : public HComponentVisProxy
 {
 	DECLARE_HIT_PROXY();
@@ -30,11 +28,9 @@ struct HPlaceRegionEdgeProxy : public HComponentVisProxy
 	{
 	}
 
-	// Edge running from EdgeIndex to EdgeIndex + 1, wrapping.
 	int32 EdgeIndex;
 };
 
-// Vertex editing for a placed region, in the spirit of the spline component's handles.
 class FPlaceRegionComponentVisualizer : public FComponentVisualizer
 {
 public:
@@ -59,7 +55,6 @@ public:
 private:
 	UPlaceRegionComponent* GetEditedRegion() const;
 
-	// True when the selection still refers to corners that exist.
 	bool IsSelectionValid() const;
 
 	void OnDeleteVertex();
@@ -69,14 +64,11 @@ private:
 	void OnSelectAllVertices();
 	bool CanSelectAllVertices() const;
 
-	// Adds a corner on EdgeIndex nearest the click ray; midpoint if the ray is parallel to the plane.
 	void InsertCornerOnEdge(UPlaceRegionComponent* Region, int32 EdgeIndex,
 		const struct FViewportClick& Click);
 
-	// Alt+click: removes one corner, keeping the rest of the selection.
 	void DeleteSingleVertex(UPlaceRegionComponent* Region, int32 VertexIndex);
 
-	// A property path rather than a raw or weak pointer.
 	FComponentPropertyPath RegionPropertyPath;
 
 	TSet<int32> SelectedVertices;

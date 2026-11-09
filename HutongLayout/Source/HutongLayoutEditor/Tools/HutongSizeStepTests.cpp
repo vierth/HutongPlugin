@@ -10,8 +10,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongSizeStepTest,
 
 bool FHutongSizeStepTest::RunTest(const FString& Parameters)
 {
-	// Two hands drawing one kind of building a few centimetres apart land on one size (so one mesh); the
-	// steps are the 營造尺's; a length never rounds to nothing; a negative (leftward) drag keeps its side.
 	const double Step = HutongSizeStep::Cm(EHutongSizeStep::FiveCun);
 	TestEqual(TEXT("five cun is 16 cm"), Step, 16.0);
 	TestEqual(TEXT("1004 cm"), HutongSizeStep::Round(1004.0, Step), 1008.0);

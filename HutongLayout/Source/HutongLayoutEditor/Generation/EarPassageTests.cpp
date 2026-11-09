@@ -12,8 +12,6 @@
 
 using UE::Geometry::FDynamicMesh3;
 
-// The closing wall is cut at any width asked, the preview matches the built doorway, and a narrow
-// frontage never runs the wall through the room.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongEarPassageDoorwayTest,
 	"HutongLayout.EarPassage.Doorway",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -31,7 +29,6 @@ bool FHutongEarPassageDoorwayTest::RunTest(const FString&)
 			&& C.GetDoorwayCentre(C.Length) + 0.5 * C.GetDoorwayWidth() < C.Length);
 	}
 
-	// Doorway position and shape are user-set.
 	{
 		FHutongEarPassageParams P;
 		P.ClosingWall.DoorwayPosition = 0.25;
@@ -42,7 +39,6 @@ bool FHutongEarPassageDoorwayTest::RunTest(const FString&)
 		TestEqual(TEXT("a solid front takes no extra width"), P.GetClearWidth(), 240.0);
 	}
 
-	// Room's roof carried on: walls stand to the ceiling under it.
 	{
 		FHutongEarPassageParams P;
 		TestTrue(TEXT("the room's roof runs over the passage by default"), P.bRoofOverPassage);
@@ -52,20 +48,17 @@ bool FHutongEarPassageDoorwayTest::RunTest(const FString&)
 		TestTrue(TEXT("closing wall has no cap to pierce the roof"), C.CapSlabHeight <= 0.0 && C.CapRidgeHeight <= 0.0);
 	}
 
-	// Own low roof: its eave drives the wall.
 	{
 		FHutongEarPassageParams P;
 		P.bRoofOverPassage = false;
 		P.Passage.EaveHeight = 300.0;
 		TestEqual(TEXT("closing wall at the eave"), P.ClosingWallParams().GetHeight(), 300.0);
 		TestEqual(TEXT("passage roof at the eave"), P.PassageParams().GetEaveHeight(), 300.0);
-		// An eave below the doorway head lifts to it, roof included.
 		P.Passage.EaveHeight = 150.0;
 		TestTrue(TEXT("eave lifted over the doorway"), P.GetPassageEaveHeight() > 150.0);
 		TestEqual(TEXT("wall and roof still meet"), P.ClosingWallParams().GetHeight(), P.PassageParams().GetEaveHeight());
 	}
 
-	// A frontage narrower than the strip still lays out in order.
 	for (const bool bFar : { false, true })
 	{
 		FHutongEarPassageParams P;
@@ -84,7 +77,6 @@ bool FHutongEarPassageDoorwayTest::RunTest(const FString&)
 	return true;
 }
 
-// The ear room tool's three presets, and a one-bay room taken whole as the passage.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongEarRoomKindsTest,
 	"HutongLayout.EarPassage.Kinds",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -119,7 +111,6 @@ bool FHutongEarRoomKindsTest::RunTest(const FString&)
 	TestEqual(TEXT("one with the passage"), Passage, 1);
 	TestEqual(TEXT("one shut to the court"), NoDoor, 1);
 
-	// No passage: the room takes the whole frontage, nothing else is built.
 	{
 		FHutongEarPassageParams P;
 		P.Passageway = EHutongEarPassage::None;
@@ -130,7 +121,20 @@ bool FHutongEarRoomKindsTest::RunTest(const FString&)
 		TestFalse(TEXT("the room's roof does not run on"), P.RoomParams().bRoofRunsOnLow || P.RoomParams().bRoofRunsOnHigh);
 	}
 
-	// Whole frontage: the passage, walled both sides, is the building; the drag sets its clear way.
+	{
+		FHutongEarPassageParams P;
+		P.Passageway = EHutongEarPassage::None;
+		P.Width = 1000.0;
+		P.Depth = P.Room.GetSuggestedDepth();
+		TestEqual(TEXT("a wide drag holds at two bays"), P.RoomParams().GetBayCount(), 2);
+		P.BayCountOverride = FHutongEarPassageParams::MaxRoomBays;
+		TestEqual(TEXT("three bays when asked"), P.RoomParams().GetBayCount(), 3);
+		TestEqual(TEXT("three on the plan"), UHutongEarPassageBuildingComponent::PlanBaysInBuildFrame(P).Boundaries.Num(), 4);
+		FDynamicMesh3 Mesh;
+		HutongGen::BuildEarPassage(Mesh, P);
+		TestTrue(TEXT("a three-bay ear room builds"), Mesh.TriangleCount() > 0);
+	}
+
 	for (const bool bFar : { false, true })
 	{
 		FHutongEarPassageParams P;
@@ -148,7 +152,6 @@ bool FHutongEarRoomKindsTest::RunTest(const FString&)
 		TestEqual(TEXT("eave is a one-bay ear room's"), P.RoomParams().GetBayCount(), 1);
 		const FHutongPlanBays Bays = UHutongEarPassageBuildingComponent::PlanBaysInBuildFrame(P);
 		TestEqual(TEXT("one bay on the plan"), Bays.Boundaries.Num(), 2);
-		// Narrower than the doorway needs: held open, not walled shut.
 		P.Width = 50.0;
 		TestTrue(TEXT("a narrow drag keeps the doorway"), P.HasClosingDoorway() && P.GetWidth() > 50.0);
 		for (const bool bOwnRoof : { false, true })
@@ -163,7 +166,6 @@ bool FHutongEarRoomKindsTest::RunTest(const FString&)
 		}
 	}
 
-	// One or two bays: a wide drag holds at two, and the bay keys step a placed one within that.
 	{
 		UHutongEarPassageBuildingComponent* Ear = NewObject<UHutongEarPassageBuildingComponent>(GetTransientPackage());
 		Ear->Params.Passageway = EHutongEarPassage::None;
@@ -174,11 +176,12 @@ bool FHutongEarRoomKindsTest::RunTest(const FString&)
 		TestEqual(TEXT("down to one"), Ear->GetDrawnBayCount(), 1);
 		HutongDetailOps::AdjustBays({ Ear }, 1);
 		HutongDetailOps::AdjustBays({ Ear }, 1);
-		TestEqual(TEXT("never past two"), Ear->GetDrawnBayCount(), 2);
+		TestEqual(TEXT("up to three"), Ear->GetDrawnBayCount(), 3);
+		HutongDetailOps::AdjustBays({ Ear }, 1);
+		TestEqual(TEXT("never past three"), Ear->GetDrawnBayCount(), 3);
 		TestFalse(TEXT("an ear room neither divides nor fuses"), Ear->CanDivideOrFuse());
 	}
 
-	// The room's house settings that ear rooms do not have stay out of every view.
 	{
 		const FProperty* RoomProp = FHutongEarPassageParams::StaticStruct()->FindPropertyByName(TEXT("Room"));
 		const FProperty* Veranda = FHutongSiheyuanParams::StaticStruct()->FindPropertyByName(TEXT("bHasFrontVeranda"));
@@ -188,7 +191,6 @@ bool FHutongEarRoomKindsTest::RunTest(const FString&)
 		TestTrue(TEXT("its front door shows in the simple view"), HutongPanel::IsVisible(*Door, Parents, false));
 	}
 
-	// Right-click Options: the room's and the passage's choices, none of the walls'.
 	{
 		const TArray<FString> Labels = HutongContextMenu::OptionLabels(NewObject<UHutongEarPassageBuildingComponent>(GetTransientPackage()));
 		TestTrue(TEXT("the room's front door is offered"), Labels.ContainsByPredicate([](const FString& L) { return L.Contains(TEXT("Has Front Door")); }));
@@ -196,6 +198,45 @@ bool FHutongEarRoomKindsTest::RunTest(const FString&)
 		TestFalse(TEXT("no wall's choices"), Labels.ContainsByPredicate([](const FString& L) { return L.StartsWith(TEXT("Outer Wall")) || L.StartsWith(TEXT("Closing Wall")); }));
 		TestFalse(TEXT("no veranda"), Labels.ContainsByPredicate([](const FString& L) { return L.Contains(TEXT("Veranda")); }));
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongMoveDoorBayTest,
+	"HutongLayout.Doors.MoveDoorBay",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongMoveDoorBayTest::RunTest(const FString&)
+{
+	UHutongSiheyuanBuildingComponent* House = NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
+	House->FootprintX = 1700.0;
+	House->FootprintY = 600.0;
+	House->BayCountOverride = 5;
+	auto DoorBay = [](const UHutongBuildingComponent* B) { FHutongPlanBays Bays; B->GetPlanBays(Bays); return Bays.DoorBay; };
+	TestTrue(TEXT("a house's door moves"), House->CanMoveDoorBay());
+	TestEqual(TEXT("door in the middle"), DoorBay(House), 2);
+	// Facing -Y, a bay right seen from the front is toward the origin (UE's left-handed axes).
+	TestTrue(TEXT("right"), HutongDetailOps::MoveDoorBay({ House }, 1));
+	TestEqual(TEXT("a bay right"), DoorBay(House), 1);
+	HutongDetailOps::MoveDoorBay({ House }, 1);
+	TestEqual(TEXT("the end bay"), DoorBay(House), 0);
+	HutongDetailOps::MoveDoorBay({ House }, 1);
+	TestEqual(TEXT("stops at the end"), DoorBay(House), 0);
+	HutongDetailOps::MoveDoorBay({ House }, -1);
+	HutongDetailOps::MoveDoorBay({ House }, -1);
+	TestEqual(TEXT("back in the middle it centres"), House->Params.DoorBayIndex, -1);
+	House->Params.bHasFrontDoorCenter = false;
+	TestFalse(TEXT("no door, nothing to move"), House->CanMoveDoorBay());
+
+	UHutongEarPassageBuildingComponent* Ear = NewObject<UHutongEarPassageBuildingComponent>(GetTransientPackage());
+	Ear->Params.Passageway = EHutongEarPassage::None;
+	Ear->Params.Room.bHasFrontDoorCenter = true;
+	Ear->FootprintX = 900.0;
+	Ear->FootprintY = 340.0;
+	Ear->BayCountOverride = 3;
+	TestTrue(TEXT("a three-bay ear room's door moves"), HutongDetailOps::MoveDoorBay({ Ear }, -1));
+	TestEqual(TEXT("a bay left"), DoorBay(Ear), 2);
+	Ear->BayCountOverride = 1;
+	TestFalse(TEXT("a one-bay ear room's cannot"), Ear->CanMoveDoorBay());
 	return true;
 }
 

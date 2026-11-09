@@ -25,18 +25,19 @@ namespace
 
 namespace HutongCourts
 {
-	FString MapTileAt(UWorld* World, const FVector& Point)
+	AStaticMeshActor* MapTileActorAt(UWorld* World, const FVector& Point, FString* OutName)
 	{
-		if (!World) return FString();
+		if (!World) return nullptr;
 		// Sheet names of 《乾隆京城全圖》 as the map tiles carry them: row, sheet letter, column (3M6, 4M10_2).
 		const FRegexPattern TilePattern(TEXT("^[0-9]+[A-Z][0-9]+(_[0-9]+)?$"));
 		auto IsTile = [&TilePattern](const FString& Candidate) { FRegexMatcher M(TilePattern, Candidate); return M.FindNext(); };
 
 		FString Best;
+		AStaticMeshActor* BestActor = nullptr;
 		double BestArea = TNumericLimits<double>::Max();
 		for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
 		{
-			const AStaticMeshActor* Actor = *It;
+			AStaticMeshActor* Actor = *It;
 			if (Actor->FindComponentByClass<UHutongBuildingComponent>()) continue;
 			const FBox Box = Actor->GetComponentsBoundingBox();
 			if (!Box.IsValid || Point.X < Box.Min.X || Point.X > Box.Max.X || Point.Y < Box.Min.Y || Point.Y > Box.Max.Y) continue;
@@ -52,9 +53,55 @@ namespace HutongCourts
 			}
 			if (Name.IsEmpty()) continue;
 			const double Area = Box.GetSize().X * Box.GetSize().Y;
-			if (Area < BestArea) { BestArea = Area; Best = Name; }
+			if (Area < BestArea) { BestArea = Area; Best = Name; BestActor = Actor; }
 		}
-		return Best;
+		if (OutName) *OutName = Best;
+		return BestActor;
+	}
+
+	FString MapTileAt(UWorld* World, const FVector& Point)
+	{
+		FString Name;
+		MapTileActorAt(World, Point, &Name);
+		return Name;
+	}
+
+	FParented ParentToTiles(UWorld* World, const TArray<UHutongBuildingComponent*>& Buildings)
+	{
+		FParented Out;
+		if (!GEditor) return Out;
+		const FScopedTransaction Transaction(LOCTEXT("ParentToTiles", "Parent Buildings To Map Tiles"));
+		for (UHutongBuildingComponent* B : Buildings)
+		{
+			AActor* Actor = B ? B->GetOwner() : nullptr;
+			if (!Actor) continue;
+			AStaticMeshActor* Tile = MapTileActorAt(World ? World : Actor->GetWorld(), FootprintCentre(B));
+			if (!Tile) { ++Out.OffMap; continue; }
+			if (Actor->GetAttachParentActor() == Tile) { ++Out.Already; continue; }
+			if (!GEditor->CanParentActors(Tile, Actor)) { ++Out.Refused; continue; }
+			// Takes the tile's Outliner folder too.
+			GEditor->ParentActors(Tile, Actor, NAME_None);
+			++Out.Parented;
+		}
+		return Out;
+	}
+
+	int32 DetachFromTiles(UWorld* World, const TArray<UHutongBuildingComponent*>& Buildings)
+	{
+		const FScopedTransaction Transaction(LOCTEXT("DetachFromTiles", "Detach Buildings From Map Tiles"));
+		int32 Detached = 0;
+		for (UHutongBuildingComponent* B : Buildings)
+		{
+			AActor* Actor = B ? B->GetOwner() : nullptr;
+			AActor* Parent = Actor ? Actor->GetAttachParentActor() : nullptr;
+			if (!Parent || Parent->FindComponentByClass<UHutongBuildingComponent>() || !Cast<AStaticMeshActor>(Parent)) continue;
+			Actor->Modify();
+			Parent->Modify(/*bAlwaysMarkDirty*/ false);
+			Actor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+			Actor->SetFolderPath(FolderFor(World ? World : Actor->GetWorld(), B));
+			++Detached;
+		}
+		return Detached;
 	}
 
 	FString NextCourtName(const FString& Prefix, const TArray<FString>& Existing)
@@ -106,7 +153,6 @@ namespace HutongCourts
 				FSummary& S = ByName.FindOrAdd(Name);
 				S.Name = Name;
 				++S.Buildings;
-				// Walls stand between courts: a court's tile is read off its own buildings where it has any.
 				if (!Where.Contains(Name) || !B->CanShareCourts()) Where.Add(Name, FootprintCentre(B));
 			}
 		}
@@ -131,7 +177,6 @@ namespace HutongCourts
 			B->Modify();
 			B->RemoveCourt(Name);
 		}
-		// Refiled where they still have a court (a wall left with one); the rest stay put.
 		FileInFolders(In[0]->GetOwner() ? In[0]->GetOwner()->GetWorld() : nullptr, In);
 		return In.Num();
 	}
@@ -199,10 +244,10 @@ namespace HutongCourts
 		for (UHutongBuildingComponent* B : Buildings)
 		{
 			AActor* Actor = B ? B->GetOwner() : nullptr;
-			if (!Actor) continue;
+			// An attached actor sits under its parent in the Outliner whatever its folder.
+			if (!Actor || Actor->GetAttachParentActor()) continue;
 			FName Folder = FolderFor(World ? World : Actor->GetWorld(), B);
-			// In no court: out of Courts, to the top level, if a court had filed it there; any other
-			// folder is the user's and stays.
+			// Folders of the user's own stay.
 			if (Folder.IsNone() && !Actor->GetFolderPath().ToString().StartsWith(FString(RootFolder) + TEXT("/"))) continue;
 			if (Actor->GetFolderPath() == Folder) continue;
 			Actor->Modify();

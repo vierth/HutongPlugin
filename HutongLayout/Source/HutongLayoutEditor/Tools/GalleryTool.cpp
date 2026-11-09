@@ -17,7 +17,6 @@ using UE::Geometry::FDynamicMesh3;
 
 namespace
 {
-	// One grid piece: label, footprint, mesh builder, and the component attach that rebuilds it later.
 	struct FGalleryItem
 	{
 		FString Label;
@@ -25,11 +24,9 @@ namespace
 		TFunction<void(FDynamicMesh3&, EHutongDetail)> Build;
 		TFunction<void(AStaticMeshActor*)> Attach;
 		EHutongGalleryCategory Category = EHutongGalleryCategory::All;
-		// Pieces of one kind, kept together on the ground and in the outliner.
 		FString Cluster;
 	};
 
-	// Band order on the ground, front to back.
 	constexpr EHutongGalleryCategory CategoryOrder[] = {
 		EHutongGalleryCategory::Houses, EHutongGalleryCategory::Gates, EHutongGalleryCategory::Walls,
 		EHutongGalleryCategory::Courtyard, EHutongGalleryCategory::Street, EHutongGalleryCategory::Temples };
@@ -43,7 +40,6 @@ namespace
 		return Preset;
 	}
 
-	// Faced types are built facing -Y.
 	constexpr EHutongBaySide GalleryFacing = EHutongBaySide::MinusY;
 
 	template <typename TComponent, typename TSetup>
@@ -55,7 +51,7 @@ namespace
 			if (!C) return;
 			Setup(C);
 			C->Palette = Palette;
-			// Without AddInstanceComponent the component is hidden in Details and not saved.
+			// AddInstanceComponent shows the component in Details and saves it.
 			Actor->AddInstanceComponent(C);
 			C->RegisterComponent();
 			C->ApplyPlacementAttachments();
@@ -69,9 +65,6 @@ namespace
 
 		const bool bVar = S->bIncludeVariants;
 
-		// Every piece is stamped with the category and cluster current when it is added; the list is filtered
-		// and grouped at the end, so a piece built by one generator can stand with another kind (a wall gate
-		// is a 牆垣式門, with the gates).
 		EHutongGalleryCategory Cat = EHutongGalleryCategory::Walls;
 		FString Cluster;
 		auto Add = [&](FGalleryItem&& It)
@@ -81,7 +74,6 @@ namespace
 			Items.Add(MoveTemp(It));
 		};
 
-		// Walls, and the gates built as walls.
 		auto AddWall = [&](const FString& Label, TFunction<void(FHutongWallParams&)> Tweak)
 		{
 			FHutongWallParams P;
@@ -104,11 +96,15 @@ namespace
 			Add(MoveTemp(It));
 		};
 
-		// --- 牆 ---
 		Cat = EHutongGalleryCategory::Walls;
 		{
 			Cluster = TEXT("Walls (牆)");
 			AddWall(TEXT("Wall (牆)"), [](FHutongWallParams&) {});
+			AddWall(TEXT("Imperial City Wall (皇城牆)"), [](FHutongWallParams& P)
+			{
+				P.Role = EHutongWallRole::ImperialCity;
+				P.bHasWindows = false;
+			});
 
 			auto AddCityWall = [&](const FString& Label, double Len, TFunction<void(FHutongCityWallParams&)> Tweak)
 			{
@@ -138,15 +134,165 @@ namespace
 				P.Rank = EHutongCityWallRank::Outer;
 				P.bRamp = true;
 			});
+			AddCityWall(TEXT("Palace Wall (紫禁城城牆)"), 4000.0, [](FHutongCityWallParams& P)
+			{
+				P.Rank = EHutongCityWallRank::Palace;
+				P.bBastions = false;
+				P.bLoopholes = false;
+				P.bRamp = true;
+			});
 
-			// Garden openings.
+			for (const EHutongCityWallRank Rank : { EHutongCityWallRank::Inner, EHutongCityWallRank::Outer, EHutongCityWallRank::Palace })
+			{
+				FHutongCityWallParams P;
+				P.ChooseRank(Rank);
+				P.bBastions = false;
+				P.bLoopholes = Rank != EHutongCityWallRank::Palace;
+				UHutongWallCornerBuildingComponent* Probe = NewObject<UHutongWallCornerBuildingComponent>();
+				Probe->Params = P;
+				const double Platform = Probe->GetPlatformSize();
+				FGalleryItem It;
+				It.Label = Rank == EHutongCityWallRank::Palace ? FString(TEXT("Palace Wall Corner (紫禁城城角)"))
+					: Rank == EHutongCityWallRank::Outer ? FString(TEXT("City Wall Corner (城角) · Outer City (外城)"))
+					: FString(TEXT("City Wall Corner (城角)"));
+				It.Footprint = FVector2D(Platform, Platform);
+				It.Build = [P, Platform](FDynamicMesh3& M, EHutongDetail D)
+				{
+					UHutongWallCornerBuildingComponent::BuildCornerMesh(P, EHutongWallCornerShape::Platform, Platform, 0, M, D);
+				};
+				It.Attach = MakeAttach<UHutongWallCornerBuildingComponent>(Palette,
+					[P](UHutongWallCornerBuildingComponent* C)
+					{
+						C->Params = P;
+						C->OuterCorner = 0;
+					});
+				Add(MoveTemp(It));
+			}
+
+			{
+				const FHutongArrowTowerParams P;
+				FGalleryItem It;
+				It.Label = TEXT("Arrow Tower (箭樓)");
+				It.Footprint = UHutongArrowTowerBuildingComponent::FootprintFor(P, EHutongBaySide::MinusY);
+				It.Build = [P](FDynamicMesh3& M, EHutongDetail D)
+				{
+					UHutongArrowTowerBuildingComponent::BuildArrowTowerMesh(P, EHutongBaySide::MinusY, M, D);
+				};
+				It.Attach = MakeAttach<UHutongArrowTowerBuildingComponent>(Palette,
+					[P](UHutongArrowTowerBuildingComponent* C)
+					{
+						C->Params = P;
+						C->Facade = EHutongBaySide::MinusY;
+					});
+				Add(MoveTemp(It));
+			}
+
+			{
+				const FHutongCityGateParams P;
+				FGalleryItem It;
+				It.Label = TEXT("Barbican Gate (閘樓)");
+				It.Footprint = UHutongCityGateBuildingComponent::FootprintFor(P, EHutongBaySide::MinusY);
+				It.Build = [P](FDynamicMesh3& M, EHutongDetail D)
+				{
+					UHutongCityGateBuildingComponent::BuildCityGateMesh(P, EHutongBaySide::MinusY, M, D);
+				};
+				It.Attach = MakeAttach<UHutongCityGateBuildingComponent>(Palette,
+					[P](UHutongCityGateBuildingComponent* C)
+					{
+						C->Params = P;
+						C->Facade = EHutongBaySide::MinusY;
+					});
+				Add(MoveTemp(It));
+			}
+			{
+				FHutongCityGateParams P;
+				P.Tower = EHutongCityGateTower::Chenglou;
+				FGalleryItem It;
+				It.Label = TEXT("City Gate Tower (城樓)");
+				It.Footprint = UHutongCityGateBuildingComponent::FootprintFor(P, EHutongBaySide::MinusY);
+				It.Build = [P](FDynamicMesh3& M, EHutongDetail D)
+				{
+					UHutongCityGateBuildingComponent::BuildCityGateMesh(P, EHutongBaySide::MinusY, M, D);
+				};
+				It.Attach = MakeAttach<UHutongCityGateBuildingComponent>(Palette,
+					[P](UHutongCityGateBuildingComponent* C)
+					{
+						C->Params = P;
+						C->Facade = EHutongBaySide::MinusY;
+					});
+				Add(MoveTemp(It));
+			}
+			for (const EHutongCityWallRank Rank : { EHutongCityWallRank::Inner })
+			{
+				FHutongCityWallParams P;
+				P.ChooseRank(Rank);
+				const double Size = UHutongWallCornerBuildingComponent::SizeFor(P, EHutongWallCornerShape::Rounded, 0.0);
+				FGalleryItem It;
+				It.Label = TEXT("Rounded Wall Corner (甕城角)");
+				It.Footprint = FVector2D(Size, Size);
+				It.Build = [P, Size](FDynamicMesh3& M, EHutongDetail D)
+				{
+					UHutongWallCornerBuildingComponent::BuildCornerMesh(P, EHutongWallCornerShape::Rounded, Size, 0, M, D);
+				};
+				It.Attach = MakeAttach<UHutongWallCornerBuildingComponent>(Palette,
+					[P](UHutongWallCornerBuildingComponent* C)
+					{
+						C->Params = P;
+						C->Shape = EHutongWallCornerShape::Rounded;
+						C->OuterCorner = 0;
+					});
+				Add(MoveTemp(It));
+			}
+			{
+				FHutongCityWallParams P;
+				P.bBastions = false;
+				const double Size = UHutongWallCornerBuildingComponent::SizeFor(P, EHutongWallCornerShape::Platform, 0.0);
+				FGalleryItem It;
+				It.Label = TEXT("Corner Arrow Tower (角箭樓)");
+				It.Footprint = FVector2D(Size, Size);
+				It.Build = [P, Size](FDynamicMesh3& M, EHutongDetail D)
+				{
+					UHutongWallCornerBuildingComponent::BuildCornerMesh(P, EHutongWallCornerShape::Platform, Size, 0, M, D, EHutongCornerTower::ArrowTower);
+				};
+				It.Attach = MakeAttach<UHutongWallCornerBuildingComponent>(Palette,
+					[P](UHutongWallCornerBuildingComponent* C)
+					{
+						C->Params = P;
+						C->Tower = EHutongCornerTower::ArrowTower;
+						C->OuterCorner = 0;
+					});
+				Add(MoveTemp(It));
+			}
+			{
+				FHutongCityWallParams P;
+				P.ChooseRank(EHutongCityWallRank::Palace);
+				P.bBastions = false;
+				P.bLoopholes = false;
+				const double Size = UHutongWallCornerBuildingComponent::SizeFor(P, EHutongWallCornerShape::Platform, 0.0);
+				FGalleryItem It;
+				It.Label = TEXT("Palace Corner Tower (紫禁城角樓)");
+				It.Footprint = FVector2D(Size, Size);
+				It.Build = [P, Size](FDynamicMesh3& M, EHutongDetail D)
+				{
+					UHutongWallCornerBuildingComponent::BuildCornerMesh(P, EHutongWallCornerShape::Platform, Size, 0, M, D, EHutongCornerTower::PalaceTower);
+				};
+				It.Attach = MakeAttach<UHutongWallCornerBuildingComponent>(Palette,
+					[P](UHutongWallCornerBuildingComponent* C)
+					{
+						C->Params = P;
+						C->Tower = EHutongCornerTower::PalaceTower;
+						C->OuterCorner = 0;
+					});
+				Add(MoveTemp(It));
+			}
+
 			Cluster = TEXT("Garden Doorways (牆門洞)");
 			AddWall(TEXT("Moon Gate (月亮門)"), [](FHutongWallParams& P)
 			{
 				P.Role = EHutongWallRole::Courtyard;
 				P.Doorway = EHutongWallDoorway::Moon;
 			});
-			AddWall(TEXT("Plain Doorway (隨牆門)"), [](FHutongWallParams& P)
+			AddWall(TEXT("Wall-Set Gate (隨牆門)"), [](FHutongWallParams& P)
 			{
 				P.Role = EHutongWallRole::Courtyard;
 				P.Doorway = EHutongWallDoorway::Rect;
@@ -175,7 +321,6 @@ namespace
 					P.Doorway = EHutongWallDoorway::Moon;
 					P.bDoorwayChuihua = true;
 				});
-				// 什錦窗: marks a 隔牆 apart from a 院牆.
 				Cluster = TEXT("Decorative Windows (什錦窗)");
 				AddWall(TEXT("Decorative Windows (什錦窗) Wall · Round Window (圓窗)"), [](FHutongWallParams& P)
 				{
@@ -198,7 +343,6 @@ namespace
 			}
 		}
 
-		// --- 正房 / 廂房 / 倒座房 / 後罩房 / 耳房 --- from the shipped presets.
 		Cat = EHutongGalleryCategory::Houses;
 		{
 			TArray<FString> Names = HutongPresets::BuiltInSiheyuanNames();
@@ -223,7 +367,6 @@ namespace
 				{
 					UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(P, GalleryFacing, 0, SX, SY, M, D);
 				};
-				// The preset is named, so the piece reads as that preset and not as customized.
 				It.Attach = MakeAttach<UHutongSiheyuanBuildingComponent>(Palette,
 					[P, SX, SY, Name](UHutongSiheyuanBuildingComponent* C)
 					{
@@ -234,7 +377,6 @@ namespace
 				Add(MoveTemp(It));
 			}
 
-			// Sumptuary rule: same house in 合瓦 and in 筒瓦.
 			if (bVar && Names.Num() > 0)
 			{
 				Cluster = HouseCluster(Names[0]);
@@ -261,7 +403,6 @@ namespace
 						});
 					Add(MoveTemp(It));
 
-					// 徹上明造: the same hall with no ceiling, its frame open overhead.
 					FHutongSiheyuanParams F = P;
 					F.RoofTile = EHutongRoofTile::He;
 					F.bExposedFrame = true;
@@ -281,7 +422,6 @@ namespace
 					Add(MoveTemp(Fr));
 				}
 
-				// A preset again with one thing changed, labelled "<preset> · <what>".
 				auto AddVariant = [&](const FString& Preset, const TCHAR* What, TFunctionRef<void(FHutongSiheyuanParams&)> Change)
 				{
 					FHutongSiheyuanParams V;
@@ -315,7 +455,6 @@ namespace
 			}
 		}
 
-		// --- 大門 and 垂花門 ---
 		Cat = EHutongGalleryCategory::Gates;
 		{
 			Cluster = TEXT("Gate Houses (屋宇式門)");
@@ -326,7 +465,6 @@ namespace
 				TEXT("Wide-Hall Gate (廣亮大門)"), TEXT("Inner-Column Gate (金柱大門)"),
 				TEXT("Flush Gate (蠻子門)"), TEXT("Ruyi Gate (如意門)") };
 
-			// The 廣亮大門 again on 抱鼓石, and with its 反八字影壁; laid beside it.
 			auto AddGuangliangVariants = [&]()
 			{
 				FHutongGateHouseParams P;
@@ -355,7 +493,6 @@ namespace
 					});
 				Add(MoveTemp(It));
 
-				// 反八字影壁 before the gate (圖5-1-2).
 				FGalleryItem Fr;
 				Fr.Label = TEXT("Wide-Hall Gate (廣亮大門) · Splayed Screen Walls (反八字影壁)");
 				Fr.Footprint = FVector2D(SX, SY);
@@ -378,7 +515,6 @@ namespace
 				FHutongGateHouseParams P;
 				P.Style = Styles[i];
 				P.RandomSeed = S->RandomSeed + i;
-				// Middle of the style's size band, as the compound sizes its gate.
 				const FHutongGateHouseParams::FSizeRange R = P.GetSizeRange();
 				const double SX = (R.FrontageMax > 0.0) ? 0.5 * (R.FrontageMin + R.FrontageMax) : 360.0;
 				const double SY = (R.DepthMax > 0.0) ? 0.5 * (R.DepthMin + R.DepthMax) : 340.0;
@@ -411,7 +547,7 @@ namespace
 				if (i == 0 && bVar) AddGuangliangVariants();
 			}
 
-			// 牆垣式門: the gates that stand in a wall rather than a building (四合院建築及其構造 §5-1).
+			// 牆垣式門: gates standing in a wall (四合院建築及其構造 §5-1).
 			Cluster = TEXT("Wall Gates (牆垣式門)");
 			if (bVar)
 			{
@@ -424,6 +560,14 @@ namespace
 				{
 					P.bHasGate = true;
 					P.DoorStones.Style = EHutongDoorStone::Drum;
+				});
+				// Several on one run; the middle one keeps the centre open for the collision test.
+				AddWall(TEXT("Wall Gate (牆垣門) · Three Gates"), [](FHutongWallParams& P)
+				{
+					P.Length = 1800.0;
+					P.bHasGate = true;
+					P.GatePosition = 0.5;
+					P.MoreGatePositions = { 0.18, 0.82 };
 				});
 			}
 			AddWall(TEXT("Wall-Mounted Inner Gate (牆垣式垂花門)"), [](FHutongWallParams& P)
@@ -467,11 +611,9 @@ namespace
 			}
 		}
 
-		// --- 遊廊, 影壁, 甬路 ---
 		Cat = EHutongGalleryCategory::Courtyard;
 		{
 			Cluster = TEXT("Covered Corridors (遊廊)");
-			// Every 遊廊 is open to its frame (徹上明造), so no separate variant.
 			auto AddCorridor = [&](const FString& Label, bool bClosed)
 			{
 				FHutongCorridorParams P;
@@ -497,7 +639,7 @@ namespace
 				Add(MoveTemp(It));
 			};
 			AddCorridor(TEXT("Covered Corridor (遊廊)"), false);
-			if (bVar) AddCorridor(TEXT("Ring Corridor (抄手遊廊) · Closed Side"), true);
+			if (bVar) AddCorridor(TEXT("Encircling Corridor (抄手遊廊) · Closed Side"), true);
 
 			Cluster = TEXT("Screen Walls (影壁)");
 			{
@@ -540,7 +682,6 @@ namespace
 				Add(MoveTemp(It));
 			}
 
-			// 天棚魚缸石榴樹.
 			{
 				FHutongFlowerBedParams P;
 				const double SX = 220.0, SY = 150.0;
@@ -576,7 +717,6 @@ namespace
 			}
 		}
 
-		// --- 耳房, alone and with its 過道 --- from the ear room tool's shipped presets.
 		Cat = EHutongGalleryCategory::Houses;
 		{
 			Cluster = HouseCluster(TEXT("Ear Room"));
@@ -588,7 +728,6 @@ namespace
 				{
 					continue;
 				}
-				// Without variants, the one the compound builds.
 				if (!bVar && P.Passageway != EHutongEarPassage::AtEnd) continue;
 				const double SX = P.GetSuggestedWidth() > 0.0 ? P.GetSuggestedWidth() : 760.0;
 				const double SY = P.Room.GetSuggestedDepth() > 0.0 ? P.Room.GetSuggestedDepth() : 340.0;
@@ -609,7 +748,6 @@ namespace
 				Add(MoveTemp(It));
 			}
 
-			// 過道: the roofed slot between a gable and the wall beside it, as the compound builds it.
 			{
 				FHutongPassageParams Pa;
 				const double Run = 300.0, Clear = 200.0;
@@ -630,7 +768,6 @@ namespace
 				Add(MoveTemp(Ps));
 			}
 
-			// 構架: the house's frame alone, as the frame tool stamps it; with its rafters as a variant.
 			Cluster = TEXT("Timber Frames (構架)");
 			for (const bool bRafters : { false, true })
 			{
@@ -656,7 +793,6 @@ namespace
 			}
 		}
 
-		// --- 鋪面房 and 牌坊 ---
 		Cat = EHutongGalleryCategory::Street;
 		{
 			auto AddShop = [&](const FString& Label, int32 OpenBays, EHutongShopFront Front, EHutongShopScheme Scheme,
@@ -699,7 +835,6 @@ namespace
 				AddShop(TEXT("Shopfront (鋪面房) · Boarded Up"), 0, EHutongShopFront::Carved, EHutongShopScheme::BlueGreen);
 			}
 
-			// 小房, one of each built-in preset.
 			Cluster = TEXT("Small Buildings (小房)");
 			for (const TPair<const TCHAR*, FVector2D>& Small : {
 					TPair<const TCHAR*, FVector2D>(TEXT("Small House (小房)"), FVector2D(400.0, 360.0)),
@@ -753,7 +888,6 @@ namespace
 			};
 			Cluster = TEXT("Storeyed Buildings (樓)");
 			AddStorey(TEXT("Multi-Story Building (樓)"), true);
-			// Without the storey gallery, for comparison.
 			if (bVar) AddStorey(TEXT("Multi-Story Building (樓) · No Gallery"), false);
 
 			auto AddPaifang = [&](const FString& Label, EHutongPaifangBays Bays, bool bRoofs, double Len)
@@ -790,7 +924,6 @@ namespace
 			}
 		}
 
-		// --- 亭 and 殿: the roof types ---
 		Cat = EHutongGalleryCategory::Temples;
 		{
 			auto AddPavilion = [&](const FString& Label, EHutongRoofType Roof, double Roll, bool bRound = false)
@@ -890,7 +1023,6 @@ namespace
 			}
 		}
 
-		// The categories asked for, in band order, each cluster together in the order it was first met.
 		TArray<FGalleryItem> Out;
 		for (const EHutongGalleryCategory C : CategoryOrder)
 		{
@@ -911,22 +1043,48 @@ namespace
 		return Out;
 	}
 
-	// Where every piece goes: categories are bands front to back, clusters sit together inside them.
 	struct FGalleryPlan
 	{
-		// Min corner of each piece (the corner its mesh is built around), in the gallery's frame.
 		TArray<FVector2D> Origins;
-		// Ground each cluster and each category covers, for the preview.
 		TArray<FBox2D> ClusterBoxes;
 		TArray<FBox2D> CategoryBoxes;
 		int32 ClusterCount = 0;
 		double TotalX = 0.0, TotalY = 0.0;
 	};
 
-	// Rows fill left to right. Small clusters share a row while its piece count stays within PerRow, a wider
-	// gap between them; a larger cluster starts its own rows and wraps. Fronts (facing -Y) line up on a row.
-	// Clusters stand twice the spacing apart, categories three times.
-	FGalleryPlan LayOut(const TArray<FGalleryItem>& Items, double Spacing, int32 PerRowIn)
+	FVector2D GalleryFacingOffset(const FVector2D& F, double Gap, int32 Quarter)
+	{
+		const double Half = 0.5 * Gap;
+		return FVector2D((Quarter & 1) ? F.X + Half : 0.0, Quarter >= 2 ? FMath::Max(F.X, F.Y) + Half : 0.0);
+	}
+	FVector2D GalleryFacingSize(const FVector2D& F, int32 Quarter) { return (Quarter & 1) ? FVector2D(F.Y, F.X) : F; }
+	FVector2D GalleryFacingsBlock(const FVector2D& F, double Gap)
+	{
+		return FVector2D(F.X + 0.5 * Gap + F.Y, 2.0 * FMath::Max(F.X, F.Y) + 0.5 * Gap);
+	}
+
+	bool TurnGalleryPiece(UHutongBuildingComponent* B, int32 Quarter)
+	{
+		// Corner offsets belong to the footprint's own corners; a turned twin would be another building.
+		if (B->HasFootprintSkew()) return false;
+		const FVector2D Size = B->GetFootprintSize();
+		const FVector2D Turned = GalleryFacingSize(Size, Quarter);
+		EHutongBaySide Side;
+		if (B->GetFacade(Side))
+		{
+			if (!B->SetFacade((EHutongBaySide)(((int32)Side + Quarter) & 3))) return false;
+			B->SetFootprintSize(Turned);
+			return true;
+		}
+		const bool bWasAlongY = B->IsRunAlongY();
+		if (Quarter != 1) return false;
+		B->SetRunAlongY(!bWasAlongY);
+		if (B->IsRunAlongY() == bWasAlongY) return false;
+		B->SetFootprintSize(Turned);
+		return true;
+	}
+
+	FGalleryPlan LayOut(const TArray<FGalleryItem>& Items, double Spacing, int32 PerRowIn, bool bFacings = false)
 	{
 		FGalleryPlan G;
 		G.Origins.SetNum(Items.Num());
@@ -964,7 +1122,7 @@ namespace
 				for (; i < End; ++i)
 				{
 					if (RowCount >= PerRow) CloseRow();
-					const FVector2D& F = Items[i].Footprint;
+					const FVector2D F = bFacings ? GalleryFacingsBlock(Items[i].Footprint, Gap) : Items[i].Footprint;
 					G.Origins[i] = FVector2D(X, Y);
 					ClusterBox += FBox2D(G.Origins[i], G.Origins[i] + F);
 					X += F.X + Gap;
@@ -997,6 +1155,25 @@ TArray<UClass*> HutongGallery::AttachedClasses(const UHutongGalleryToolPropertie
 		World->DestroyActor(Actor);
 	}
 	return Out;
+}
+
+bool HutongGallery::TurnPiece(UHutongBuildingComponent* Building, int32 Quarter)
+{
+	return Building && TurnGalleryPiece(Building, Quarter);
+}
+
+void HutongGallery::ForEachAttached(const UHutongGalleryToolProperties* Settings, UWorld* World,
+	TFunctionRef<void(const FString&, AStaticMeshActor*)> Visit)
+{
+	if (!World) return;
+	for (const FGalleryItem& It : MakeItems(Settings, FHutongPalette()))
+	{
+		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>();
+		if (!Actor) continue;
+		if (It.Attach) It.Attach(Actor);
+		Visit(It.Label, Actor);
+		World->DestroyActor(Actor);
+	}
 }
 
 void HutongGallery::ForEachBuilt(const UHutongGalleryToolProperties* Settings, EHutongDetail Level,
@@ -1061,7 +1238,7 @@ TArray<HutongGallery::FHutongCostRow> HutongGallery::BuildCostReport(
 			Row.Triangles[Level] = Mesh.TriangleCount();
 			Row.Vertices[Level] = Mesh.VertexCount();
 
-			// Count distinct slots used; the mesh is not compacted.
+			// Count distinct slots: IDs in an uncompacted mesh can skip.
 			if (const UE::Geometry::FDynamicMeshMaterialAttribute* MatIDs =
 				Mesh.HasAttributes() ? Mesh.Attributes()->GetMaterialID() : nullptr)
 			{
@@ -1116,7 +1293,7 @@ TArray<HutongGallery::FPlacedPiece> HutongGallery::Plan(const UHutongGalleryTool
 	TArray<FPlacedPiece> Out;
 	if (!Settings) return Out;
 	const TArray<FGalleryItem> Items = MakeItems(Settings, FHutongPalette());
-	const FGalleryPlan G = LayOut(Items, Settings->Spacing, Settings->Columns);
+	const FGalleryPlan G = LayOut(Items, Settings->Spacing, Settings->Columns, Settings->bAllFacings);
 	for (int32 i = 0; i < Items.Num(); ++i)
 	{
 		FPlacedPiece& P = Out.AddDefaulted_GetRef();
@@ -1139,8 +1316,7 @@ void UHutongGalleryTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongGalleryToolProperties>(this);
 	RegisterSettings(Settings);
-	// After the restore: every gallery tool shares this settings class, so a restored category was the last
-	// gallery's, and each tool placed whatever was opened first.
+	// Set after the restore: every gallery tool shares this settings class.
 	Settings->GalleryCategory = Category;
 }
 
@@ -1151,10 +1327,8 @@ void UHutongGalleryTool::GetEffectiveRectBounds(
 	Super::GetEffectiveRectBounds(OutMinX, OutMinY, OutMaxX, OutMaxY);
 	if (!Settings) return;
 
-	// Drag positions and turns the gallery; it does not size it.
-	const FGalleryPlan G = LayOut(MakeItems(Settings, FHutongPalette()), Settings->Spacing, Settings->Columns);
+	const FGalleryPlan G = LayOut(MakeItems(Settings, FHutongPalette()), Settings->Spacing, Settings->Columns, Settings->bAllFacings);
 
-	// Held under the cursor, not pinned to the anchor corner.
 	HoldExtentAtCursor(OutMinX, OutMaxX, G.TotalX);
 	HoldExtentAtCursor(OutMinY, OutMaxY, G.TotalY);
 }
@@ -1167,7 +1341,7 @@ void UHutongGalleryTool::SpawnFinalActor()
 	const TArray<FGalleryItem> Items = MakeItems(Settings, Palette);
 	if (Items.Num() == 0) return;
 
-	const FGalleryPlan G = LayOut(Items, Settings->Spacing, Settings->Columns);
+	const FGalleryPlan G = LayOut(Items, Settings->Spacing, Settings->Columns, Settings->bAllFacings);
 
 	double MinX, MinY, MaxX, MaxY;
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
@@ -1175,12 +1349,10 @@ void UHutongGalleryTool::SpawnFinalActor()
 	UWorld* World = GetToolManager()->GetContextQueriesAPI()->GetCurrentEditingWorld();
 	if (!World) return;
 
-	// One transaction: the whole gallery is one Ctrl+Z.
 	UInteractiveToolManager* ToolManager = GetToolManager();
 	ToolManager->BeginUndoTransaction(
 		NSLOCTEXT("HutongLayout", "PlaceGallery", "Place Hutong Gallery"));
 
-	// Dozens of mesh bakes: show progress so it does not look hung.
 	FScopedSlowTask Task((float)Items.Num(),
 		NSLOCTEXT("HutongLayout", "BuildingGallery", "Building the gallery…"));
 	Task.MakeDialog();
@@ -1190,11 +1362,11 @@ void UHutongGalleryTool::SpawnFinalActor()
 		const FGalleryItem& It = Items[i];
 		Task.EnterProgressFrame(1.0f, FText::FromString(It.Label));
 
-		// The item's build callable already takes a level, as the LOD chain wants.
 		TArray<FDynamicMesh3> LODs;
+		HutongGen::FMeshTurn Turn;
 		const int32 CollisionLOD = HutongGen::Detail::BuildPlacementLODs(IsPlanOnly(), It.Footprint.X, It.Footprint.Y,
 			GetDetailLevel(), ShouldBuildLODChain(),
-			[&It](FDynamicMesh3& M, EHutongDetail Level) { It.Build(M, Level); }, LODs);
+			[&It](FDynamicMesh3& M, EHutongDetail Level) { It.Build(M, Level); }, LODs, &Turn);
 		const bool bPlanOnly = IsPlanOnly();
 		if (!bPlanOnly && (LODs.Num() == 0 || LODs[0].TriangleCount() == 0)) continue;
 
@@ -1205,24 +1377,43 @@ void UHutongGalleryTool::SpawnFinalActor()
 
 		AStaticMeshActor* Actor = bPlanOnly
 			? HutongGen::SpawnEmptyActor(World, Xform, GetActorNameBase())
-			: HutongGen::SpawnStaticMeshActor(World, LODs, Xform, GetActorNameBase(), Palette, CollisionLOD);
+			: HutongGen::SpawnStaticMeshActor(World, LODs, Xform, GetActorNameBase(), Palette, CollisionLOD, Turn);
 		if (!Actor) continue;
 
 		Actor->SetActorLabel(It.Label);
 		if (!Settings->OutlinerFolder.IsNone())
 		{
-			// Folder / category / cluster, as they stand on the ground.
 			Actor->SetFolderPath(FName(FString::Printf(TEXT("%s/%s/%s"),
 				*Settings->OutlinerFolder.ToString(), *HutongGallery::CategoryName(It.Category), *It.Cluster)));
 		}
 
-		// Each piece keeps its own building component, individually editable.
 		It.Attach(Actor);
 
 		// Stamp sets bPlanOnly after the attach's own pass, so re-apply attachments or plan outlines are missing.
 		if (UHutongBuildingComponent* B = Actor->FindComponentByClass<UHutongBuildingComponent>())
 		{
 			StampDetail(B);
+			B->ApplyPlacementAttachments();
+		}
+
+		for (int32 Quarter = 1; Settings->bAllFacings && Quarter < 4; ++Quarter)
+		{
+			const FVector2D At = Origin + GalleryFacingOffset(It.Footprint, FMath::Max(Settings->Spacing, 50.0), Quarter);
+			const FVector TurnedLoc = LocalRectToWorld(MinX + At.X, MinY + At.Y);
+			AStaticMeshActor* Turned = HutongGen::SpawnEmptyActor(World,
+				FTransform(FRotator(0.0, PlacementYawDeg, 0.0), FVector(TurnedLoc.X, TurnedLoc.Y, StartWorld.Z)), GetActorNameBase());
+			if (!Turned) continue;
+			It.Attach(Turned);
+			UHutongBuildingComponent* B = Turned->FindComponentByClass<UHutongBuildingComponent>();
+			if (!B || !TurnGalleryPiece(B, Quarter))
+			{
+				Turned->Destroy();
+				continue;
+			}
+			Turned->SetActorLabel(FString::Printf(TEXT("%s · turned %d°"), *It.Label, 90 * Quarter));
+			Turned->SetFolderPath(Actor->GetFolderPath());
+			StampDetail(B);
+			if (!B->bPlanOnly) B->Rebuild();
 			B->ApplyPlacementAttachments();
 		}
 	}
@@ -1234,7 +1425,7 @@ FString UHutongGalleryTool::GetPlacementDetail() const
 {
 	if (!Settings) return FString();
 	const TArray<FGalleryItem> Items = MakeItems(Settings, FHutongPalette());
-	const FGalleryPlan G = LayOut(Items, Settings->Spacing, Settings->Columns);
+	const FGalleryPlan G = LayOut(Items, Settings->Spacing, Settings->Columns, Settings->bAllFacings);
 	return FString::Printf(TEXT("%d pieces in %d clusters · %.0f x %.0f m"),
 		Items.Num(), G.ClusterCount, G.TotalX * 0.01, G.TotalY * 0.01);
 }
@@ -1250,7 +1441,7 @@ void UHutongGalleryTool::Render(IToolsContextRenderAPI* RenderAPI)
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
 
 	const TArray<FGalleryItem> Items = MakeItems(Settings, FHutongPalette());
-	const FGalleryPlan G = LayOut(Items, Settings->Spacing, Settings->Columns);
+	const FGalleryPlan G = LayOut(Items, Settings->Spacing, Settings->Columns, Settings->bAllFacings);
 
 	auto DrawBox = [&](const FBox2D& Box, double Pad, const FLinearColor& Colour, float Thickness)
 	{
@@ -1266,12 +1457,15 @@ void UHutongGalleryTool::Render(IToolsContextRenderAPI* RenderAPI)
 		DrawPreviewLine(PDI, D, A, Colour, Thickness);
 	};
 
-	// Each piece's footprint, each cluster round its pieces, each category round its clusters.
+	const double Gap = FMath::Max(Settings->Spacing, 50.0);
 	for (int32 i = 0; i < Items.Num(); ++i)
 	{
-		DrawBox(FBox2D(G.Origins[i], G.Origins[i] + Items[i].Footprint), 0.0, FLinearColor(0.35f, 0.75f, 1.0f, 1.0f), 3.0f);
+		for (int32 Quarter = 0; Quarter < (Settings->bAllFacings ? 4 : 1); ++Quarter)
+		{
+			const FVector2D At = G.Origins[i] + GalleryFacingOffset(Items[i].Footprint, Gap, Quarter);
+			DrawBox(FBox2D(At, At + GalleryFacingSize(Items[i].Footprint, Quarter)), 0.0, FLinearColor(0.35f, 0.75f, 1.0f, 1.0f), 3.0f);
+		}
 	}
-	const double Gap = FMath::Max(Settings->Spacing, 50.0);
 	for (const FBox2D& Box : G.ClusterBoxes) DrawBox(Box, 0.5 * Gap, FLinearColor(0.35f, 0.75f, 1.0f, 0.5f), 1.5f);
 	for (const FBox2D& Box : G.CategoryBoxes) DrawBox(Box, 1.5 * Gap, FLinearColor(1.0f, 0.75f, 0.3f, 1.0f), 2.0f);
 }

@@ -32,11 +32,10 @@ struct FHutongPassageParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Tile Courses (壟)", ToolTip="Models each tile course on the roof as geometry."))
 	bool bHasTileRuns = true;
 
-	// Set by the layout. Width = clear way, wall face to wall face.
+	// Width = clear way, wall face to wall face.
 	double Length = 300.0;
 	double Width = 200.0;
 
-	// Roof span: clear way plus bearing each side.
 	double GetRoofSpan() const
 	{
 		return FMath::Max(Width, 1.0) + 2.0 * FMath::Max(Bearing, 0.0);

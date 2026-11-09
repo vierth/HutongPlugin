@@ -19,6 +19,12 @@ public:
 
 	TSharedPtr<FUICommandInfo> BeginWallTool;
 	TSharedPtr<FUICommandInfo> BeginCourtWallTool;
+	TSharedPtr<FUICommandInfo> BeginImperialWallTool;
+	TSharedPtr<FUICommandInfo> BeginPalaceWallTool;
+	TSharedPtr<FUICommandInfo> BeginWallCornerTool;
+	TSharedPtr<FUICommandInfo> BeginArrowTowerTool;
+	TSharedPtr<FUICommandInfo> BeginCityGateTool;
+	TSharedPtr<FUICommandInfo> BeginGateComplexTool;
 	TSharedPtr<FUICommandInfo> BeginSiheyuanTool;
 	TSharedPtr<FUICommandInfo> BeginEarPassageTool;
 	TSharedPtr<FUICommandInfo> BeginGateHouseTool;

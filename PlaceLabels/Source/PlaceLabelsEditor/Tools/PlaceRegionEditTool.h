@@ -106,10 +106,9 @@ public:
 	virtual void Render(IToolsContextRenderAPI* RenderAPI) override;
 	virtual void DrawHUD(FCanvas* Canvas, IToolsContextRenderAPI* RenderAPI) override;
 
-	// Region adds, deletes and imports do not notify the tool.
+	// Polls for region adds, deletes and imports.
 	virtual void OnTick(float DeltaTime) override;
 
-	// IClickDragBehaviorTarget.
 	virtual FInputRayHit CanBeginClickDragSequence(const FInputDeviceRay& PressPos) override;
 	virtual void OnClickPress(const FInputDeviceRay& PressPos) override;
 	virtual void OnClickDrag(const FInputDeviceRay& DragPos) override;
@@ -118,24 +117,20 @@ public:
 
 	virtual void OnUpdateModifierState(int ModifierID, bool bIsOn) override {}
 
-	// IHoverBehaviorTarget
 	virtual FInputRayHit BeginHoverSequenceHitTest(const FInputDeviceRay& PressPos) override;
 	virtual void OnBeginHover(const FInputDeviceRay& DevicePos) override;
 	virtual bool OnUpdateHover(const FInputDeviceRay& DevicePos) override;
 	virtual void OnEndHover() override;
 
-	// Driven by the mode's global key handler and the property set buttons.
 	void DeleteSelectedCorners();
 	void ClearTarget();
 	void WeldTargetToNeighbours();
-	// Writes panel fields to the target: NAME_None all, else just that property, so a stale
-	// snapshot does not overwrite a mode-panel edit.
+	// NAME_None writes all, else just that property, so a mode-panel edit survives a stale snapshot.
 	void ApplyTargetProperties(FName ChangedProperty = NAME_None);
 	void SelectAllCorners();
 
 	bool HasTarget() const { return TargetRegion.IsValid(); }
 
-	// The clicked region; the mode panel's form follows it.
 	UPlaceRegionComponent* GetTargetRegion() const { return TargetRegion.Get(); }
 	bool HasCornerSelection() const { return SelectedCorners.Num() > 0; }
 
@@ -153,10 +148,8 @@ protected:
 	void PushTargetToPanel();
 	void SetTarget(UPlaceRegionComponent* Region);
 
-	// The region whose outline is nearest the given world point, preferring one that contains it.
 	UPlaceRegionComponent* PickRegionAt(const FVector& WorldPoint) const;
 
-	// Screen-constant handle sizing.
 	double PickRadiusAt(const FVector& WorldPoint) const;
 	double HandleSizeAt(const FVector& WorldPoint) const;
 
@@ -195,7 +188,6 @@ protected:
 	TArray<TWeakObjectPtr<UPlaceRegionComponent>> CachedRegions;
 	TArray<PlaceLabelsTopology::FSeamIssue> CachedSeams;
 
-	// Hover
 	EHover HoverKind = EHover::None;
 	int32 HoverCorner = INDEX_NONE;
 	int32 HoverEdge = INDEX_NONE;
@@ -204,7 +196,6 @@ protected:
 	TWeakObjectPtr<UPlaceRegionComponent> HoverRegion;
 	FString SnapDetail;
 
-	// Drag
 	bool bDragging = false;
 	bool bDragMoved = false;
 	FVector2D PressPixel = FVector2D::ZeroVector;

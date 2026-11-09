@@ -27,7 +27,6 @@ bool FHutongWallChainMiterTest::RunTest(const FString& Parameters)
 	using namespace HutongWallChain;
 	const double T = 37.0;
 
-	// Three legs (left turn, sharper right) on the centre line: at each join, one segment's end corners are the next one's start corners.
 	{
 		TArray<FVector2D> Points = { FVector2D(0, 0), FVector2D(800, 0), FVector2D(800, 600), FVector2D(300, 900) };
 		TArray<FSegment> Segments;
@@ -43,16 +42,13 @@ bool FHutongWallChainMiterTest::RunTest(const FString& Parameters)
 			TestTrue(FString::Printf(TEXT("join %d melds on the inner face"), i), FVector2D::Distance(A[2], B[3]) < 1.0e-6);
 			TestFalse(FString::Printf(TEXT("join %d is cut"), i), Segments[i].Skew.IsZero());
 		}
-		// Outer ends rest on nothing, so they are square.
 		TestTrue(TEXT("the start is square"), Segments[0].Skew.Corner00.IsNearlyZero() && Segments[0].Skew.Corner01.IsNearlyZero());
 		TestTrue(TEXT("the end is square"), Segments.Last().Skew.Corner10.IsNearlyZero() && Segments.Last().Skew.Corner11.IsNearlyZero());
-		// Centre line drawn: first segment's faces at +/- half thickness about y = 0.
 		FVector2D C[4];
 		Corners(Segments[0], T, C);
 		TestTrue(TEXT("the drawn line is the centre"), FMath::IsNearlyEqual(C[0].Y, -0.5 * T, 1.0e-6) && FMath::IsNearlyEqual(C[3].Y, 0.5 * T, 1.0e-6));
 	}
 
-	// Straight run needs no cut; a repeated click leaves no segment.
 	{
 		TArray<FVector2D> Points = { FVector2D(0, 0), FVector2D(500, 0), FVector2D(1000, 0), FVector2D(1002, 0) };
 		TArray<FSegment> Segments;
@@ -61,7 +57,6 @@ bool FHutongWallChainMiterTest::RunTest(const FString& Parameters)
 		for (const FSegment& S : Segments) TestTrue(TEXT("a straight join is square"), S.Skew.IsZero());
 	}
 
-	// Drawn along one face: body entirely on one side, joins still meld.
 	{
 		TArray<FVector2D> Points = { FVector2D(0, 0), FVector2D(600, 0), FVector2D(600, 600) };
 		TArray<FSegment> Segments;
@@ -86,7 +81,6 @@ bool FHutongWallChainFlushTest::RunTest(const FString& Parameters)
 	using namespace HutongWallChain;
 	const double T = 37.0;
 
-	// End resting on a face 60° off: both end corners on that face's line (flush). Start on a square face stays plain.
 	FEndFace Start;
 	Start.bSet = true; Start.Point = FVector2D(0, 0); Start.Dir = FVector2D(0, 1);
 	FEndFace End;
@@ -106,7 +100,6 @@ bool FHutongWallChainFlushTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a square face leaves the start square"), Segments[0].Skew.Corner00.IsNearlyZero() && Segments[0].Skew.Corner01.IsNearlyZero());
 	TestTrue(TEXT("the start corners are on the square face"), LineDistance(C[0], Start.Point, Start.Dir) < 1.0e-6 && LineDistance(C[3], Start.Point, Start.Dir) < 1.0e-6);
 
-	// Face nearly along the run is not a flush end: the cut would run metres.
 	FEndFace Along;
 	Along.bSet = true; Along.Point = FVector2D(1000, 0); Along.Dir = FVector2D(1, 0.05).GetSafeNormal();
 	TArray<FSegment> Shallow;
@@ -123,24 +116,18 @@ bool FHutongWallChainSideTest::RunTest(const FString& Parameters)
 {
 	using namespace HutongWallChain;
 	const double T = 37.0;
-	// SideAlongFace, as a placed run's vertex drag uses it (drawing takes the corner rule, CornerEnd).
-	// House front along +X, inside toward +Y. A run continuing it along +X puts its outer face on the
-	// house face: body toward +Y, drawn line at y = 0. Reversed, body still toward +Y, now the y = T face.
 	double DrawnY = -1.0;
 	TestTrue(TEXT("a face along the run sets a side"), SideAlongFace(FVector2D(1, 0), 0.0, -1000.0, FVector2D(0, 1), T, DrawnY));
 	TestTrue(TEXT("the body is on the house's side"), FMath::IsNearlyEqual(DrawnY, 0.0));
 	TestTrue(TEXT("run the other way too"), SideAlongFace(FVector2D(-1, 0), 0.0, -1000.0, FVector2D(0, 1), T, DrawnY));
 	TestTrue(TEXT("still on the house's side"), FMath::IsNearlyEqual(DrawnY, T));
-	// At the house corner both edges are offered, inward diagonal: the edge along the run decides the side.
 	TestTrue(TEXT("a corner offers the edge along the run"), SideAlongFace(FVector2D(1, 0), 90.0, 0.0, FVector2D(-1, 1).GetSafeNormal(), T, DrawnY));
 	TestTrue(TEXT("and the body goes inside"), FMath::IsNearlyEqual(DrawnY, 0.0));
-	// Face across the run is a butt joint, not a side.
 	TestFalse(TEXT("a face across the run sets no side"), SideAlongFace(FVector2D(1, 0), 90.0, -1000.0, FVector2D(1, 0), T, DrawnY));
 	TestFalse(TEXT("nor one 45° off"), SideAlongFace(FVector2D(1, 0), 45.0, -1000.0, FVector2D(-1, 1).GetSafeNormal(), T, DrawnY));
-	// 13° off: not along, unless it was along last frame.
+	// 13° off: along only if it was along last frame.
 	TestFalse(TEXT("13° off is not along"), SideAlongFace(FVector2D(1, 0), 13.0, -1000.0, FVector2D(0, 1), T, DrawnY));
 	TestTrue(TEXT("but stays along once decided"), SideAlongFace(FVector2D(1, 0), 13.0, -1000.0, FVector2D(0, 1), T, DrawnY, AlongFaceDegAfter));
-	// Setback: drawn line falls outside the wall away from the house; built face lands Setback in from it.
 	const double S = 3.0;
 	TestTrue(TEXT("a setback still sets a side"), SideAlongFace(FVector2D(1, 0), 0.0, -1000.0, FVector2D(0, 1), T, DrawnY, AlongFaceDeg, S));
 	TestTrue(TEXT("the drawn line is the setback outside the y = 0 face"), FMath::IsNearlyEqual(DrawnY, -S));
@@ -163,7 +150,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongWallRunVertexTest,
 
 bool FHutongWallRunVertexTest::RunTest(const FString& Parameters)
 {
-	// Tool-placed run reads back as a run; moving the join rebuilds both legs melded; moving an outer end onto a face cuts it flush.
 	using namespace HutongWallChain;
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
@@ -194,7 +180,6 @@ bool FHutongWallRunVertexTest::RunTest(const FString& Parameters)
 		&& Run.Vertices[0].Equals(Points[0], 0.01) && Run.Vertices[1].Equals(Points[1], 0.01) && Run.Vertices[2].Equals(Points[2], 0.01));
 	TestFalse(TEXT("the outer ends are square"), Run.StartFace.bSet || Run.EndFace.bSet);
 
-	// Join moved: both legs turn and still meet on one line.
 	auto WorldCorners = [](const UHutongWallBuildingComponent* Leg, FVector2D Out[4])
 	{
 		FVector2D Local[4];
@@ -222,7 +207,6 @@ bool FHutongWallRunVertexTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the join is where it was put"), E0.Equals(Moved[1], 1.0e-3) && S1.Equals(Moved[1], 1.0e-3));
 	TestTrue(TEXT("the far ends stayed"), S0.Equals(Points[0], 1.0e-3) && E1.Equals(Points[2], 1.0e-3));
 
-	// Far end onto a 45° face: cut flush, read back as resting on it.
 	FEndFace Face;
 	Face.bSet = true; Face.Point = FVector2D(800, 700); Face.Dir = FVector2D(1, 1).GetSafeNormal();
 	Moved[2] = Face.Point;
@@ -237,20 +221,14 @@ bool FHutongWallRunVertexTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongWallChainCornerTest,
 	"HutongLayout.Walls.CornerEnds",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FHutongWallChainCornerTest::RunTest(const FString& Parameters)
 {
-	// Two houses on a street, the run across the gap from a front corner of one to a front corner of
-	// the other, a little off the line: at each end the run's outside corner is the house's corner and
-	// its short face lies along the house's gable.
 	using namespace HutongWallChain;
 	const double T = 37.0;
-	// House A: x in [-600, 0], y in [0, 400], front on y = 0; the run leaves its corner (0, 0).
-	// House B: x in [700, 1300], y in [-100, 300], set 1 m forward; the run arrives at its corner (700, -100).
 	const FVector2D A(0.0, 0.0), B(700.0, -100.0);
 	const FVector2D InA = (FVector2D(-300.0, 200.0)).GetSafeNormal(), InB = (FVector2D(300.0, 200.0)).GetSafeNormal();
 
@@ -269,7 +247,6 @@ bool FHutongWallChainCornerTest::RunTest(const FString& Parameters)
 	auto Nearest = [&](const FVector2D& P) { double D = TNumericLimits<double>::Max(); for (const FVector2D& Q : C) D = FMath::Min(D, FVector2D::Distance(P, Q)); return D; };
 	TestTrue(FString::Printf(TEXT("the outside corner is house A's corner (%.4f cm off)"), Nearest(A)), Nearest(A) < 1.0e-6);
 	TestTrue(FString::Printf(TEXT("the outside corner is house B's corner (%.4f cm off)"), Nearest(B)), Nearest(B) < 1.0e-6);
-	// The other corner at each end lies on the house's face, inside its edge.
 	int32 OnA = 0, OnB = 0;
 	for (const FVector2D& Q : C)
 	{
@@ -287,7 +264,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongWallChainFaceEndTest,
 
 bool FHutongWallChainFaceEndTest::RunTest(const FString& Parameters)
 {
-	// An end snapped mid-face, at a slant: the short face lies on the face's line, the line centred.
 	using namespace HutongWallChain;
 	const double T = 37.0;
 	const FVector2D A(0.0, 0.0), B(600.0, 300.0);

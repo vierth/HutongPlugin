@@ -29,7 +29,6 @@ void UHutongScreenWallTool::GetEffectiveRectBounds(
 	const FVector2D Local = WorldXYToLocalRect(CurrentWorld);
 	const double D = Settings ? Settings->Params.GetFootprintDepth() : 60.0;
 
-	// Longer extent is the run; the other collapses (as wall and paifang).
 	if (FMath::Abs(Local.X) >= FMath::Abs(Local.Y))
 	{
 		OutMinX = FMath::Min(0.0, Local.X);

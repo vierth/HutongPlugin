@@ -7,11 +7,9 @@ namespace
 	// Local +Y for a run along Dir: yaw + 90°, what the actor's rotation makes of the rect's Y.
 	FVector2D LeftOf(const FVector2D& Dir) { return FVector2D(-Dir.Y, Dir.X); }
 
-	// Miter a join only while the miter stays sane: past this turn the bisector cut runs along
-	// the wall, and past the skew's validity the end folds over the body.
+	// Past this turn the bisector cut runs along the wall and the end folds over the body.
 	constexpr double MaxMiterTurnDeg = 150.0;
-	// Cut an outer end flush only when the face is well off the run: nearer parallel the cut runs
-	// metres along the wall, and it is the side-alignment case.
+	// Nearer parallel, a flush cut runs metres along the wall.
 	constexpr double MinFaceCross = 0.2;
 }
 
@@ -30,7 +28,6 @@ namespace HutongWallChain
 		auto Dir = [](double Yaw) { const double R = FMath::DegreesToRadians(Yaw); return FVector2D(FMath::Cos(R), FMath::Sin(R)); };
 		FVector2D Face = Dir(Yaw1Deg);
 		if (Yaw2Deg > -900.0 && FMath::Abs(Cross(Away, Dir(Yaw2Deg))) > FMath::Abs(Cross(Away, Face))) Face = Dir(Yaw2Deg);
-		// The way the face runs from the corner along the neighbour.
 		if (FVector2D::DotProduct(Face, Inward) < 0.0) Face = -Face;
 		// Body toward it: on the left of travel, the drawn (outer) line is local Y = 0.
 		OutDrawnY = Cross(D, Face) > 0.0 ? 0.0 : Thickness;
@@ -44,7 +41,6 @@ namespace HutongWallChain
 	{
 		const FVector2D D = SegmentDir.GetSafeNormal();
 		if (D.IsNearlyZero() || Inward.IsNearlyZero()) return false;
-		// The edge most nearly along the segment, of the one or two on offer.
 		double BestDot = 0.0;
 		FVector2D Edge = FVector2D::ZeroVector;
 		for (const double Yaw : { EdgeYawDeg, EdgeYaw2Deg })
@@ -56,7 +52,6 @@ namespace HutongWallChain
 			if (Dot > BestDot) { BestDot = Dot; Edge = E; }
 		}
 		if (BestDot < FMath::Cos(FMath::DegreesToRadians(ToleranceDeg))) return false;
-		// Edge normal pointing into the neighbour, relative to the wall's +Y.
 		FVector2D Perp(-Edge.Y, Edge.X);
 		if (FVector2D::DotProduct(Perp, Inward) < 0.0) Perp = -Perp;
 		const FVector2D Left = LeftOf(D);
@@ -72,7 +67,6 @@ namespace HutongWallChain
 		OutSegments.Reset();
 		const double T = FMath::Max(Thickness, 1.0);
 
-		// Drop too-short steps so a repeated click leaves no zero-length segment.
 		TArray<FVector2D> Points;
 		for (const FVector2D& P : InPoints)
 		{
@@ -89,8 +83,6 @@ namespace HutongWallChain
 			Left[i] = LeftOf(Dir[i]);
 		}
 
-		// Centre line: the drawn line offset by half the thickness, interior vertices along their
-		// bisectors so the offset segments still meet.
 		const double Shift = 0.5 * T - DrawnY;
 		TArray<FVector2D> Centre;
 		Centre.SetNum(N + 1);
@@ -113,22 +105,18 @@ namespace HutongWallChain
 			S.Length = FVector2D::Distance(Centre[i], Centre[i + 1]);
 		}
 
-		// Joins: both ends cut on the turn's bisector, outer corner reaching and inner giving way by
-		// half-thickness * tan(half turn).
+		// Joins cut on the bisector: outer corner reaches, inner gives way, by half-thickness * tan(half turn).
 		for (int32 i = 0; i + 1 < N; ++i)
 		{
 			const double Turn = TurnDeg(Dir[i], Dir[i + 1]);
 			if (FMath::Abs(Turn) < 0.05 || FMath::Abs(Turn) > MaxMiterTurnDeg) continue;
 			const double K = 0.5 * T * FMath::Tan(FMath::DegreesToRadians(0.5 * Turn));
-			// This segment's end: local y = 0 reaches by K when turning towards +Y.
 			OutSegments[i].Skew.Corner10 = FVector2D(K, 0.0);
 			OutSegments[i].Skew.Corner11 = FVector2D(-K, 0.0);
-			// Next segment's start mirrors it, so the two faces are one line.
 			OutSegments[i + 1].Skew.Corner00 = FVector2D(-K, 0.0);
 			OutSegments[i + 1].Skew.Corner01 = FVector2D(K, 0.0);
 		}
 
-		// Outer ends: each corner slid along the run onto the face's line.
 		auto CutOnFace = [&](FSegment& S, const FVector2D& Vertex, const FVector2D& D, const FVector2D& L, const FEndFace& Face, bool bStart)
 		{
 			if (!Face.bSet) return;
@@ -172,5 +160,32 @@ namespace HutongWallChain
 		{
 			OutCorners[i] = Segment.Origin + D * Local[i].X + L * Local[i].Y;
 		}
+	}
+
+	FHutongFootprintSkew CarryJoinSkew(const FHutongFootprintSkew& Existing, bool bJoinAtStart, const FHutongFootprintSkew& FromFar)
+	{
+		FHutongFootprintSkew Skew = Existing;
+		Skew.Mode = EHutongSkewMode::Ends;
+		if (bJoinAtStart)
+		{
+			Skew.Set(0, -FromFar.Get(2));
+			Skew.Set(3, -FromFar.Get(1));
+		}
+		else
+		{
+			Skew.Set(1, FromFar.Get(1));
+			Skew.Set(2, FromFar.Get(2));
+		}
+		return Skew;
+	}
+
+	FHutongFootprintSkew Reversed(const FHutongFootprintSkew& Skew)
+	{
+		FHutongFootprintSkew Out = Skew;
+		Out.Set(0, -Skew.Get(2));
+		Out.Set(1, -Skew.Get(3));
+		Out.Set(2, -Skew.Get(0));
+		Out.Set(3, -Skew.Get(1));
+		return Out;
 	}
 }

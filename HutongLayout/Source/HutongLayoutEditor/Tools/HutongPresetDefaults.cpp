@@ -10,11 +10,10 @@
 #include "Generation/HutongCanon.h"
 #include "Generation/SmallBuildingGenerator.h"
 
-// Courtyard building types, as presets rather than tools.
 FHutongSiheyuanParams HutongPresets::MakeHouse(const HutongCanon::House::FHouse& H)
 {
 	FHutongSiheyuanParams P;
-	// Fallback when derivation is off; normally eave = 檐柱高 = 8/10 明間面闊 off the frontage.
+	// Used with derivation off; derived eave = 檐柱高 = 8/10 明間面闊.
 	P.EaveHeight = H.EaveCm;
 	P.MinBayWidth = H.MinBayCm;
 	P.MaxBayWidth = H.MaxBayCm;
@@ -45,7 +44,7 @@ const HutongCanon::Courtyard::FSize& HutongPresets::CourtSize(EHutongCompoundSiz
 	}
 }
 
-// 明間/次間 are the court's; bay limits force three bays at that frontage. 檐柱高, 柱徑, 進深 derive as usual.
+// Bay limits force three bays at the court's frontage.
 FHutongSiheyuanParams HutongPresets::MakeCourtHall(const HutongCanon::Courtyard::FSize& Size, bool bRearVeranda)
 {
 	FHutongSiheyuanParams P = MakeHouse(bRearVeranda
@@ -70,7 +69,7 @@ FHutongSiheyuanParams HutongPresets::MakeCourtEarRoom(const HutongCanon::Courtya
 
 FHutongSiheyuanParams HutongPresets::MakeCourtWing(const HutongCanon::Courtyard::FSize& Size)
 {
-	// 進深 = (檁數 - 1) × 步架; the court's walk decides the 廊 (HutongCompound::CourtWing).
+	// The court's walk decides the 廊 (HutongCompound::CourtWing).
 	FHutongSiheyuanParams P = MakeHouse(HutongCanon::House::SideHouseSmall);
 	P.StepRun = Size.WingStepRunCm;
 	// 三間 at the hall's 次間: bay limits force exactly that frontage split.
@@ -106,23 +105,19 @@ namespace
 
 void HutongPresets::RegisterBuiltInPresets()
 {
-	// 正房: north main hall, the only type with a 前廊. 七檁前後廊 in large/medium compounds, 前廊後無廊 in small.
+	// 七檁前後廊 in large/medium compounds, 前廊後無廊 in small.
 	Add(TEXT("Main Hall (正房)"), HutongCanon::House::MainHall);
 	Add(TEXT("Main Hall, Five Bays (五間正房)"), HutongCanon::House::MainHallFiveBay);
 	Add(TEXT("Main Hall, Small Court (正房 前廊後無廊)"), HutongCanon::House::MainHallSmall);
 
-	// 廂房: east and west side houses.
 	Add(TEXT("Side House (廂房)"), HutongCanon::House::SideHouse);
 	Add(TEXT("Side House, Small Court (廂房 五檁無廊)"), HutongCanon::House::SideHouseSmall);
 
-	// 倒座房: south row, front to the courtyard, back as lane wall.
 	Add(TEXT("Front Row (倒座房)"), HutongCanon::House::FrontRow);
 
-	// 後罩房: row behind the 正房, closing the plot.
 	Add(TEXT("Rear Row (後罩房)"), HutongCanon::House::RearRow);
 	Add(TEXT("Rear Row, Blank Back Wall (後罩房 無後窗)"), HutongCanon::House::RearRowBlankBack);
 
-	// 構架: the 正房's frame alone, each form.
 	for (const TPair<const TCHAR*, HutongCanon::House::FHouse>& Frame : {
 			TPair<const TCHAR*, HutongCanon::House::FHouse>(TEXT("Main Hall (正房 七檁前後廊)"), HutongCanon::House::MainHall),
 			TPair<const TCHAR*, HutongCanon::House::FHouse>(TEXT("Main Hall, Five Bays (五間正房 七檁前後廊)"), HutongCanon::House::MainHallFiveBay),
@@ -132,7 +127,6 @@ void HutongPresets::RegisterBuiltInPresets()
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Frame"), Frame.Key, FHutongFrameParams::StaticStruct(), &P);
 	}
 
-	// 大門: one per style, so the gate's rank is a preset pick (tool, Details, heights window).
 	for (const EHutongGateStyle Style : { EHutongGateStyle::Guangliang, EHutongGateStyle::Jinzhu, EHutongGateStyle::Manzi, EHutongGateStyle::Ruyi })
 	{
 		FHutongGateHouseParams P;
@@ -141,18 +135,15 @@ void HutongPresets::RegisterBuiltInPresets()
 			StaticEnum<EHutongGateStyle>()->GetDisplayNameTextByValue((int64)Style).ToString(), FHutongGateHouseParams::StaticStruct(), &P);
 	}
 
-	// 小房: minor freestanding buildings. PROVISIONAL — general knowledge, to be shaped on the user's figures.
 	{
 		FHutongSmallBuildingParams House;
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Small"), TEXT("Small House (小房)"), FHutongSmallBuildingParams::StaticStruct(), &House);
 
-		// 堆撥房: the watch post at a lane mouth or bridgehead, door to the street.
 		FHutongSmallBuildingParams Post;
 		Post.EaveHeight = 280.0;
 		Post.MinBayWidth = 240.0;
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Small"), TEXT("Guard Post (堆撥房)"), FHutongSmallBuildingParams::StaticStruct(), &Post);
 
-		// 棚: a lean-to, open at the front.
 		FHutongSmallBuildingParams Shed;
 		Shed.Roof = EHutongSmallRoof::LeanTo;
 		Shed.Front = EHutongSmallFront::Open;
@@ -163,7 +154,6 @@ void HutongPresets::RegisterBuiltInPresets()
 		Shed.bHasTileRuns = false;
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Small"), TEXT("Shed (棚)"), FHutongSmallBuildingParams::StaticStruct(), &Shed);
 
-		// 土地廟: a one-bay wayside shrine on a raised base.
 		FHutongSmallBuildingParams Shrine;
 		Shrine.EaveHeight = 210.0;
 		Shrine.FloorHeight = 45.0;
@@ -177,7 +167,7 @@ void HutongPresets::RegisterBuiltInPresets()
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Small"), TEXT("Shrine (土地廟)"), FHutongSmallBuildingParams::StaticStruct(), &Shrine);
 	}
 
-	// 亭: the 則例's two, the round one with its 倒掛楣子 as drawn.
+	// The 則例's two.
 	{
 		FHutongPavilionParams Square;
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Pavilion"), TEXT("Square Pavilion (四角方亭)"), FHutongPavilionParams::StaticStruct(), &Square);
@@ -187,8 +177,7 @@ void HutongPresets::RegisterBuiltInPresets()
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Pavilion"), TEXT("Round Pavilion (六柱圓亭)"), FHutongPavilionParams::StaticStruct(), &Round);
 	}
 
-	// 殿: the small lane temple at the struct's defaults, and the 則例 卷二 大式 hall. The small one was
-	// left unregistered, so the picker offered the grand hall alone.
+	// The 則例 卷二 大式 hall.
 	{
 		const FHutongHallParams Small;
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Hall"), TEXT("Small Temple (小式 歇山殿)"), FHutongHallParams::StaticStruct(), &Small);
@@ -198,8 +187,6 @@ void HutongPresets::RegisterBuiltInPresets()
 		UHutongPresetLibrary::RegisterBuiltIn(TEXT("Hall"), TEXT("Grand Hall (大式 九檁歇山殿)"), FHutongHallParams::StaticStruct(), &Grand);
 	}
 
-	// 耳房: low ear rooms against the 正房 flanks, on their own tool. Plain with a front door; with the
-	// compound's 過道 (struct defaults); shut to the court, entered from the hall beside it.
 	{
 		FHutongEarPassageParams Plain;
 		Plain.Passageway = EHutongEarPassage::None;

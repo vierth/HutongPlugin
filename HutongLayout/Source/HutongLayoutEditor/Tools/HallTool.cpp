@@ -29,7 +29,6 @@ void UHutongHallTool::RegisterToolSettings()
 void UHutongHallTool::OnPlacementStarted(const FVector& HitWorld)
 {
 	BaySide = ComputeDefaultBaySide();
-	// Bay count depends on the frontage drawn, so it never carries between placements.
 	BayCountOverride = 0;
 }
 
@@ -41,7 +40,6 @@ void UHutongHallTool::CancelPlacement()
 
 bool UHutongHallTool::OnRectCommitted(const FVector& HitWorld)
 {
-	// Defer to a third click so the facing side is picked by hovering.
 	return false;
 }
 
@@ -74,7 +72,6 @@ void UHutongHallTool::AttachBuildingComponent(AStaticMeshActor* Actor, double Si
 	if (!Building) return;
 
 	if (Settings) Building->Params = Settings->Params;
-	// The previewed count, mirrored onto the component.
 	Building->BayCountOverride = BayCountOverride;
 	Building->FootprintX = SizeX;
 	Building->FootprintY = SizeY;
@@ -93,7 +90,7 @@ void UHutongHallTool::AdjustHeight(double DeltaCm)
 {
 	if (!Settings) return;
 	FHutongHallParams& P = Settings->Params;
-	// The eave only: the 舉架 is tuned, and raising a hall must not flatten its roof.
+	// The eave only: the 舉架 is tuned, and the roof keeps its pitch.
 	P.EaveHeight = FMath::Clamp(P.EaveHeight + DeltaCm, P.FloorHeight + 150.0, 900.0);
 }
 
@@ -111,8 +108,7 @@ FHutongHallParams UHutongHallTool::GetSizedParams() const
 	return P;
 }
 
-// The 大式 hall keeps the figure's plan: the rect holds its proportion, the frontage on the longer drag until the
-// facing is picked, then on the facing's side (GetSizedParams takes Width along it).
+// The 大式 hall keeps the figure's plan proportion; GetSizedParams takes Width along the facing.
 void UHutongHallTool::GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const
 {
 	Super::GetEffectiveRectBounds(OutMinX, OutMinY, OutMaxX, OutMaxY);
@@ -186,7 +182,6 @@ void UHutongHallTool::Render(IToolsContextRenderAPI* RenderAPI)
 	if (Settings)
 	{
 		const int32 N = ComputeBayCountForSide();
-		// The 大式 hall's bays are the figure's, scaled to the frontage.
 		if (Settings->Params.IsGrand())
 		{
 			const double K = GetSizedParams().GetGrandScale();

@@ -8,8 +8,6 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// Not a check: if HUTONG_OBJ_DUMP names a file, writes the default compound at 近 as OBJ (one group
-// per material slot) for offline inspection. Otherwise a no-op.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongMeshDumpTest,
 	"HutongDev.CompoundObj",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -61,7 +59,6 @@ bool FHutongMeshDumpTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// Same with HUTONG_GALLERY_DUMP: every gallery placement, in a row.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongGalleryDumpTest,
 	"HutongDev.GalleryObj",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -75,8 +72,6 @@ bool FHutongGalleryDumpTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// With HUTONG_GALLERY_PLAN: where the whole gallery puts each piece, one CSV line each (category, cluster,
-// label, footprint min and max in cm), to draw the layout offline.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongGalleryPlanDumpTest,
 	"HutongDev.GalleryPlan",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -96,8 +91,6 @@ bool FHutongGalleryPlanDumpTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// With HUTONG_SLOT_DUMP: every gallery placement at every level, one line per piece of each triangle's
-// material slot in order. Two dumps compare exactly across a refactor that must not move a slot.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongSlotDumpTest,
 	"HutongDev.SlotSignature",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

@@ -8,9 +8,6 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// Can the court be walked round under cover? Grid-samples the compound's collision-level meshes: a
-// cell is standable with a floor and body height clear above; the walk is standable cells under a
-// roof, linked to neighbours by at most a step.
 namespace
 {
 	using UE::Geometry::FDynamicMesh3;
@@ -64,7 +61,6 @@ namespace
 				for (const auto& H : Hits) Z.Add({ Origin.Z + H.Distance, OutwardZ(Mesh, H.TriangleId) });
 				Z.Sort([](const TPair<double, double>& A, const TPair<double, double>& B) { return A.Key < B.Key; });
 
-				// Ground, then every upward top below the highest standable floor.
 				TArray<double> Candidates = { 0.0 };
 				for (const auto& H : Z) if (H.Value > 0.5 && H.Key <= MaxFloor) Candidates.Add(H.Key);
 				Candidates.Sort([](double A, double B) { return A > B; });
@@ -99,7 +95,6 @@ namespace
 		return G;
 	}
 
-	// Standable, covered unless told otherwise, and a body radius clear of anything blocked.
 	TArray<bool> WalkableCells(const FWalkGrid& G, bool bNeedCover = true)
 	{
 		TArray<bool> Ok;
@@ -120,7 +115,6 @@ namespace
 						const int32 xx = x + dx, yy = y + dy;
 						if (xx < 0 || yy < 0 || xx >= G.NX || yy >= G.NY) continue;
 						const FWalkCell& N = G.At(xx, yy);
-						// A wall, post, or a floor a step higher that would be walked into.
 						if (N.bBlocked || (N.bStand && N.Floor > C.Floor + MaxStep)) bFree = false;
 					}
 				}
@@ -148,7 +142,6 @@ namespace
 		return Best;
 	}
 
-	// BFS over walkable cells whose centre passes Allowed; returns cells reached.
 	TArray<bool> Reach(const FWalkGrid& G, const TArray<bool>& Ok, int32 Start, TFunctionRef<bool(const FVector2D&)> Allowed)
 	{
 		TArray<bool> Seen;
@@ -177,7 +170,6 @@ namespace
 		return Seen;
 	}
 
-	// Grid picture for a failing run, written to HUTONG_WALK_DUMP.
 	void DumpGrid(const FWalkGrid& G, const TArray<bool>& Ok, const TArray<bool>& A, const TArray<bool>& B)
 	{
 		const FString Path = FPlatformMisc::GetEnvironmentVariable(TEXT("HUTONG_WALK_DUMP"));
@@ -224,7 +216,6 @@ bool FHutongCompoundWalkTest::RunTest(const FString& Parameters)
 	Tool->Settings = NewObject<UHutongCompoundToolProperties>(Tool);
 	UHutongCompoundToolProperties* S = Tool->Settings;
 
-	// Default first (標准 size, 三進, court walked round), then every size and plan with the walk.
 	struct FCase { EHutongCompoundSize Size; EHutongCompoundPlan Plan; };
 	const FCase Cases[] = {
 		{ EHutongCompoundSize::Standard, EHutongCompoundPlan::ThreeCourtyards },
@@ -261,7 +252,6 @@ bool FHutongCompoundWalkTest::RunTest(const FString& Parameters)
 		const FWalkGrid G = Sample(All, W, D);
 		const TArray<bool> Ok = WalkableCells(G);
 
-		// From under the 垂花門 roof, court side of its wall, to the 正房 前廊.
 		FBox2D GateIn = Gate;
 		GateIn.Min.Y = Gate.GetCenter().Y;
 		const int32 Start = NearestWalkable(G, Ok, GateIn.GetCenter(), GateIn.ExpandBy(40.0));
@@ -271,12 +261,10 @@ bool FHutongCompoundWalkTest::RunTest(const FString& Parameters)
 		TestTrue(*(Name + TEXT(": somewhere to stand under the 垂花門")), Start != INDEX_NONE);
 		TestTrue(*(Name + TEXT(": somewhere to stand on the 正房's 前廊")), Goal != INDEX_NONE);
 
-		// Each side alone: the open court between is not part of the walk.
 		const double Mid = 0.5 * W;
 		const double Slack = 0.5 * Gate.GetSize().X;
 		const TArray<bool> Low = Reach(G, Ok, Start, [&](const FVector2D& P) { return P.X <= Mid + Slack; });
 		const TArray<bool> High = Reach(G, Ok, Start, [&](const FVector2D& P) { return P.X >= Mid - Slack; });
-		// Dump the picture for a failing case, if asked.
 		if (Goal == INDEX_NONE || !Low[Goal] || !High[Goal]) DumpGrid(G, Ok, Low, High);
 		if (Goal != INDEX_NONE)
 		{
@@ -284,7 +272,6 @@ bool FHutongCompoundWalkTest::RunTest(const FString& Parameters)
 			TestTrue(*(Name + TEXT(": the west side walks under cover from the 垂花門 to the 正房")), High[Goal]);
 		}
 
-		// The gate is walked through upright, 外院 flight to rear flight, within its own width.
 		{
 			const TArray<bool> Open = WalkableCells(G, /*bNeedCover*/ false);
 			const double CX = Gate.GetCenter().X;

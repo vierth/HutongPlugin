@@ -22,7 +22,6 @@
 
 namespace
 {
-	// Set while the Place Labels mode is active; nothing draws otherwise.
 	bool GPlaceRegionDrawingVisible = false;
 
 	// Reads as coverage without muddying overlapping district/area/hutong fills.
@@ -32,7 +31,6 @@ namespace
 	constexpr double DrawLift = 2.0;
 }
 
-// Draws the region outline in editor viewports.
 class FPlaceRegionSceneProxy final : public FPrimitiveSceneProxy
 {
 public:
@@ -56,15 +54,13 @@ public:
 		// Parallel gather reorders proxies every frame: a shared edge's winner would flicker.
 		bSupportsParallelGDME = false;
 
-		// Triangulated once here rather than per frame.
 		if (bDrawFill)
 		{
 			PlaceLabelsGeo::TriangulatePolygon2D(WorldPoints, FillIndices);
 		}
 	}
 
-	// No mesh or collision: without this only the billboard is clickable. Uses the actor's proxy;
-	// the scene keeps it alive via OutHitProxies, so the raw pointer is safe.
+	// The region has no mesh or collision, so this makes it clickable; the scene keeps the actor's proxy alive via OutHitProxies.
 	virtual HHitProxy* CreateHitProxies(UPrimitiveComponent* Component,
 		TArray<TRefCountPtr<HHitProxy>>& OutHitProxies) override
 	{
@@ -82,7 +78,6 @@ public:
 			return;
 		}
 
-		// Selected at full strength; the rest faint enough to draw a whole city.
 		const bool bSelected = IsSelected();
 		FLinearColor Color = OutlineColor;
 		Color.A = bSelected ? 1.0f : 0.5f;
@@ -97,10 +92,8 @@ public:
 
 			FPrimitiveDrawInterface* PDI = Collector.GetPDI(ViewIndex);
 
-			// Foreground, not the primitive's own group.
 			constexpr uint8 DPG = SDPG_Foreground;
 
-			// Fill shows which ground is already labelled.
 			if (bDrawFill && FillIndices.Num() >= 3 && GEngine && GEngine->DebugMeshMaterial)
 			{
 				FLinearColor FillColor = OutlineColor;
@@ -130,14 +123,12 @@ public:
 					MeshBuilder.AddTriangle(FillIndices[i], FillIndices[i + 1], FillIndices[i + 2]);
 				}
 
-				// World-space vertices → identity. Fill carries the hit proxy: the main click target.
 				MeshBuilder.GetMesh(FMatrix::Identity, MaterialProxy, DPG,
 					/*bDisableBackfaceCulling*/ true, /*bReceivesDecals*/ false,
 					/*bUseSelectionOutline*/ false, ViewIndex, Collector,
 					ActorHitProxy ? ActorHitProxy->Id : FHitProxyId());
 			}
 
-			// Outline clickable too: the only target when fill is off.
 			PDI->SetHitProxy(ActorHitProxy);
 
 			auto DrawLoop = [&](double Z)
@@ -179,7 +170,7 @@ public:
 		Result.bDynamicRelevance = true;
 		Result.bShadowRelevance = false;
 
-		// Deliberately not bEditorPrimitiveRelevance.
+		// Normal translucency: editor-primitive relevance would suppress the translucent fill.
 		Result.bSeparateTranslucency = Result.bNormalTranslucency = true;
 		return Result;
 	}
@@ -199,7 +190,6 @@ private:
 	bool bUseHeightBounds;
 	bool bDrawFill;
 
-	// The owning actor's proxy, made in CreateHitProxies and kept alive by the scene.
 	HHitProxy* ActorHitProxy = nullptr;
 };
 
@@ -208,23 +198,21 @@ UPlaceRegionComponent::UPlaceRegionComponent()
 	PrimaryComponentTick.bCanEverTick = false;
 	bWantsOnUpdateTransform = true;
 
-	// Editor-only furniture: never rendered to the player, never collided with, never overlapped.
 	bHiddenInGame = true;
-	// Editor compositing is off on purpose — it suppresses the translucent fill.
+	// Editor compositing suppresses the translucent fill.
 	bUseEditorCompositing = false;
 	CastShadow = false;
 	SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
 	SetGenerateOverlapEvents(false);
 
 #if WITH_EDITORONLY_DATA
-	// Picking takes highest priority, not nearest: beats the ground. Not UI: the gizmo (HPP_UI) must win.
+	// Foreground: picked over the ground, while the gizmo (HPP_UI) still wins.
 	HitProxyPriority = HPP_Foreground;
 #endif
 }
 
 FPrimitiveSceneProxy* UPlaceRegionComponent::CreateSceneProxy()
 {
-	// Outline and fill together, and only while the mode is up.
 	if (!bDrawOutline || !IsEditorDrawingVisible() || CachedWorldPoints.Num() < 2)
 	{
 		return nullptr;
@@ -234,7 +222,6 @@ FPrimitiveSceneProxy* UPlaceRegionComponent::CreateSceneProxy()
 
 FLinearColor UPlaceRegionComponent::GetOutlineColor() const
 {
-	// Colour encodes type only.
 	if (!Type)
 	{
 		return FLinearColor(1.0f, 0.55f, 0.1f);
@@ -257,7 +244,7 @@ void UPlaceRegionComponent::OnComponentCreated()
 {
 	Super::OnComponentCreated();
 
-	// Not in the constructor: it runs for the CDO too, giving every region one guid.
+	// Here, since the constructor also runs for the CDO and would give every region one guid.
 	if (!RegionId.IsValid())
 	{
 		RegionId = FGuid::NewGuid();
@@ -342,7 +329,6 @@ bool UPlaceRegionComponent::ContainsWorldPoint2D(const FVector2D& WorldXY) const
 	{
 		return false;
 	}
-	// Bounds first: four compares reject nearly every region on the map before the ray cast.
 	if (!CachedWorldBounds.bIsValid || !CachedWorldBounds.IsInside(WorldXY))
 	{
 		return false;
@@ -419,7 +405,6 @@ void UPlaceRegionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 FBoxSphereBounds UPlaceRegionComponent::CalcBounds(const FTransform& LocalToWorld) const
 {
-	// Without this the actor's bounds collapse to a point.
 	if (LocalPoints.Num() == 0)
 	{
 		return FBoxSphereBounds(LocalToWorld.GetLocation(), FVector::ZeroVector, 0.0);
@@ -433,7 +418,6 @@ FBoxSphereBounds UPlaceRegionComponent::CalcBounds(const FTransform& LocalToWorl
 
 	if (bUseHeightBounds)
 	{
-		// Height bounds are world Z, so they extend the world-space box directly.
 		Box.Min.Z = FMath::Min(Box.Min.Z, MinZ);
 		Box.Max.Z = FMath::Max(Box.Max.Z, MaxZ);
 	}
@@ -453,7 +437,6 @@ void UPlaceRegionComponent::PostEditChangeProperty(FPropertyChangedEvent& Proper
 	RebuildCache();
 	UpdateBounds();
 
-	// Interactive means a slider or gizmo drag in progress.
 	if (PropertyChangedEvent.ChangeType == EPropertyChangeType::Interactive)
 	{
 		return;

@@ -21,20 +21,13 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// What the plugin costs, as a number.
-
 using UE::Geometry::FDynamicMesh3;
 
 namespace
 {
-	// Houses are the city's unit: this number decides whether 40 km² is reachable.
-	// At 近 (Nanite renders it) the modelled 壟 are about half; 遠 is fallback and collision.
-	// Raised from 14000 for the 裝修 of 圖5-4-5 (隔扇, 簾架, 支摘窗, 橫陂): the five-bay 正房, uncommon but
-	// important (user, 2026-09-27), came to 15184. Raised again for the 金柱 at their height and the 檐椽 open
-	// over the 前廊 (user, 2026-09-27): that hall came to 16968.
+	// Houses are the city's unit: this budget decides whether 40 km² is reachable.
 	constexpr int32 HouseBudgetTris = 17500;
 
-	// The ToolKey is the string "Siheyuan".
 	FHutongSiheyuanParams PresetParams(const FString& Name)
 	{
 		HutongPresets::RegisterBuiltInPresets();
@@ -59,7 +52,6 @@ bool FHutongCostReportTest::RunTest(const FString& Parameters)
 
 	TestTrue(TEXT("the gallery has pieces in it"), Rows.Num() >= 15);
 
-	// Heaviest first, so the expensive item tops the report.
 	TArray<HutongGallery::FHutongCostRow> Sorted = Rows;
 	Sorted.Sort([](const HutongGallery::FHutongCostRow& A, const HutongGallery::FHutongCostRow& B)
 	{
@@ -90,7 +82,6 @@ bool FHutongCostReportTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("%s builds geometry at every level"), *R.Label),
 			R.Triangles[0] > 0 && R.Triangles[1] > 0 && R.Triangles[2] > 0 && R.Triangles[3] > 0);
 
-		// The core property: a level not cheaper than the one above is no level, and fails silently otherwise.
 		TestTrue(FString::Printf(TEXT("%s: 塊 <= 遠"), *R.Label),
 			R.Triangles[(int32)EHutongDetail::Massing] <= R.Triangles[(int32)EHutongDetail::Far]);
 		TestTrue(FString::Printf(TEXT("%s: 遠 <= 近"), *R.Label),
@@ -107,7 +98,6 @@ bool FHutongCostReportTest::RunTest(const FString& Parameters)
 	UE_LOG(LogTemp, Display, TEXT("cost: %-40s %8lld %8lld %8lld %8lld %6s %8.2f"),
 		TEXT("TOTAL"), Totals[0], Totals[1], Totals[2], Totals[3], TEXT(""), TotalMs);
 
-	// Whole gallery in massing: per-piece cost of a first-pass city.
 	UE_LOG(LogTemp, Display, TEXT("cost: 塊 is %.0f%% of 近; 遠 is %.0f%%"),
 		100.0 * (double)Totals[0] / FMath::Max((double)Totals[2], 1.0),
 		100.0 * (double)Totals[1] / FMath::Max((double)Totals[2], 1.0));
@@ -121,7 +111,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongCostHouseBudgetTest,
 
 bool FHutongCostHouseBudgetTest::RunTest(const FString& Parameters)
 {
-	// The shipped house presets make up a city, so they carry the budget.
 	for (const FString& Name : HutongPresets::BuiltInSiheyuanNames())
 	{
 		FHutongSiheyuanParams P = PresetParams(Name);
@@ -150,7 +139,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongDetailSavingsTest,
 
 bool FHutongDetailSavingsTest::RunTest(const FString& Parameters)
 {
-	// The detail system's premise, asserted.
 	auto Tris = [](auto Build) { FDynamicMesh3 M; Build(M); return M.TriangleCount(); };
 
 	{
@@ -198,7 +186,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongDetailMassingTest,
 
 bool FHutongDetailMassingTest::RunTest(const FString& Parameters)
 {
-	// A block must be cheap and stand where the building stands.
 	constexpr int32 MassingCeilingTris = 400;
 
 	for (const FString& Name : HutongPresets::BuiltInSiheyuanNames())
@@ -206,7 +193,6 @@ bool FHutongDetailMassingTest::RunTest(const FString& Parameters)
 		FHutongSiheyuanParams P = PresetParams(Name);
 		const double W = P.SuggestedFrontage > 0.0 ? P.SuggestedFrontage : 900.0;
 		const double D = P.GetSuggestedDepth() > 0.0 ? P.GetSuggestedDepth() : 450.0;
-		// Eave and section come from the footprint, which the tool fills in.
 		P.Width = W;
 		P.Depth = D;
 
@@ -224,7 +210,6 @@ bool FHutongDetailMassingTest::RunTest(const FString& Parameters)
 			*Name, MassingCeilingTris), R.Triangles <= MassingCeilingTris);
 		TestTrue(FString::Printf(TEXT("%s block is not inside out"), *Name), R.Volume > 0.0);
 
-		// Silhouette: the block fills its footprint and rises past the eave to the 舉架 ridge.
 		const UE::Geometry::FAxisAlignedBox3d Bounds = Mesh.GetBounds();
 		const double Over = P.GetRoofOverhang();
 
@@ -236,7 +221,6 @@ bool FHutongDetailMassingTest::RunTest(const FString& Parameters)
 			Bounds.Min.Z >= -1.0);
 		TestTrue(FString::Printf(TEXT("%s block spans its frontage"), *Name),
 			Bounds.Min.X <= 1.0 && Bounds.Max.X >= W - 1.0);
-		// Roof oversails the footprint front and back by no more than the eave.
 		TestTrue(FString::Printf(TEXT("%s block keeps inside its own eaves"), *Name),
 			Bounds.Min.Y >= -(Over + P.PlatformOverhang + 1.0) && Bounds.Max.Y <= D + Over + 1.0);
 	}
@@ -252,7 +236,6 @@ bool FHutongDetailPlanOnlyTest::RunTest(const FString& Parameters)
 {
 	using HutongGen::Detail::BuildPlacementLODs;
 
-	// A laid-out building has no geometry: the outline component draws it.
 	int32 Calls = 0;
 	TArray<FDynamicMesh3> LODs;
 	LODs.Emplace();
@@ -278,15 +261,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanBaysTest,
 
 bool FHutongPlanBaysTest::RunTest(const FString& Parameters)
 {
-	// A laid-out rectangle reports its 間 count, and its divisions must match the generator's, hence
-	// the params' own BayBoundary.
 	UHutongSiheyuanBuildingComponent* House =
 		NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
 	House->FootprintX = 960.0;
 	House->FootprintY = 500.0;
 	House->BayCountOverride = 3;
-	// Deliberately off-centre: a turned facade that lost the door bay index would land on a 次間,
-	// which a symmetrical house would hide.
+	// Off-centre: a turned facade that lost the door bay index would land on a 次間.
 	House->Params.DoorBayIndex = 0;
 
 	for (int32 s = 0; s < 4; ++s)
@@ -307,7 +287,6 @@ bool FHutongPlanBaysTest::RunTest(const FString& Parameters)
 		}
 		TestTrue(*(Name + TEXT(": the boundaries run up the facade")), bAscending);
 
-		// Along the facade edge, inset at each end by the corner column radius.
 		const bool bAlongX = House->ArePlanBaysAlongX();
 		TestEqual(*(Name + TEXT(": counted along the facade")),
 			bAlongX, HutongGen::BaySide::IsAlongX(Side));
@@ -317,7 +296,6 @@ bool FHutongPlanBaysTest::RunTest(const FString& Parameters)
 		TestTrue(*(Name + TEXT(": both ends inset by the same radius")),
 			FMath::Abs(Bays.Boundaries[0] - (Span - Bays.Boundaries.Last())) < 0.01);
 
-		// Door bay is the 明間, however the facade is turned.
 		int32 Widest = 0;
 		double Best = 0.0;
 		for (int32 b = 0; b + 1 < Bays.Boundaries.Num(); ++b)
@@ -328,7 +306,6 @@ bool FHutongPlanBaysTest::RunTest(const FString& Parameters)
 		TestEqual(*(Name + TEXT(": the door is in the widest bay")), Bays.DoorBay, Widest);
 	}
 
-	// A wall has no bays; the readout must not invent one.
 	UHutongWallBuildingComponent* Wall =
 		NewObject<UHutongWallBuildingComponent>(GetTransientPackage());
 	FHutongPlanBays None;
@@ -343,8 +320,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanBayLinesTest,
 
 bool FHutongPlanBayLinesTest::RunTest(const FString& Parameters)
 {
-	// A frame and its house on one footprint put their bay lines in the same plan places: Full House
-	// stamps one beside the other.
 	for (const HutongCanon::House::FHouse& Canon : { HutongCanon::House::MainHall,
 			HutongCanon::House::MainHallSmall, HutongCanon::House::MainHallFiveBay })
 	{
@@ -398,27 +373,22 @@ bool FHutongDetailLODChainTest::RunTest(const FString& Parameters)
 	using HutongGen::Detail::LODScreenSize;
 	using HutongGen::Detail::BuildLODChain;
 
-	// The four levels are also one mesh's four LODs.
-
-	// Chain = placed level and every level below, cheapest last.
 	{
 		const TArray<EHutongDetail> Near = LODChain(EHutongDetail::Near);
 		TestEqual(TEXT("近 chains three levels"), Near.Num(), 3);
 		TestEqual(TEXT("LOD0 is the placed level"), Near[0], EHutongDetail::Near);
 		TestEqual(TEXT("the bottom of every chain is 塊"), Near.Last(), EHutongDetail::Massing);
 		TestEqual(TEXT("精 chains four"), LODChain(EHutongDetail::Hero).Num(), 4);
-		// Placed at the bottom: nothing to fall back to.
 		TestEqual(TEXT("塊 chains one"), LODChain(EHutongDetail::Massing).Num(), 1);
 	}
 
-	// A LOD switching further out than the one above would never draw.
+	// Each LOD switches in nearer than the one above, so every LOD gets drawn.
 	for (int32 i = 1; i < 4; ++i)
 	{
 		TestTrue(FString::Printf(TEXT("LOD %d takes over further out than LOD %d"), i, i - 1),
 			LODScreenSize(i) < LODScreenSize(i - 1));
 	}
 
-	// House at 近: three levels, each cheaper than the last, LOD0 identical to the chainless bake.
 	HutongPresets::RegisterBuiltInPresets();
 	const TArray<FString>& Names = HutongPresets::BuiltInSiheyuanNames();
 	if (Names.Num() > 0)
@@ -451,13 +421,12 @@ bool FHutongDetailLODChainTest::RunTest(const FString& Parameters)
 			TestTrue(FString::Printf(TEXT("LOD %d is not empty"), i), LODs[i].TriangleCount() > 0);
 		}
 
-		// Chain off: one mesh at one level.
 		TArray<FDynamicMesh3> Single;
 		BuildLODChain(EHutongDetail::Near, /*bChain*/ false, Build, Single);
 		TestEqual(TEXT("the chain can be turned off"), Single.Num(), 1);
 	}
 
-	// The drop rule, on the two cases that need it. A wall has no block form; 塊 reads as 遠.
+	// A wall has no block form; 塊 reads as 遠.
 	{
 		auto Chain = [&](const FHutongWallParams& From)
 		{
@@ -471,12 +440,10 @@ bool FHutongDetailLODChainTest::RunTest(const FString& Parameters)
 			return LODs.Num();
 		};
 
-		// A 隔牆 carries 什錦窗, all a wall's levels touch.
 		FHutongWallParams Inner;
 		Inner.Role = EHutongWallRole::Courtyard;
 		TestEqual(TEXT("a 隔牆's 塊 is its 遠 and is not baked twice"), Chain(Inner), 2);
 
-		// A 院牆 is blank: with cap tile courses off, nothing a level touches remains.
 		FHutongWallParams Perimeter;
 		Perimeter.Role = EHutongWallRole::Perimeter;
 		Perimeter.bHasTileRuns = false;
@@ -494,7 +461,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongDetailLODBakeTest,
 
 bool FHutongDetailLODBakeTest::RunTest(const FString& Parameters)
 {
-	// Chain arithmetic is tested above; this is the half only the asset can answer.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to spawn into"), World)) return false;
 
@@ -513,7 +479,6 @@ bool FHutongDetailLODBakeTest::RunTest(const FString& Parameters)
 			UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(
 				P, EHutongBaySide::MinusY, 0, W, D, M, Level);
 		}, LODs);
-	// 近, 遠, 塊 all kept on a house, so 遠 is second.
 	TestEqual(TEXT("collision is the 遠 LOD"), CollisionLOD, 1);
 
 	const int32 Expected = LODs.Num();
@@ -525,8 +490,8 @@ bool FHutongDetailLODBakeTest::RunTest(const FString& Parameters)
 
 	HutongGen::BuildAndAssignStaticMesh(Actor, LODs, FHutongPalette(), CollisionLOD);
 
-	UStaticMesh* Baked = Actor->GetStaticMeshComponent()
-		? Actor->GetStaticMeshComponent()->GetStaticMesh() : nullptr;
+	UStaticMesh* Baked = HutongGen::GetBuiltMeshComponent(Actor)
+		? HutongGen::GetBuiltMeshComponent(Actor)->GetStaticMesh() : nullptr;
 	if (!TestNotNull(TEXT("the actor carries a baked mesh"), Baked))
 	{
 		World->DestroyWorld(false);
@@ -553,7 +518,6 @@ bool FHutongDetailLODBakeTest::RunTest(const FString& Parameters)
 		for (int32 L = 0; L < RD->LODResources.Num(); ++L)
 		{
 			const FStaticMeshLODResources& R = RD->LODResources[L];
-			// Built, not decimated: each LOD is its level's own mesh, triangle for triangle.
 			TestEqual(FString::Printf(TEXT("LOD %d is the level's own mesh"), L),
 				(int32)R.GetNumTriangles(), SourceTris.IsValidIndex(L) ? SourceTris[L] : -1);
 			// Smooth faces share vertices; per-triangle normals would give exactly three per triangle.

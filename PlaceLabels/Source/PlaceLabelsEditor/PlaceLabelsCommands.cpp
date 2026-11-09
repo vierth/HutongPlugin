@@ -4,7 +4,7 @@
 
 void FPlaceLabelsCommands::RegisterCommands()
 {
-	// Shift+digit rather than a plain digit.
+	// Shift+digit: plain digits are the level editor's viewport bookmarks.
 	UI_COMMAND(BeginSelectTool, "Select",
 		"Click regions to select them, as anywhere else in the editor.\n"
 		"This tool takes no clicks of its own: that is what puts the pen down, so a click picks a "

@@ -28,18 +28,14 @@ using namespace HutongGen;
 
 namespace
 {
-	// A level scales a count, not a per-type table of magic numbers.
 	int32 Coarser(int32 N) { return FMath::Max(N / 2, 1); }
 	int32 Finer(int32 N)   { return FMath::CeilToInt32(1.5 * (double)FMath::Max(N, 1)); }
 
-	// 壟 pitch at a distance.
 	double CoarserTileSpacing(double Spacing)
 	{
 		return 2.0 * FMath::Max(Spacing, HutongGen::RoofTile::DefaultRowSpacing);
 	}
 }
-
-// ---- Detail::Apply ----
 
 namespace HutongGen
 {
@@ -48,7 +44,6 @@ namespace Detail
 
 void Apply(EHutongDetail D, FHutongWallParams& P)
 {
-	// A wall's cost is its openings, but they are why the run exists.
 	if (D == EHutongDetail::Far || D == EHutongDetail::Massing)
 	{
 		P.WindowOutlineSteps = 4;
@@ -82,20 +77,15 @@ void Apply(EHutongDetail D, FHutongSiheyuanParams& P)
 		P.bHasWindowLattice = false;
 		P.WindowMullions = 0;
 		P.WindowRails = 0;
-		// The facade's joinery keeps its frames; the 簾架 and the 橫陂's divisions go.
 		P.bHasCurtainFrame = false;
 		P.TransomPanes = 1;
 
-		// Interior and ground detail: unseen at a distance.
 		P.bHasInteriorPlaster = false;
 		P.bHasInteriorPartitions = false;
 		P.bHasChitou = false;
 
-		// Drop the 蠍子尾 sweep; the ridge stays as silhouette.
 		P.RidgeEndKick = 0.0;
 		P.RoofSlopeSegments = Coarser(P.RoofSlopeSegments);
-
-		// 窗紙 stays: it carries the emissive; black holes at dusk are the worse error.
 	}
 	else if (D == EHutongDetail::Hero)
 	{
@@ -129,7 +119,6 @@ void Apply(EHutongDetail D, FHutongPaifangParams& P)
 		P.TileRowSpacing = CoarserTileSpacing(P.TileRowSpacing);
 		P.RoofEaveSegments = Coarser(P.RoofEaveSegments);
 		P.RoofSlopeSegments = Coarser(P.RoofSlopeSegments);
-		// 匾額 stays: without it a 牌樓 is a gantry.
 	}
 	else if (D == EHutongDetail::Hero)
 	{
@@ -145,7 +134,6 @@ void Apply(EHutongDetail D, FHutongScreenWallParams& P)
 		P.bHasTileRuns = false;
 		P.RafterEndSection = 0.0;
 		P.RidgeEndKick = 0.0;
-		// 影壁心: four bars per face, the only ornament.
 		P.bHasPanel = false;
 	}
 }
@@ -173,7 +161,6 @@ void Apply(EHutongDetail D, FHutongInnerGateParams& P)
 		P.RafterEndSection = 0.0;
 		P.RidgeEndKick = 0.0;
 		P.bHasBrackets = false;
-		// 垂蓮柱 stay: they define the type.
 	}
 }
 
@@ -202,8 +189,6 @@ void Apply(EHutongDetail D, FHutongStoreyParams& P)
 		P.TileRowSpacing = CoarserTileSpacing(P.TileRowSpacing);
 		P.RidgeEndKick = 0.0;
 		P.bHasWindowLattice = false;
-		// 窗紙 stays: it carries the emissive, and a street of black holes at dusk is the worse error.
-		// Gallery stays: without it a 樓 reads as a tall shop.
 		P.BalusterSpacing = FMath::Max(P.BalusterSpacing * 2.0, 12.0);
 	}
 }
@@ -212,7 +197,6 @@ void Apply(EHutongDetail D, FHutongPavilionParams& P)
 {
 	if (D == EHutongDetail::Far)
 	{
-		// The sizes stay the figure's; the rafter ends go.
 		P.FreezeProportions();
 		P.bExposedFrame = false;
 		P.RoofTile = EHutongRoofTile::He;
@@ -223,7 +207,6 @@ void Apply(EHutongDetail D, FHutongPavilionParams& P)
 		P.FriezeBars = 0;
 		P.bHasTileRuns = false;
 		P.RafterEndSection = 0.0;
-		// 寶頂 stays: on a 攢尖 roof it is the top of the silhouette.
 	}
 	else if (D == EHutongDetail::Hero)
 	{
@@ -248,7 +231,7 @@ void Apply(EHutongDetail D, FHutongPassageParams& P)
 
 void Apply(EHutongDetail, FHutongFlowerBedParams&)
 {
-	// Four kerbs and earth: already massing.
+	// Already massing: four kerbs and earth.
 }
 
 void Apply(EHutongDetail D, FHutongWaterJarParams& P)
@@ -265,7 +248,7 @@ void Apply(EHutongDetail D, FHutongWaterJarParams& P)
 
 void Apply(EHutongDetail D, FHutongFrameParams& P)
 {
-	// No block form: 塊 reads as 遠 (posts, beams, purlins, no rafters).
+	// 塊 reads as 遠: posts, beams, purlins.
 	if (D == EHutongDetail::Far || D == EHutongDetail::Massing)
 	{
 		P.bHasRafters = false;
@@ -286,7 +269,7 @@ void Apply(EHutongDetail D, FHutongHallParams& P)
 		P.LatticeRails = 0;
 		P.bHasBrackets = false;
 		P.bExposedFrame = false;
-		// The band stays, its sets go: at a distance 斗栱 are texture.
+		// At a distance 斗栱 sets are texture.
 		P.bHasDougong = false;
 		P.bHasTileRuns = false;
 		P.RafterEndSection = 0.0;
@@ -298,11 +281,8 @@ void Apply(EHutongDetail D, FHutongHallParams& P)
 	}
 }
 
-// ---- the LOD chain ----
-
 TArray<EHutongDetail> LODChain(EHutongDetail Placed)
 {
-	// Descending through the enum.
 	TArray<EHutongDetail> Chain;
 	for (int32 L = (int32)Placed; L >= (int32)EHutongDetail::Massing; --L)
 	{
@@ -321,19 +301,33 @@ int32 BuildLODChain(
 	EHutongDetail Placed,
 	bool bChain,
 	TFunctionRef<void(FDynamicMesh3&, EHutongDetail)> Build,
-	TArray<FDynamicMesh3>& OutLODs)
+	TArray<FDynamicMesh3>& OutLODs,
+	FMeshTurn* OutTurn)
 {
 	OutLODs.Reset();
+	if (OutTurn) *OutTurn = FMeshTurn();
 
 	TArray<EHutongDetail> Chain;
 	if (bChain) Chain = LODChain(Placed);
 	else Chain.Add(Placed);
 
 	int32 CollisionLOD = 0;
+	bool bTurnKnown = false;
 	for (const EHutongDetail Level : Chain)
 	{
 		FDynamicMesh3 Mesh;
-		Build(Mesh, Level);
+		{
+			FMeshTurnRecorder Turn;
+			Build(Mesh, Level);
+			if (OutTurn)
+			{
+				// Every level of a building is turned alike; the component carries one turn.
+				ensureMsgf(!bTurnKnown || Turn.Get() == *OutTurn, TEXT("LODs of one building built with different turns"));
+				if (!bTurnKnown) *OutTurn = Turn.Get();
+				bTurnKnown = true;
+				UnturnAndSnap(Mesh, *OutTurn);
+			}
+		}
 
 		// LOD0 is whatever the placement asked for, empty or not.
 		if (OutLODs.Num() > 0
@@ -342,7 +336,7 @@ int32 BuildLODChain(
 		{
 			continue;
 		}
-		// 塊 has no doorways; collides only when it is the only LOD.
+		// Collision from 遠 or above; 塊 collides only as the sole LOD.
 		if (Level >= EHutongDetail::Far) CollisionLOD = OutLODs.Num();
 		OutLODs.Emplace(MoveTemp(Mesh));
 	}
@@ -356,20 +350,20 @@ int32 BuildPlacementLODs(
 	EHutongDetail Placed,
 	bool bChain,
 	TFunctionRef<void(FDynamicMesh3&, EHutongDetail)> Build,
-	TArray<FDynamicMesh3>& OutLODs)
+	TArray<FDynamicMesh3>& OutLODs,
+	FMeshTurn* OutTurn)
 {
 	if (!bPlanOnly)
 	{
-		return BuildLODChain(Placed, bChain, Build, OutLODs);
+		return BuildLODChain(Placed, bChain, Build, OutLODs, OutTurn);
 	}
+	if (OutTurn) *OutTurn = FMeshTurn();
 	OutLODs.Reset();
 	return 0;
 }
 
 } // namespace Detail
 } // namespace HutongGen
-
-// ---- Massing ----
 
 namespace HutongGen
 {
@@ -383,7 +377,6 @@ void AppendBlock(FDynamicMesh3& Mesh, const FBlock& B)
 	const double Floor = FMath::Max(B.FloorHeight, 0.0);
 	const double Eave = FMath::Max(B.EaveHeight, Floor + 1.0);
 
-	// Slid along Y rather than built there.
 	auto SlideY = [&Mesh, &B](int32 FirstVert)
 	{
 		if (FMath::IsNearlyZero(B.OriginY)) return;
@@ -391,7 +384,6 @@ void AppendBlock(FDynamicMesh3& Mesh, const FBlock& B)
 			FTransform(FQuat::Identity, FVector(0.0, B.OriginY, 0.0)));
 	};
 
-	// 臺基, from the shell rather than as a box.
 	if (Floor > 0.0)
 	{
 		const int32 FirstVert = Mesh.MaxVertexID();
@@ -400,7 +392,6 @@ void AppendBlock(FDynamicMesh3& Mesh, const FBlock& B)
 		SlideY(FirstVert);
 	}
 
-	// The body.
 	{
 		const int32 FirstVert = Mesh.MaxVertexID();
 		const int32 FirstTri = Mesh.MaxTriangleID();
@@ -411,7 +402,6 @@ void AppendBlock(FDynamicMesh3& Mesh, const FBlock& B)
 		}
 		else if (B.ColumnSize > 0.0)
 		{
-			// Colonnade, not block, for the two open types.
 			const double C = FMath::Max(B.ColumnSize, 1.0);
 			const int32 NX = FMath::Max(B.ColumnsAlongWidth, 2);
 			const int32 NR = FMath::Clamp(B.ColumnRows, 1, 2);
@@ -440,7 +430,6 @@ void AppendBlock(FDynamicMesh3& Mesh, const FBlock& B)
 
 	if (B.Roof == ERoof::Gable)
 	{
-		// The type's own roof primitive with every ornament off.
 		Shell::FRoofParams Roof;
 		Roof.FrontOverhang = FMath::Max(B.FrontOverhang, 0.0);
 		Roof.RearOverhang = FMath::Max(B.RearOverhang, 0.0);
@@ -632,7 +621,6 @@ FBlock From(const FHutongCorridorParams& P)
 	B.EaveHeight = P.GetRoofBaseHeight();
 	B.bOpen = true;
 	B.ColumnSize = FMath::Max(P.ColumnDiameter, 4.0);
-	// The bays the real walk stands on, so the block's rhythm is the building's.
 	B.ColumnsAlongWidth = FMath::Clamp(
 		FMath::RoundToInt32(B.Width / FMath::Max(P.BaySpacing, 40.0)) + 1, 2, 64);
 	B.ColumnRows = 2;
@@ -650,7 +638,6 @@ FBlock From(const FHutongPaifangParams& P)
 	FBlock B;
 	B.Width = FMath::Max(P.Length, 1.0);
 	B.Depth = FMath::Max(P.Depth, 1.0);
-	// Eave at the central 樓 on the architrave, not the frame top (else an architrave too low).
 	B.EaveHeight = P.GetRoofEaveZ();
 	// Cart opening: a solid block would wall off the street.
 	B.bOpen = true;
@@ -675,7 +662,6 @@ FBlock From(const FHutongPavilionParams& P)
 	B.FloorHeight = P.GetFloorHeight();
 	B.PlatformOverhang = P.GetPlatformOverhang();
 	B.EaveHeight = P.GetRoofBaseHeight();
-	// Closed on no sides, which is the whole type.
 	B.bOpen = true;
 	B.ColumnSize = FMath::Max(P.GetColumnDiameter(), 4.0);
 	B.ColumnsAlongWidth = 2;
@@ -686,7 +672,7 @@ FBlock From(const FHutongPavilionParams& P)
 		? FMath::Max(P.Width - P.Depth, 0.0) : 0.0;
 	B.FrontOverhang = P.GetRoofOverhang();
 	B.Section = P.GetRoofSection();
-	// Set explicitly: the generator reads the field, not the zero fallback.
+	// Set explicitly: the generator reads the field.
 	B.Rise = P.GetRoofRise();
 	return B;
 }

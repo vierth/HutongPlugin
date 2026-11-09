@@ -11,7 +11,6 @@ UInteractiveTool* UHutongUnknownToolBuilder::BuildTool(const FToolBuilderState& 
 void UHutongUnknownTool::Setup()
 {
 	Super::Setup();
-	// Nothing is built, so detail and materials have nothing to say.
 	SetToolPropertySourceEnabled(DetailSettings, false);
 	SetToolPropertySourceEnabled(Appearance, false);
 }
@@ -44,7 +43,7 @@ FString UHutongUnknownTool::GetPlacementDetail() const
 TArray<FText> UHutongUnknownTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
-	// No height to change.
+	// Line 2, the height help: outlines carry no height.
 	Lines.RemoveAt(2);
 	Lines[0] = NSLOCTEXT("HutongUnknownTool", "HelpSpan",
 		"Trace a footprint whose type is not known.");

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "DynamicMesh/DynamicMesh3.h"
 #include "Generation/HutongJiajia.h"
+#include "Generation/HutongMeshTurn.h"
 #include "Templates/Function.h"
 #include "HutongDetail.generated.h"
 
@@ -62,12 +63,13 @@ namespace HutongGen
 
 		float LODScreenSize(int32 LODIndex);
 
-		// Both return the index of the LOD collision cooks from: 遠, or the cheapest LOD above 塊.
+		// Returns the LOD collision cooks from: 遠, or the cheapest LOD above 塊.
 		int32 BuildLODChain(
 			EHutongDetail Placed,
 			bool bChain,
 			TFunctionRef<void(UE::Geometry::FDynamicMesh3&, EHutongDetail)> Build,
-			TArray<UE::Geometry::FDynamicMesh3>& OutLODs);
+			TArray<UE::Geometry::FDynamicMesh3>& OutLODs,
+			FMeshTurn* OutTurn = nullptr);
 
 		int32 BuildPlacementLODs(
 			bool bPlanOnly,
@@ -76,7 +78,8 @@ namespace HutongGen
 			EHutongDetail Placed,
 			bool bChain,
 			TFunctionRef<void(UE::Geometry::FDynamicMesh3&, EHutongDetail)> Build,
-			TArray<UE::Geometry::FDynamicMesh3>& OutLODs);
+			TArray<UE::Geometry::FDynamicMesh3>& OutLODs,
+			FMeshTurn* OutTurn = nullptr);
 	}
 
 	namespace Massing
@@ -90,11 +93,9 @@ namespace HutongGen
 
 			double OriginY = 0.0;
 
-			// 臺基. Zero for a piece that stands on the ground.
 			double FloorHeight = 0.0;
 			double PlatformOverhang = 0.0;
 
-			// Top of the body: the eave line for a roofed piece, the whole height for a wall.
 			double EaveHeight = 100.0;
 
 			bool bOpen = false;
@@ -104,7 +105,6 @@ namespace HutongGen
 
 			ERoof Roof = ERoof::Gable;
 
-			// 舉架 as the real roofs take it, so the rise and the creases are the building's own.
 			HutongGen::FHutongRoofSection Section;
 			double Rise = 0.0;            // zero takes the section's own
 			double FrontOverhang = 0.0;
@@ -112,7 +112,6 @@ namespace HutongGen
 			double GableOverhang = 0.0;
 			double RearSlopeTrim = 0.0;
 
-			// Hipped family only.
 			double RidgeLength = 0.0;
 			double ShouInset = 0.0;
 		};

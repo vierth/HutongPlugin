@@ -17,9 +17,8 @@ namespace HutongGen
 
 namespace
 {
-	// 舉架 over the drawn depth, eave overhang as outermost run. A 廊 is one of the section's 步架, never
-	// added outside: 前廊後無廊 framed otherwise is the 撅尾巴房 (rear eave a 金檁 high, ridge off centre),
-	// which the 鑽金柱 frame avoids (四合院建築及其構造 p.85).
+	// 舉架 over the drawn depth, eave overhang as outermost run. A 廊 is one of the section's 步架, as in the
+	// 鑽金柱 frame, so the ridge stays centred (四合院建築及其構造 p.85).
 	Shell::FRoofParams MakeRoofParams(const FHutongSiheyuanParams& P, double Depth)
 	{
 		Shell::FRoofParams Roof;
@@ -33,7 +32,6 @@ namespace
 			: 0.0;
 		Roof.Section = Jiajia::MakeSection(
 			P.Purlins, 0.5 * Depth, Roof.FrontOverhang, P.RoofApexRoll);
-		// Zero keeps the section's own (canonical) rise.
 		Roof.Rise = P.bDeriveProportions ? 0.0 : P.GetRoofRise();
 		Roof.SlopeSegments = P.RoofSlopeSegments;
 		Roof.FasciaDepth = P.EaveFasciaDepth;
@@ -55,7 +53,6 @@ namespace
 		return Roof;
 	}
 
-	// Wall run with rectangular openings, laid as three bands.
 	void AppendPiercedWall(FDynamicMesh3& Mesh, double X0, double X1, double Y0, double Y1,
 		double Bottom, double Top, double Sill, double Head,
 		const TArray<TPair<double, double>>& Openings)
@@ -86,7 +83,6 @@ namespace
 		}
 	}
 
-	// One 高窗 per bay, centred.
 	TArray<TPair<double, double>> RearWindowSpans(const FHutongSiheyuanParams& P,
 		double W, double T, int32 N, const FBayBoundary& BayBoundaryX)
 	{
@@ -106,7 +102,6 @@ namespace
 		return Spans;
 	}
 
-	// 窗紙 and 欞條 in the 高窗.
 	void AppendRearWindows(FDynamicMesh3& Mesh, const FHutongSiheyuanParams& P,
 		double D, double T, double Sill, double Head,
 		const TArray<TPair<double, double>>& Spans)
@@ -147,7 +142,6 @@ namespace
 		}
 	}
 
-	// 白灰 on the three closed walls, 板壁 across interior bay boundaries.
 	void AppendInterior(FDynamicMesh3& Mesh, const FHutongSiheyuanParams& P,
 		double W, double T, double Floor, double Eave, double PlasterTop, double RoomY0, double RoomY1,
 		int32 N, const FBayBoundary& BayBoundaryX,
@@ -165,7 +159,7 @@ namespace
 				FVector3d(W - T, RoomY1, PlasterTop));
 			if (W - 2.0 * (T + PlasterT) > 0.0)
 			{
-				// Same splits as the brickwork, or the lime seals the 高窗.
+				// Same splits as the brickwork, so the 高窗 stay open.
 				AppendPiercedWall(Mesh, T + PlasterT, W - T - PlasterT,
 					RoomY1 - PlasterT, RoomY1, Floor, PlasterTop,
 					RearWinSill, RearWinHead, RearWins);
@@ -173,7 +167,6 @@ namespace
 			PlasterTag.Close();
 		}
 
-		// 板壁 is joinery: the frame carries the roof (牆倒屋不塌), partitions take no load.
 		if (!P.bHasInteriorPartitions || N <= 1 || RoomY1 <= RoomY0)
 		{
 			return;
@@ -207,8 +200,7 @@ namespace
 		PartTag.Close();
 	}
 
-	// 裝修 on the facade plane (圖5-4-5): 檻牆 under a 榻板, 抱框 at the columns, 支摘窗 in the 次間, 隔扇 with
-	// 簾架 and 風門 in the 明間, 中檻, 橫陂 and 上檻 over every bay, the 枋 face up to the ceiling.
+	// 裝修 on the facade plane (圖5-4-5).
 	void AppendFacade(FDynamicMesh3& Mesh, const FHutongSiheyuanParams& P, const Shell::FRoofParams& Roof, double D, double RoofZ,
 		double W, double TG, double TF, double PT, double FY, double Floor, double Sill, double WinTop,
 		double LintelBottom, double CeilZ, double GoldTop, int32 N, int32 DoorIdx, const FBayBoundary& BayBoundaryX)
@@ -240,7 +232,6 @@ namespace
 		auto Right = [&](int32 i) { return (i == N - 1) ? W - TG : BayBoundaryX(i + 1) - 0.5 * PT; };
 		auto IsDoor = [&](int32 i) { return bDoor && i == DoorIdx; };
 
-		// 檻牆 and its 榻板, one run per stretch of window bays, behind intermediate columns.
 		auto SillRun = [&](int32 First, int32 Last)
 		{
 			if (Last < First) return;
@@ -254,7 +245,7 @@ namespace
 		if (bDoor) { SillRun(0, DoorIdx - 1); SillRun(DoorIdx + 1, N - 1); }
 		else SillRun(0, N - 1);
 
-		// 海棠池子 (圖5-3-10.1) on each window bay's street face between the columns: 大枋子, 線枋子, diagonal 墻心.
+		// 海棠池子 (圖5-3-10.1).
 		if (P.SillWallFinish == EHutongSillWall::Pool && BoardZ > Floor)
 		{
 			const double ColR = P.GetColumnRadius();
@@ -289,8 +280,7 @@ namespace
 			}
 		}
 
-		// Over the 隔扇 and windows, one rail at the 檐枋's line (上檻, or 中檻 where 橫陂 follow). Behind a 前廊
-		// the 金柱 rise past that line (GoldTop): the 橫陂 fill the height up to an 上檻 under the 金枋 (p.104).
+		// Behind a 前廊 the 金柱 rise past the 檐枋's line: the 橫陂 fill up to an 上檻 under the 金枋 (p.104).
 		const double HeadH = FMath::Max(LintelBottom - WinTop, 1.0);
 		const double BeamH = ColD;
 		// The 橫陂's own 上檻 under the 金枋, ½ 柱徑.
@@ -300,8 +290,6 @@ namespace
 		const double BeamZ = bTransom ? TransomTop + UpperH : LintelBottom;
 
 		FSlotScope WoodTag(Mesh, MatSlot_Wood);
-		// The 枋 face across the whole front, up to the ceiling, or to the underside where it is open over the
-		// 廊 or a 徹上明造 shell.
 		if (Roof.VerandaEnd > 0.0 || Roof.ShellCover > 0.0)
 		{
 			Shell::AppendWallToUnderside(Mesh, Roof, D, RoofZ, TG, W - TG, FY, FY + TF, BeamZ);
@@ -311,7 +299,6 @@ namespace
 			AppendBox(Mesh, FVector3d(TG, FY, BeamZ), FVector3d(W - TG, FY + TF, CeilZ));
 		}
 
-		// 抱框 at every interior bay boundary, full wall depth; the door's side carried down to the floor.
 		for (int32 i = 1; i < N; ++i)
 		{
 			const double B = BayBoundaryX(i);
@@ -328,7 +315,6 @@ namespace
 			const double Rail = IsDoor(i) ? LeafTop : WinTop;
 			if (IsDoor(i) && !bDoorJoinery)
 			{
-				// An open bay: the 枋 face comes down to the doorway's head.
 				if (bTransom)
 				{
 					FSlotScope FaceTag(Mesh, MatSlot_Wood);
@@ -366,7 +352,6 @@ namespace
 			}
 			else if (WinTop > Sill + WindowRail)
 			{
-				// 風檻 on the 榻板 under the sashes.
 				if (WindowRail > 0.0)
 				{
 					FSlotScope SillRailTag(Mesh, MatSlot_Wood);
@@ -386,7 +371,6 @@ namespace
 		const double Eave = FMath::Max(P.GetEaveHeight(), 10.0);
 		// The roof and every wall that meets it stand on the frame's line; columns and 額枋 at the column top.
 		const double RoofZ = Eave + P.GetRoofLift();
-		// Walls rise to the ceiling under it, the rafters' tops on the 檐檁 (buried in the roof where it is lower).
 		const double CeilZ = RoofZ + P.GetUndersideRise();
 		const double Floor = FMath::Clamp(P.GetFloorHeight(), 0.0, Eave * 0.5);
 		// 表十二: 山牆 (TG), the facade's 檻牆 and walls (TF), the 檐牆 behind (TR).
@@ -406,14 +390,10 @@ namespace
 
 		const double ColR = P.GetColumnRadius();
 
-		// 明間 wider than the 次間.
 		auto BayBoundaryX = [&](int32 i) { return P.GetBayBoundary(i, N, W, ColR); };
 
-		// 前廊: wall retreats one 廊步, 檐柱 stay on the footprint edge. 後廊: back wall on the 後檐柱 line,
-		// rear 金柱 one 廊步 inside.
 		double FY, RY;
 		P.GetBuiltVerandaDepths(D, TF, FY, RY);
-		// The frame builds only the 廊 the house does (a 徹上明造 house's 廊 are already on its lines).
 		FHutongSiheyuanParams Framed = P;
 		Framed.Width = W;
 		Framed.Depth = D;
@@ -426,15 +406,12 @@ namespace
 		const double BaseP = FMath::Max(P.BaseCourseProjection, 0.0);
 		const double WallBottom = (BaseH > 0.0 && BaseP > 0.0) ? Floor + BaseH : Floor;
 
-		// 臺基 projects in front only; 踏跺 under the door, not the middle.
 		const double PlatO = FMath::Max(P.PlatformOverhang, ColR);
 		const double PlatSide = 0.0;
 		Shell::AppendPlatform(Mesh, W, D, Floor, PlatO, PlatSide,
 			P.bHasFrontDoorCenter ? P.StepCount : 0, P.StepTread,
 			BayBoundaryX(DoorIdx), BayBoundaryX(DoorIdx + 1));
 
-		// 廊門筒子: gable walls open across the 前廊 between its columns. Walked upright along the veranda:
-		// standing head height held under the eave, not a low room's crouch.
 		double EndDoorY0 = 0.0, EndDoorY1 = 0.0;
 		const double EndDoorHead = FMath::Max(HutongGen::Passage::MinHeadZ(Floor, 0.0),
 			FMath::Min(Floor + HutongCanon::Openings::WalkerHeightCm + 20.0, Eave - 20.0));
@@ -454,7 +431,6 @@ namespace
 			BaseTag.Close();
 		}
 
-		// 高窗 under the 封護檐 back wall eave, one per bay.
 		TArray<TPair<double, double>> RearWins;
 		double RearWinSill = 0.0, RearWinHead = 0.0;
 		if (P.bHasRearHighWindows)
@@ -474,9 +450,7 @@ namespace
 		Shell::FRoofParams Roof = MakeRoofParams(P, D);
 		Roof.GableWallThickness = TG;
 		Roof.SealedCorniceFloorZ = RearWins.Num() > 0 ? RearWinHead + 5.0 : WallBottom + 20.0;
-		// 前廊: the 檐椽 open over the 廊 up to the 金檁, and the 金柱 as much taller than the 檐柱 as the roof
-		// climbs over the 廊 (四合院建築及其構造 圖5-3-1/5-3-2; p.104's 橫陂 fill the difference). A 徹上明造
-		// house has its shell already; its 金柱 rise to the frame's own 金檁 support.
+		// The 金柱 rise as much over the 檐柱 as the roof climbs over the 廊 (四合院建築及其構造 圖5-3-1/5-3-2).
 		if (bVeranda && !P.bExposedFrame) Roof.VerandaEnd = FY + TF;
 		double GoldTop = Eave, RearGoldTop = Eave;
 		if (Roof.VerandaEnd > 0.0)
@@ -485,18 +459,15 @@ namespace
 		}
 		else if (bVeranda && P.bExposedFrame)
 		{
-			// Front and rear 金柱 up to the frame's own supports, under its main beams.
 			if (FrameL.bFrontVeranda) GoldTop = FMath::Max(FrameL.Support[FrameL.Front], Eave);
 			if (FrameL.bRearVeranda) RearGoldTop = FMath::Max(FrameL.Support[FrameL.Rear], Eave);
 		}
 
-		// Over the 廊 the 山牆 rise to the open underside.
 		if (Roof.VerandaEnd > 0.0)
 		{
 			for (const double X0 : { 0.0, W - TG }) Shell::AppendWallToUnderside(Mesh, Roof, D, RoofZ, X0, X0 + TG, 0.0, Roof.VerandaEnd, CeilZ);
 		}
 
-		// 封護檐: the roof builds the wall carried up under it, cornice and drip course.
 		for (const double X0 : { 0.0, W - TG })
 		{
 			if (EndDoorY1 > EndDoorY0)
@@ -511,7 +482,6 @@ namespace
 			}
 		}
 
-		// Lime to the ceiling; 板壁 under the beams.
 		AppendInterior(Mesh, P, W, TG, Floor, Eave, CeilZ, /*RoomY0*/ FY + TF, /*RoomY1*/ D - TR,
 			N, BayBoundaryX, RearWinSill, RearWinHead, RearWins);
 
@@ -521,22 +491,19 @@ namespace
 				P.GetChitouProjection(), P.ChitouCorbelSteps, Roof, (BaseH > 0.0 && BaseP > 0.0) ? BaseH : 0.0, BaseP);
 		}
 
-		// Lintel, columns and 額枋: one wood range.
 		FSlotScope WoodTag(Mesh, MatSlot_Wood);
 
 		// 清式營造則例 表四 檐枋 ⅘, 表二 穿插枋 ¾ of the 柱徑 thick.
 		const double EaveTieT = HutongCanon::Frame::EaveTieThickness * P.GetColumnDiameter();
 		const double ThroughTieT = HutongCanon::Frame::ThroughTieThickness * P.GetColumnDiameter();
-				// 收分 against 柱高, not the drawn height.
+		// 收分 measured against 柱高.
 		const double ColOvershoot = 1.0;
 		const double ColTopR = Frame::TaperedTopRadius(ColR, P.GetColumnHeight(), P.ColumnTaperRatio);
 
-		// 金柱 in the wall plane, up to the 金檁's 墊板 behind a 前廊.
 		Frame::AppendColumnRow(Mesh, BayBoundaryX, N, FY, ColR, ColTopR, 0.0, GoldTop, ColOvershoot);
 
 		if (bVeranda)
 		{
-			// 檐柱 free-standing on the platform carrying the eave, 額枋 along them, 穿插枋 back to each 金柱.
 			Frame::AppendColumnRow(Mesh, BayBoundaryX, N, 0.0, ColR, ColTopR, 0.0, Eave, ColOvershoot);
 			Frame::AppendArchitrave(Mesh, BayBoundaryX(0), BayBoundaryX(N), 0.0, EaveTieT,
 				LintelBottom, Eave);
@@ -546,7 +513,6 @@ namespace
 
 		if (RY > 0.0)
 		{
-			// 後金柱 free-standing in the room, tied back to the 後檐柱 in the wall.
 			Frame::AppendColumnRow(Mesh, BayBoundaryX, N, D - RY, ColR, ColTopR, 0.0, RearGoldTop, ColOvershoot);
 			Frame::AppendTieBeams(Mesh, BayBoundaryX, N, D - RY, D - 0.5 * TR, ThroughTieT,
 				LintelBottom, Eave, ColOvershoot);
@@ -554,19 +520,16 @@ namespace
 
 		WoodTag.Close();
 
-		// 墊板 and 檐檁 on the front columns, under the lifted roof; ends buried in the gable walls.
 		if (RoofZ > Eave) Frame::AppendEaveStack(Mesh, 0.5 * TG, W - 0.5 * TG, 0.0, P.GetColumnDiameter(), Eave);
-		// The 金墊板 and 金檁 on the 金柱, open over the 廊.
 		if (GoldTop > Eave + 1.0 && !P.bExposedFrame) Frame::AppendEaveStack(Mesh, 0.5 * TG, W - 0.5 * TG, FY, P.GetColumnDiameter(), GoldTop);
 
-		// 徹上明造: the 梁架 of 圖5-3-1 on each interior column line and the 檁 over them, under the shell.
+		// 徹上明造: the 梁架 of 圖5-3-1.
 		if (P.bExposedFrame)
 		{
 			TArray<double> FrameX;
 			for (int32 i = 1; i < N; ++i) FrameX.Add(BayBoundaryX(i));
 			FRoofFrameOptions Options;
 			Options.bSkipEaveLines = true;
-			// Beam heads and 出頭 end in the back wall, not through it.
 			Options.RearLimit = D - 1.0;
 			Options.Underside = [&](double Y) { return Shell::UndersideAt(Roof, D, RoofZ, Y); };
 			AppendRoofFrame(Mesh, FrameL, FrameX, 0.5 * TG, W - 0.5 * TG, Options);
@@ -574,12 +537,10 @@ namespace
 
 		AppendFacade(Mesh, P, Roof, D, RoofZ, W, TG, TF, PT, FY, Floor, Sill, WinTop, LintelBottom, CeilZ, GoldTop, N, DoorIdx, BayBoundaryX);
 
-		// Under a 徹上明造 shell the back wall carries on up to it (the facade's own call above).
 		if (Roof.ShellCover > 0.0) Shell::AppendWallToUnderside(Mesh, Roof, D, RoofZ, TG, W - TG, D - TR, D, CeilZ);
 
 		AppendRearWindows(Mesh, P, D, TR, RearWinSill, RearWinHead, RearWins);
 
-		// AppendGableRoof tags its own material.
 		Shell::AppendGableRoof(Mesh, W, D, RoofZ, Roof);
 	}
 
@@ -595,8 +556,6 @@ namespace
 		Roof.bHasTileRowPhase = true;
 		Roof.TileRowPhase = RowPhase - X0;
 		const int32 V0 = Mesh.MaxVertexID();
-		// The run's closed end is a corner: its 墀頭 carries the 博縫 foot and closes the eave (without it
-		// the 博縫 hung in air and the soffit showed).
 		if (P.bHasChitou)
 		{
 			HutongMeshUtils::FSlotScope PierTag(Mesh, MatSlot_Body);

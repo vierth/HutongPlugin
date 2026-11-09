@@ -8,7 +8,7 @@ using UE::Geometry::FDynamicMesh3;
 FHutongEarPassageParams::FHutongEarPassageParams()
 {
 	Room = HutongPresets::MakeHouse(HutongCanon::House::EarRoom);
-	// Both walls are 隔牆: the passage is an inner way, not the plot edge.
+	// Both walls are 隔牆: the passage is an inner way.
 	OuterWall.Role = EHutongWallRole::Courtyard;
 	OuterWall.bHasWindows = false;
 	ClosingWall.Role = EHutongWallRole::Courtyard;
@@ -26,7 +26,6 @@ namespace HutongGen
 		const double ClearX0 = P.GetClearX0();
 		const bool bBlock = Detail::IsMassing(Detail);
 
-		// One roof over room and passage reads as one block at a distance.
 		if (bBlock && P.bRoofOverPassage)
 		{
 			FHutongSiheyuanParams Whole = P.RoomParams();
@@ -37,7 +36,6 @@ namespace HutongGen
 			return;
 		}
 
-		// Room, at its own end of the frontage.
 		if (P.HasRoom())
 		{
 			FHutongSiheyuanParams R = P.RoomParams();
@@ -49,7 +47,6 @@ namespace HutongGen
 		}
 		if (!P.HasPassage()) return;
 
-		// Walls along the passage, full depth: the outer one, and over the whole frontage the inner one.
 		auto AppendSideWall = [&](double WallX0)
 		{
 			FHutongWallParams Wp = P.OuterWall;
@@ -74,7 +71,6 @@ namespace HutongGen
 		if (P.bHasOuterWall) AppendSideWall(P.GetOuterWallX0());
 		if (P.GetInnerWallThickness() > 0.0) AppendSideWall(P.GetInnerWallX0());
 
-		// 隔牆 across the front of the way, with its doorway.
 		if (P.bHasClosingWall)
 		{
 			FHutongWallParams Cw = P.ClosingWallParams();
@@ -84,7 +80,6 @@ namespace HutongGen
 			HutongMeshUtils::TransformVerticesFrom(Mesh, V0, FTransform(FVector(ClearX0, 0.0, 0.0)));
 		}
 
-		// Room roof carried over the way, tile rows in step with the room's.
 		if (P.bRoofOverPassage)
 		{
 			FHutongSiheyuanParams R = P.RoomParams();
@@ -94,7 +89,6 @@ namespace HutongGen
 			const double SX0 = P.GetStripX0();
 			if (!P.HasRoom())
 			{
-				// The passage is the whole building: closed at both gables, a row on the middle.
 				AppendHouseRoofRun(Mesh, R, SX0, SX0 + P.GetStripWidth(), false, false, SX0 + 0.5 * P.GetStripWidth());
 				return;
 			}
@@ -105,7 +99,6 @@ namespace HutongGen
 			return;
 		}
 
-		// Passage roof along the depth, bearing into wall and gable.
 		{
 			FHutongPassageParams Pass = P.PassageParams();
 			Detail::Apply(Detail, Pass);

@@ -23,11 +23,9 @@ namespace
 	const FLinearColor DeleteColor(1.0f, 0.25f, 0.2f);
 	const FLinearColor ErrorColor(1.0f, 0.1f, 0.1f);
 
-	// In pixels, converted per handle.
 	constexpr double HandlePixels = 9.0;
 	constexpr double MidpointPixels = 5.0;
 
-	// World size covering the given number of pixels at P.
 	double WorldSizeForPixels(const FSceneView* View, const FVector& P, double Pixels)
 	{
 		if (!View)
@@ -42,7 +40,6 @@ namespace
 		return FMath::Max(W * (Pixels / ViewWidth / ZoomFactor), 1.0);
 	}
 
-	// Handles are drawn as crossed segments.
 	void DrawHandle(FPrimitiveDrawInterface* PDI, const FVector& P, const FLinearColor& Color,
 		double Size, float Thickness)
 	{
@@ -52,7 +49,6 @@ namespace
 		PDI->DrawLine(P - FVector(0, 0, H), P + FVector(0, 0, H), Color, SDPG_Foreground, Thickness, 0.0f, true);
 	}
 
-	// DrawHandle rotated 45 degrees, so a removal never reads as a corner.
 	void DrawDeleteHandle(FPrimitiveDrawInterface* PDI, const FVector& P, const FLinearColor& Color,
 		double Size, float Thickness)
 	{
@@ -139,7 +135,6 @@ void FPlaceRegionComponentVisualizer::DrawVisualization(const UActorComponent* C
 	const int32 N = Region->LocalPoints.Num();
 	const bool bIsEditedComponent = (GetEditedComponent() == Component);
 
-	// Crossing edges are reported, never silently repaired.
 	TArray<TPair<int32, int32>> Crossings;
 	PlaceLabelsGeo::FindSelfIntersections(Region->GetWorldPoints2D(), Crossings);
 	TSet<int32> BadEdges;
@@ -152,7 +147,6 @@ void FPlaceRegionComponentVisualizer::DrawVisualization(const UActorComponent* C
 	const FLinearColor OutlineColor = Region->GetOutlineColor();
 	const bool bAlt = IsAltHeld();
 
-	// The edges carry the insert proxy, not just their midpoints.
 	for (int32 i = 0; i < N; ++i)
 	{
 		const int32 Next = (i + 1) % N;
@@ -165,7 +159,6 @@ void FPlaceRegionComponentVisualizer::DrawVisualization(const UActorComponent* C
 		PDI->SetHitProxy(nullptr);
 	}
 
-	// Midpoint markers show edges are insertable.
 	if (N >= 3)
 	{
 		for (int32 i = 0; i < N; ++i)
@@ -191,7 +184,6 @@ void FPlaceRegionComponentVisualizer::DrawVisualization(const UActorComponent* C
 		// Pair every SetHitProxy with a null, or later draws inherit it as vertex i.
 		PDI->SetHitProxy(new HPlaceRegionVertexProxy(Component, i));
 
-		// Alt shows every corner as a removal before the click.
 		if (bAlt && bCanDelete)
 		{
 			DrawDeleteHandle(PDI, P, DeleteColor, Size * 1.4, 4.0f);
@@ -219,7 +211,6 @@ bool FPlaceRegionComponentVisualizer::VisProxyHandleClick(FEditorViewportClient*
 
 		RegionPropertyPath = FComponentPropertyPath(VisProxy->Component.Get());
 
-		// Alt+click removes this one corner, leaving any other selection alone.
 		if (Click.IsAltDown())
 		{
 			if (UPlaceRegionComponent* Region = GetEditedRegion())
@@ -268,7 +259,6 @@ void FPlaceRegionComponentVisualizer::InsertCornerOnEdge(UPlaceRegionComponent* 
 	const FVector2D A = Region->LocalPoints[EdgeIndex];
 	const FVector2D B = Region->LocalPoints[(EdgeIndex + 1) % N];
 
-	// Where the click ray meets the region's own plane, in component space.
 	FVector2D Insert = (A + B) * 0.5;
 	{
 		const FTransform& Xf = Region->GetComponentTransform();
@@ -315,7 +305,6 @@ void FPlaceRegionComponentVisualizer::DeleteSingleVertex(UPlaceRegionComponent* 
 	{
 		return;
 	}
-	// Refusing to leave a degenerate polygon beats repairing one later.
 	if (Region->LocalPoints.Num() <= 3)
 	{
 		return;
@@ -347,7 +336,6 @@ bool FPlaceRegionComponentVisualizer::GetWidgetLocation(
 		return false;
 	}
 
-	// Centroid of the selection, so a multi-vertex drag has a sensible pivot.
 	FVector Sum = FVector::ZeroVector;
 	for (int32 Index : SelectedVertices)
 	{
@@ -367,7 +355,6 @@ bool FPlaceRegionComponentVisualizer::HandleInputDelta(FEditorViewportClient* Vi
 	}
 	if (!IsSelectionValid())
 	{
-		// Point count changed externally.
 		EndEditing();
 		return false;
 	}
@@ -393,7 +380,7 @@ bool FPlaceRegionComponentVisualizer::HandleInputDelta(FEditorViewportClient* Vi
 	Region->RebuildCache();
 	Region->UpdateBounds();
 
-	// Interactive, not ValueSet: re-parenting would run per mouse move.
+	// Interactive: ValueSet re-parents, too costly per mouse move.
 	NotifyPropertyModified(Region, PointsProperty, EPropertyChangeType::Interactive);
 	return true;
 }
@@ -457,7 +444,6 @@ bool FPlaceRegionComponentVisualizer::CanDeleteVertex() const
 	{
 		return false;
 	}
-	// Refusing to leave a degenerate polygon beats repairing one later.
 	return Region->LocalPoints.Num() - SelectedVertices.Num() >= 3;
 }
 
@@ -514,7 +500,6 @@ void FPlaceRegionComponentVisualizer::OnDuplicateVertex()
 	}
 	Region->Modify();
 
-	// Offset toward the next corner.
 	const int32 N = Region->LocalPoints.Num();
 	const FVector2D Here = Region->LocalPoints[LastSelectedVertex];
 	const FVector2D Next = Region->LocalPoints[(LastSelectedVertex + 1) % N];

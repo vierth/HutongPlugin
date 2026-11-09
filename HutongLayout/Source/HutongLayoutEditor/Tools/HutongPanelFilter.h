@@ -3,15 +3,12 @@
 #include "CoreMinimal.h"
 #include "UObject/UnrealType.h"
 
-// Panel's simple view. A params-struct field shows only with meta=(HutongBasic); a field declared on
-// a tool property set or building component shows unless meta=(HutongAdvanced). Every nesting level
-// must pass. Engine structs (vector, colour) follow their owner.
+// A params-struct field needs meta=(HutongBasic); a field on a property set or component shows unless meta=(HutongAdvanced).
 namespace HutongPanel
 {
 	inline const FName BasicKey(TEXT("HutongBasic"));
 	inline const FName AdvancedKey(TEXT("HutongAdvanced"));
-	// On a nested params struct: its fields that do not apply where it is used (an ear room's house
-	// params have no veranda), comma-separated, hidden in every view.
+	// On a nested params struct: comma-separated fields hidden wherever it is used.
 	inline const FName HideChildrenKey(TEXT("HutongHideChildren"));
 
 	inline bool IsHiddenBy(const FProperty& Prop, const FProperty* Parent)

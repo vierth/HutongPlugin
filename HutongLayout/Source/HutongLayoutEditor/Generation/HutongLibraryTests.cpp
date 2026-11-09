@@ -1,3 +1,4 @@
+#include "Generation/GateHouseGenerator.h"
 #include "Generation/HutongActorSpawn.h"
 #include "Generation/HutongMeshUtils.h"
 #include "Generation/HutongPalette.h"
@@ -8,6 +9,7 @@
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "UObject/Package.h"
+#include "AssetRegistry/AssetData.h"
 
 #include "Misc/AutomationTest.h"
 
@@ -19,8 +21,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongMeshLibraryTest,
 
 bool FHutongMeshLibraryTest::RunTest(const FString& Parameters)
 {
-	// Identical geometry shares one asset in the library; different geometry does not; with sharing off
-	// the mesh is the actor's own, as before.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to spawn into"), World)) return false;
 
@@ -43,12 +43,12 @@ bool FHutongMeshLibraryTest::RunTest(const FString& Parameters)
 		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>();
 		TArray<UE::Geometry::FDynamicMesh3> LODs = Build(Height);
 		HutongGen::BuildAndAssignStaticMesh(Actor, LODs, FHutongPalette(), 0);
-		UStaticMeshComponent* C = Actor->GetStaticMeshComponent();
+		UStaticMeshComponent* C = HutongGen::GetBuiltMeshComponent(Actor);
 		TestEqual(TEXT("each building wears its own palette over the mesh's two slots"), C->OverrideMaterials.Num(), 2);
 		return C->GetStaticMesh();
 	};
 
-	// A height no other test uses, so an earlier run's asset is not what is found.
+	// A height no other test uses, so the asset found is this run's.
 	const double H = 311.0 + FMath::FRand();
 	UStaticMesh* A = Bake(H);
 	UStaticMesh* B = Bake(H);
@@ -58,16 +58,16 @@ bool FHutongMeshLibraryTest::RunTest(const FString& Parameters)
 	TestTrue(FString::Printf(TEXT("the shared mesh lives in the library (%s)"), A ? *A->GetPackage()->GetName() : TEXT("none")),
 		A && A->GetPackage()->GetName().StartsWith(TEXT("/Game/HutongLayout/Generated/")));
 
-	// A building rebuilt to other geometry leaves its old mesh to the clean-up; one still worn stays.
 	{
 		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>();
 		TArray<UE::Geometry::FDynamicMesh3> LODs = Build(H + 90.0);
 		HutongGen::BuildAndAssignStaticMesh(Actor, LODs, FHutongPalette(), 0);
-		UStaticMesh* Left = Actor->GetStaticMeshComponent()->GetStaticMesh();
-		Actor->GetStaticMeshComponent()->SetStaticMesh(nullptr);
-		const TArray<UStaticMesh*> Unused = HutongGen::FindUnusedLibraryMeshes();
-		TestTrue(TEXT("the mesh no building wears is offered for clean-up"), Left && Unused.Contains(Left));
-		TestFalse(TEXT("a mesh still worn is not"), Unused.Contains(A));
+		UStaticMesh* Left = HutongGen::GetBuiltMeshComponent(Actor)->GetStaticMesh();
+		HutongGen::GetBuiltMeshComponent(Actor)->SetStaticMesh(nullptr);
+		TSet<FName> Unused;
+		for (const FAssetData& Asset : HutongGen::FindUnusedLibraryMeshes()) Unused.Add(Asset.PackageName);
+		TestTrue(TEXT("the mesh no building wears is offered for clean-up"), Left && Unused.Contains(Left->GetPackage()->GetFName()));
+		TestFalse(TEXT("a mesh still worn is not"), A && Unused.Contains(A->GetPackage()->GetFName()));
 	}
 
 	IConsoleVariable* Share = IConsoleManager::Get().FindConsoleVariable(TEXT("hutong.ShareMeshes"));
@@ -77,12 +77,44 @@ bool FHutongMeshLibraryTest::RunTest(const FString& Parameters)
 		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>();
 		TArray<UE::Geometry::FDynamicMesh3> LODs = Build(H);
 		HutongGen::BuildAndAssignStaticMesh(Actor, LODs, FHutongPalette(), 0);
-		UStaticMesh* Own = Actor->GetStaticMeshComponent()->GetStaticMesh();
+		UStaticMesh* Own = HutongGen::GetBuiltMeshComponent(Actor)->GetStaticMesh();
 		TestTrue(TEXT("sharing off: the actor's own mesh, outered to it"), Own && Own != A && Own->GetOuter() == Actor);
 		Share->Set(true);
 	}
 
 	World->DestroyWorld(false);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongGateSeedsShareTest,
+	"HutongLayout.Detail.GateSeedsShare",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FHutongGateSeedsShareTest::RunTest(const FString& Parameters)
+{
+	const auto GateVertices = [](int32 Seed)
+	{
+		FHutongGateHouseParams P;
+		P.RandomSeed = Seed;
+		P.Width = 600.0; // Narrower, the leaves all take the widest swing to hold the clear width.
+		UE::Geometry::FDynamicMesh3 Mesh;
+		HutongGen::BuildGateHouse(Mesh, P);
+		FString Vertices;
+		for (const int32 V : Mesh.VertexIndicesItr())
+		{
+			Vertices += Mesh.GetVertex(V).ToString();
+		}
+		return Vertices;
+	};
+
+	TSet<FString> Forms;
+	for (int32 i = 0; i < 200; ++i)
+	{
+		Forms.Add(GateVertices(i * 7919 - 500000));
+	}
+	TestEqual(TEXT("two hundred seeds make four gates"), Forms.Num(), 4);
+	TestEqual(TEXT("a seed rebuilds the same gate"), GateVertices(1234567), GateVertices(1234567));
+	TestEqual(TEXT("a negative seed is one of the four"), Forms.Contains(GateVertices(-7)), true);
 	return true;
 }
 

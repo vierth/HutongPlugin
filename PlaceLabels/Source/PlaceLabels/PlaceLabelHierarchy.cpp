@@ -50,7 +50,6 @@ namespace PlaceLabelsHierarchy
 			}
 			Current = Current->GetEffectiveParent();
 		}
-		// Ran off the top, or hit the cap on data that is already broken.
 		return false;
 	}
 
@@ -62,7 +61,6 @@ namespace PlaceLabelsHierarchy
 			return nullptr;
 		}
 
-		// An explicit parent is a statement that the geometry lies. Nothing is derived.
 		if (Region->ExplicitParent)
 		{
 			return Region->ExplicitParent->FindComponentByClass<UPlaceRegionComponent>();
@@ -112,7 +110,6 @@ namespace PlaceLabelsHierarchy
 					}
 					else
 					{
-						// Adjacent: the compound-fronting-a-hutong case.
 						const double Radius = FMath::Max(Type->ParentSearchRadius, 0.0);
 						if (!Region->GetWorldBounds2D().ExpandBy(Radius)
 								 .Intersect(Candidate->GetWorldBounds2D()))
@@ -145,7 +142,6 @@ namespace PlaceLabelsHierarchy
 			}
 		}
 
-		// Fallback for untyped regions and for types whose rule found nothing.
 		UPlaceRegionComponent* Fallback = nullptr;
 		double FallbackArea = TNumericLimits<double>::Max();
 
@@ -178,7 +174,6 @@ namespace PlaceLabelsHierarchy
 			return 0;
 		}
 
-		// Coarsest first.
 		Regions.Sort([](const UPlaceRegionComponent& A, const UPlaceRegionComponent& B)
 		{
 			return A.GetDisplayPriority() < B.GetDisplayPriority();

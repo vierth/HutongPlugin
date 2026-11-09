@@ -17,7 +17,6 @@ public:
 	FHutongInnerGateParams Params;
 
 #if WITH_EDITOR
-	// Clamps the eave into the band when it or the constraint changes.
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 };
@@ -43,7 +42,6 @@ protected:
 	virtual FString GetActorNameBase() const override { return TEXT("Hutong_InnerGate"); }
 	virtual FString GetPlacementDetail() const override;
 
-	// Clamps the drag into the size band.
 	virtual void GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const override;
 
 	virtual void OnPlacementStarted(const FVector& HitWorld) override;

@@ -4,20 +4,16 @@
 
 void FHutongLayoutCommands::RegisterCommands()
 {
-	// Shift+digit: plain digits are the viewport bookmarks.
-	// Two walls, not one with a role picker: boundary and dividing walls differ in height,
-	// thickness, cap, openings, and whether they are measured against a street.
 	UI_COMMAND(BeginWallTool, "Lane Wall",
 		"Place a boundary wall (院牆) onto the lane, with a gate (牆垣式門).\n"
-		"Click to anchor, move, click again to place. [ and ] slide the gate. Hold R to rotate, Esc to cancel.",
+		"Click to start, click to end each leg, click the last end again to finish. G puts the gate on this leg, [ and ] slide it, Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord(EModifierKey::Shift, EKeys::One));
 
 	UI_COMMAND(BeginCourtWallTool, "Court Wall",
-		"Place a dividing wall (隔牆) inside the compound, with doorways (隨牆門) and decorative windows (什錦窗).\n"
-		"Click to anchor, move, click again to place. [ and ] slide the doorway. Hold R to rotate, Esc to cancel.",
+		"Place a dividing wall (隔牆) inside the compound, with wall-set gates (隨牆門) and decorative windows (什錦窗).\n"
+		"Click to start, click to end each leg, click the last end again to finish. G puts the doorway on this leg, [ and ] slide it, Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord(EModifierKey::Shift | EModifierKey::Alt, EKeys::Eight));
 
-	// "House", not "Siheyuan": this places one building.
 	UI_COMMAND(BeginSiheyuanTool, "House",
 		"Place one dwelling — main hall (正房), side house (廂房), front row (倒座房), rear row (後罩房) or ear room (耳房), chosen by preset.\n"
 		"Click to anchor, move, click to fix the footprint, move to pick the facade side, click to place.\n"
@@ -26,7 +22,7 @@ void FHutongLayoutCommands::RegisterCommands()
 
 	UI_COMMAND(BeginEarPassageTool, "Ear Room",
 		"Place an ear room (耳房): plain, with a covered passage (過道), or with no front door.\n"
-		"Click to anchor, move, click to fix the footprint, move to pick the facade side, click to place. [ and ] set one or two bays; Shift+[ and ] swap the passage's end.\n"
+		"Click to anchor, move, click to fix the footprint, move to pick the facade side, click to place. [ and ] set one to three bays; Shift+[ and ] swap the passage's end.\n"
 		"Hold R to rotate, Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord());
 
@@ -81,7 +77,7 @@ void FHutongLayoutCommands::RegisterCommands()
 		"Drag along the run; the width is held to a band. Hold R to rotate, Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord(EModifierKey::Shift, EKeys::Zero));
 
-	// "Temple", not "Hall": "Hall" read as the plain house beside it.
+	// "Temple": "Hall" read as the plain house beside it.
 	UI_COMMAND(BeginHallTool, "Temple",
 		"Place a temple hall (殿).\n"
 		"Click to anchor, move, click to fix the footprint, move to pick the side the facade faces, click to place.\n"
@@ -98,7 +94,6 @@ void FHutongLayoutCommands::RegisterCommands()
 		"Click to set the southeast corner, move to size the plot, click to lay it out. The orange edge is the street. Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord(EModifierKey::Shift | EModifierKey::Alt, EKeys::One));
 
-	// 構架: shows how a house is framed; not for building a street.
 	UI_COMMAND(BeginFrameTool, "Frame",
 		"Place the timber frame (構架) of a main hall (正房), without walls or roof.\n"
 		"Stamped at the preset's canonical size: click where it stands, move toward its front, click to place.\n"
@@ -111,7 +106,7 @@ void FHutongLayoutCommands::RegisterCommands()
 		EUserInterfaceActionType::ToggleButton, FInputChord(EModifierKey::Shift | EModifierKey::Alt, EKeys::Three));
 
 	UI_COMMAND(BeginGalleryWallsTool, "Wall Gallery",
-		"Place every wall: plain, with garden doorways (moon gate 月亮門, plain doorway 隨牆門, …) and with decorative windows (什錦窗).\n"
+		"Place every wall: plain, with garden doorways (moon gate 月亮門, wall-set gate 隨牆門, …) and with decorative windows (什錦窗).\n"
 		"Click to anchor, move to position the set, click to place. Hold R to rotate, Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord());
 
@@ -140,7 +135,6 @@ void FHutongLayoutCommands::RegisterCommands()
 		"Click to anchor, move to position the set, click to place. Hold R to rotate, Esc to cancel.",
 		EUserInterfaceActionType::ToggleButton, FInputChord());
 
-	// 天棚魚缸石榴樹: courtyard furnishing, not a building.
 	UI_COMMAND(BeginFlowerBedTool, "Bed",
 		"Place a kerbed flower bed (花池).\n"
 		"Click to anchor, move, click again to place. Hold R to rotate, Esc to cancel.",
@@ -161,8 +155,38 @@ void FHutongLayoutCommands::RegisterCommands()
 		"Click to anchor, move, click again to place. F turns the front, [ and ] set the bays.",
 		EUserInterfaceActionType::ToggleButton, FInputChord());
 
+	UI_COMMAND(BeginImperialWallTool, "Imperial City Wall",
+		"Place the wall round the imperial city (皇城牆): red plaster, battered, under a yellow glazed tile cap.\n"
+		"Click to start, click to end each leg, click the last end again to finish. Esc to cancel.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	UI_COMMAND(BeginPalaceWallTool, "Palace Wall",
+		"Lay the Forbidden City's wall (紫禁城城牆): battered brick, crenellated outer parapet, red on the side facing the palace.\n"
+		"Click to start, click to end each leg, click the last end to finish or the first point to close. F flips the battlements.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	UI_COMMAND(BeginWallCornerTool, "Wall Corner",
+		"Place the corner of a city or palace wall (城角): the square platform under the corner tower, which wall runs join.\n"
+		"Click the outside corner, move toward the inside of the city, click again. Esc to cancel.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	UI_COMMAND(BeginArrowTowerTool, "Arrow Tower",
+		"Place an arrow tower (箭樓) on its platform at the front of a barbican, as at Deshengmen (德勝門).\n"
+		"Click the middle of the platform's front, move toward the inside of the city, click again. Esc to cancel.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	UI_COMMAND(BeginCityGateTool, "City Gate",
+		"Place a gate passage (門洞) through a city wall, with the barbican's gate tower (閘樓) over it.\n"
+		"Click the middle of the gate's outer face, move toward the inside of the city, click again. Esc to cancel.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
+	UI_COMMAND(BeginGateComplexTool, "Deshengmen",
+		"Lay out a whole city gate as at Deshengmen (德勝門): gate tower (城樓), barbican (甕城), arrow tower (箭樓) and the barbican's gate (閘樓).\n"
+		"Click the middle of the gate's outer face on the city wall, move toward the inside of the city, click again. Esc to cancel.",
+		EUserInterfaceActionType::ToggleButton, FInputChord());
+
 	UI_COMMAND(BeginCityWallTool, "City Wall",
-		"Lay a city wall (城牆) on the Beijing inner city's pattern: battered brick, crenellated outer parapet (垛口).\n"
+		"Lay a city wall (城牆) on the Beijing inner city's pattern: battered brick, crenellated outer parapet (垛牆).\n"
 		"Click to start, click to end each leg, click the last end to finish or the first point to close. F flips the battlements.",
 		EUserInterfaceActionType::ToggleButton, FInputChord());
 

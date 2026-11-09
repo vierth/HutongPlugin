@@ -19,7 +19,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongHeightsRanksTest,
 
 bool FHutongHeightsRanksTest::RunTest(const FString& Parameters)
 {
-	// The ranking the suggestions use is the house table's, 正房 above 廂房 above the low rows.
 	using namespace HutongPresets;
 	const double Side = EaveRatio(EHutongCourtRole::SideHouse);
 	const double Front = EaveRatio(EHutongCourtRole::FrontRow);
@@ -38,7 +37,6 @@ bool FHutongHeightsRanksTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a suggestion from a 廂房 reference goes through the 正房 ratio"),
 		FMath::IsNearlyEqual(SuggestEave(EHutongCourtRole::EarRoom, EHutongCourtRole::SideHouse, 300.0), 300.0 * Ear / Side));
 
-	// The tool's reference is the highest rank selected, and it suggests itself.
 	TArray<FHutongEaveRow> Rows;
 	auto Row = [](EHutongCourtRole Role, double Eave) { FHutongEaveRow R; R.Role = Role; R.NewEave = Eave; return R; };
 	Rows.Add(Row(EHutongCourtRole::EarRoom, 280.0));
@@ -59,7 +57,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongHeightsSetEaveTest,
 
 bool FHutongHeightsSetEaveTest::RunTest(const FString& Parameters)
 {
-	// Every type the tool offers takes the eave it is given, as its own accessor answers it.
 	const TArray<UClass*> Classes = {
 		UHutongSiheyuanBuildingComponent::StaticClass(), UHutongEarPassageBuildingComponent::StaticClass(),
 		UHutongGateHouseBuildingComponent::StaticClass(), UHutongCorridorBuildingComponent::StaticClass(),
@@ -77,7 +74,6 @@ bool FHutongHeightsSetEaveTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("%s answers it (%.1f)"), *Name, B->GetEditHeight()), FMath::IsNearlyEqual(B->GetEditHeight(), Target, 0.01));
 	}
 
-	// A house's derived eave is overridden, not kept.
 	UHutongSiheyuanBuildingComponent* House = NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
 	House->SetFootprintSize(FVector2D(1040.0, 600.0));
 	const double Derived = House->GetEaveHeight();
@@ -106,7 +102,6 @@ bool FHutongHeightsRoleTest::RunTest(const FString& Parameters)
 	UHutongWallBuildingComponent* Wall = NewObject<UHutongWallBuildingComponent>(GetTransientPackage());
 	Wall->Params.Role = EHutongWallRole::Courtyard;
 	TestEqual(TEXT("a court wall by its role"), Wall->GetCourtRole(), EHutongCourtRole::CourtWall);
-	// A wall stands between courts and keeps both; a house moves.
 	Wall->AssignCourt(TEXT("3M6_Courtyard_1"));
 	Wall->AssignCourt(TEXT("3M6_Courtyard_2"));
 	TestTrue(TEXT("a wall is in both courts"), Wall->IsInCourt(TEXT("3M6_Courtyard_1")) && Wall->IsInCourt(TEXT("3M6_Courtyard_2")));
@@ -131,7 +126,6 @@ bool FHutongHeightsCourtNameTest::RunTest(const FString& Parameters)
 		HutongCourts::NextCourtName(TEXT("3M6_Courtyard"), { TEXT("3M6_Courtyard_1"), TEXT("3M6_Courtyard_4"), TEXT("3M7_Courtyard_9"), TEXT("3M6_Courtyard_x") }),
 		FString(TEXT("3M6_Courtyard_5")));
 
-	// A map tile is found by the label of the plane the point stands on; other actors are not tiles.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
 	if (!TestNotNull(TEXT("the engine plane loads"), Plane)) { World->DestroyWorld(false); return false; }
@@ -150,7 +144,6 @@ bool FHutongHeightsCourtNameTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("the neighbouring tile"), HutongCourts::MapTileAt(World, FVector(10500.0, 0.0, 0.0)), FString(TEXT("3M7")));
 	TestEqual(TEXT("off every tile"), HutongCourts::MapTileAt(World, FVector(0.0, 20000.0, 0.0)), FString());
 
-	// Each building is filed by the tile under it and its court; a wall between courts under Shared walls.
 	auto Building = [&](UClass* Class, const FVector& At, const TCHAR* Court) -> UHutongBuildingComponent*
 	{
 		AStaticMeshActor* Actor = HutongGen::SpawnEmptyActor(World, FTransform(At), TEXT("Filed"));
@@ -175,24 +168,35 @@ bool FHutongHeightsCourtNameTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("every court in the level, sorted"), HutongCourts::AllCourts(World),
 		TArray<FString>{ TEXT("3M6_Courtyard_1"), TEXT("3M6_Courtyard_2"), TEXT("Courtyard_1") });
 
-	// The window's list: each court once, its tile, its buildings (a shared wall counts in both).
 	const TArray<HutongCourts::FSummary> Summaries = HutongCourts::Summaries(World);
 	const HutongCourts::FSummary* First = Summaries.FindByPredicate([](const HutongCourts::FSummary& S) { return S.Name == TEXT("3M6_Courtyard_1"); });
 	const HutongCourts::FSummary* Away2 = Summaries.FindByPredicate([](const HutongCourts::FSummary& S) { return S.Name == TEXT("Courtyard_1"); });
 	TestTrue(TEXT("a court lists its tile and both its buildings"), First && First->Tile == TEXT("3M6") && First->Buildings == 2);
 	TestTrue(TEXT("a court off the map says so"), Away2 && Away2->Tile == HutongCourts::OffMapFolder);
 
-	// Out of one court: the shared wall keeps the other and is filed under it.
 	TestEqual(TEXT("the wall leaves one court"), HutongCourts::Remove({ Shared, Loose }, TEXT("3M6_Courtyard_2")), 1);
 	TestEqual(TEXT("keeping the other"), Shared->GetCourts(), TArray<FString>{ TEXT("3M6_Courtyard_1") });
 	TestEqual(TEXT("and is filed under it"), Shared->GetOwner()->GetFolderPath(), FName(TEXT("Courts/3M6/3M6_Courtyard_1")));
 
-	// Out of its only court: out of the Courts folders too; a folder of the user's own is left alone.
 	TestEqual(TEXT("the house leaves its court"), HutongCourts::Remove({ House }, TEXT("3M6_Courtyard_1")), 1);
 	TestEqual(TEXT("and the Courts folders"), House->GetOwner()->GetFolderPath(), FName(NAME_None));
 	Loose->GetOwner()->SetFolderPath(TEXT("Study/Traced"));
 	HutongCourts::FileInFolders(World, { Loose });
 	TestEqual(TEXT("a folder of the user's own stays"), Loose->GetOwner()->GetFolderPath(), FName(TEXT("Study/Traced")));
+
+	const HutongCourts::FParented Parented = HutongCourts::ParentToTiles(World, { Loose, Away });
+	TestTrue(TEXT("one parented, one on no tile"), Parented.Parented == 1 && Parented.OffMap == 1);
+	AActor* Tile = Loose->GetOwner()->GetAttachParentActor();
+	TestTrue(TEXT("onto the tile under it"), Tile && Tile->GetActorLabel() == TEXT("3M6"));
+	if (Tile)
+	{
+		const FVector Was = Loose->GetOwner()->GetActorLocation();
+		Tile->SetActorLocation(Tile->GetActorLocation() + FVector(120.0, -40.0, 0.0));
+		TestTrue(TEXT("moving the tile carries the building"), Loose->GetOwner()->GetActorLocation().Equals(Was + FVector(120.0, -40.0, 0.0), 0.01));
+	}
+	TestEqual(TEXT("a second pass finds it parented"), HutongCourts::ParentToTiles(World, { Loose }).Already, 1);
+	TestEqual(TEXT("one detached"), HutongCourts::DetachFromTiles(World, { Loose, Away }), 1);
+	TestNull(TEXT("and loose again"), Loose->GetOwner()->GetAttachParentActor());
 	World->DestroyWorld(false);
 	return true;
 }
@@ -203,7 +207,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongHeightsGateTest,
 
 bool FHutongHeightsGateTest::RunTest(const FString& Parameters)
 {
-	// The gate's eave for a ridge is solved both ways, so a suggestion can lower a gate too.
 	FHutongGateHouseParams Gate;
 	const double Depth = 600.0;
 	const double Ridge = HutongGen::Ridge::Gate(Gate, Depth);
@@ -216,7 +219,6 @@ bool FHutongHeightsGateTest::RunTest(const FString& Parameters)
 			FMath::IsNearlyEqual(HutongGen::Ridge::Gate(At, Depth), Ridge + Step, 0.1));
 	}
 
-	// Each style is a preset, so the rank is picked where the height is set.
 	UHutongGateHouseBuildingComponent* Placed = NewObject<UHutongGateHouseBuildingComponent>(GetTransientPackage());
 	const TArray<FString> Options = Placed->GetPresetOptions();
 	TestTrue(TEXT("the four gate styles are presets"),

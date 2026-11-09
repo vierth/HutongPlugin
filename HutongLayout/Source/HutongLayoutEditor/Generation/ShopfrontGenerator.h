@@ -18,8 +18,6 @@ enum class EHutongShopFront : uint8
 	Carved  UMETA(DisplayName = "Carved Fascia Front", ToolTip = "A deep painted hanging board (掛檐板) with fretwork brackets (花牙子) under the eave."),
 	Platform UMETA(DisplayName = "Platform Front (拍子式)", ToolTip = "A flat canopy on posts across the front, an upward railing (朝天欄杆) along its edge."),
 	Shed    UMETA(DisplayName = "Lattice Shed Front (涼棚)", ToolTip = "A light frame of thin posts with an open lattice top shading the street in front of the shop."),
-	// A 牌樓式 front (沖天柱 rising past the eave) was removed 2026-10-05: neither view of the 萬壽圖 shows
-	// one on a shop. Re-add only once a source of the period confirms it.
 };
 
 // The tall 招牌 a shop puts up for the street.
@@ -92,8 +90,6 @@ struct FHutongShopfrontParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bays", meta=(DisplayName="Column Taper (收分)", UIMin="0", UIMax="0.02", ClampMin="0", ClampMax="0.05", ToolTip="Taper of each column toward its top, as a fraction of its height."))
 	double ColumnTaperRatio = HutongCanon::Module::ColumnTaperRatio;
 
-	// --- 排板門 ---
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Opening Head / Eave", UIMin="0.6", UIMax="0.92", ClampMin="0.3", ClampMax="0.95", ToolTip="Height of the shopfront opening's head as a fraction of the eave height."))
 	double OpeningTopRatio = 0.8;
 
@@ -120,8 +116,6 @@ struct FHutongShopfrontParams
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shopfront", meta=(DisplayName="Counter Depth", EditCondition="Counter != EHutongShopCounter::None", UIMin="30", UIMax="80", ClampMin="10", Units="cm", ToolTip="Depth of the counter from front to back, in cm."))
 	double CounterDepth = 52.0;
-
-	// --- 掛檐板 and 匾額 ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fascia", meta=(DisplayName="Has Hanging Board (掛檐板)", ToolTip="Adds an eave board (掛檐板) under the eave."))
 	bool bHasHangingBoard = true;
@@ -188,8 +182,6 @@ struct FHutongShopfrontParams
 
 
 
-	// --- Shell ---
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Base Course Height (下鹼)", UIMin="0", UIMax="150", ClampMin="0", Units="cm", ToolTip="Height of the base course (下鹼) above the floor, in cm; zero for automatic."))
 	double BaseCourseHeight = 0.0;
 
@@ -210,8 +202,6 @@ struct FHutongShopfrontParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Gable Pier Corbel Courses", EditCondition="bHasChitou", UIMin="0", UIMax="6", ClampMin="0", ClampMax="10", ToolTip="Number of corbel courses at the top of each gable pier (墀頭)."))
 	int32 ChitouCorbelSteps = 3;
 
-	// --- Roof ---
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(HutongBasic, DisplayName="Roof Tile (瓦作)", ToolTip="Type of tile laid on the roof."))
 	EHutongRoofTile RoofTile = EHutongRoofTile::He;
 
@@ -230,17 +220,12 @@ struct FHutongShopfrontParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(UIMin="40", UIMax="250", ClampMin="10", Units="cm", ToolTip="Rise of the roof from eave to ridge, in cm."))
 	double RoofRise = 150.0;
 
-	// Roof figures shared by generator, massing block, preview and ridge estimate.
 	double GetEaveHeight() const { return FMath::Max(EaveHeight, 60.0); }
-	// The 臺基, raised when asked; never past a quarter of the eave.
 	double GetFloorHeight() const
 	{
 		const double Asked = bRaisedPlatform ? FMath::Max(FloorHeight, RaisedPlatformHeight) : FloorHeight;
 		return FMath::Clamp(Asked, 0.0, 0.25 * GetEaveHeight());
 	}
-	// Roof above the column tops, the ceiling at the column line, and the roof's base
-	// (HutongGen::Proportions::RoofLift).
-	// The eave step's 舉 of the roof as built: the section scaled to the fixed rise.
 	double GetEaveJu() const { return HutongGen::Jiajia::BuiltEaveJu(HutongGen::Jiajia::MakeSection(EHutongPurlins::Five, 0.5 * Depth, FMath::Max(RoofOverhang, 0.0), RoofApexRoll), GetRoofRise()); }
 	double GetRoofLift() const { return HutongGen::Proportions::RoofLift(FMath::Max(ColumnDiameter, 2.0), FMath::Max(RoofOverhang, 0.0), GetEaveJu()); }
 	double GetUndersideRise() const { return HutongGen::Proportions::UndersideRise(FMath::Max(ColumnDiameter, 2.0), FMath::Max(RoofOverhang, 0.0), GetEaveJu()); }
@@ -285,8 +270,7 @@ struct FHutongShopfrontParams
 
 	double GetColumnRadius() const { return FMath::Max(0.5 * ColumnDiameter, 4.0); }
 
-	// Column radius as laid, capped by the wall the posts stand in. Bay boundaries inset by it, so
-	// the plan asks for the same value.
+	// Capped by the wall the posts stand in; the bay boundaries inset by it, so the plan asks for it too.
 	double GetColumnRadiusFor(double Frontage, double PlanDepth) const
 	{
 		const double W = FMath::Max(Frontage, 1.0), D = FMath::Max(PlanDepth, 1.0);
@@ -294,7 +278,6 @@ struct FHutongShopfrontParams
 		return FMath::Min(GetColumnRadius(), 0.25 * T + 12.0);
 	}
 
-	// Pier projection: at least covers the corner column.
 	double GetChitouProjectionFor(double Frontage, double PlanDepth) const
 	{
 		return HutongGen::Proportions::ChitouProjection(

@@ -46,8 +46,6 @@ struct FHutongCorridorParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Corridor", meta=(DisplayName="Back Wall Thickness", EditCondition="bClosedSide && bBuildBackWall", UIMin="10", UIMax="50", ClampMin="5", Units="cm", ToolTip="Thickness of the back wall, in cm."))
 	double WallThickness = 24.0;
 
-	// --- 楣子 ---
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(HutongBasic, DisplayName="Has Hanging Frieze (倒掛楣子)", ToolTip="Builds a hanging frieze (倒掛楣子) under the architrave (額枋)."))
 	bool bHasFrieze = true;
 
@@ -72,8 +70,6 @@ struct FHutongCorridorParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(DisplayName="Bench Depth", EditCondition="bHasBench", UIMin="15", UIMax="50", ClampMin="8", Units="cm", ToolTip="Depth of the bench seat, in cm."))
 	double BenchDepth = 26.0;
 
-	// --- Roof ---
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(UIMin="10", UIMax="90", ClampMin="0", Units="cm", ToolTip="How far the eave projects past the posts, in cm."))
 	double RoofOverhang = 42.0;
 
@@ -84,9 +80,6 @@ struct FHutongCorridorParams
 	double RoofRise = 58.0;
 
 	double GetEaveHeight() const { return FMath::Max(EaveHeight, 60.0); }
-	// Roof above the column tops, the ceiling at the column line, and the roof's base
-	// (HutongGen::Proportions::RoofLift).
-	// The eave step's 舉 of the roof as built: the section scaled to the fixed rise.
 	double GetEaveJu() const { return HutongGen::Jiajia::BuiltEaveJu(HutongGen::Jiajia::MakeSection(EHutongPurlins::Three, 0.5 * GetFootprintDepth(), FMath::Max(RoofOverhang, 0.0), GetRoofRoll()), GetRoofRise()); }
 	double GetRoofLift() const { return HutongGen::Proportions::RoofLift(FMath::Max(ColumnDiameter, 2.0), FMath::Max(RoofOverhang, 0.0), GetEaveJu()); }
 	double GetUndersideRise() const { return HutongGen::Proportions::UndersideRise(FMath::Max(ColumnDiameter, 2.0), FMath::Max(RoofOverhang, 0.0), GetEaveJu()); }
@@ -124,30 +117,25 @@ struct FHutongCorridorParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="8", UIMax="40", ClampMin="4", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))
 	double RafterEndSpacing = 16.0;
 
-	// Set by the tool from the drag rect.
 	double Length = 800.0;
 	double Width = 150.0;
 
 	// 坐凳楣子 break for stepping on, as a fraction along the run; negative = unbroken.
 	double BenchGapAt = -1.0;
 
-	// Whole bays are cleared; this only names the opening.
 	double BenchGapWidth = 130.0;
 
-	// Set from the component: the low/high end post (footprint frame) belongs to the neighbouring
-	// run round a corner; not built twice.
+	// Set from the component: that end post belongs to the neighbouring run round a corner.
 	bool bOmitLowEndPost = false;
 	bool bOmitHighEndPost = false;
 
-	// Set from the component: no bench in that end bay, where the walk turns through a doorway on
-	// the bench side (a 廂房's 廊門筒子).
+	// Set from the component: the walk turns through a doorway (a 廂房's 廊門筒子) in that end bay.
 	bool bNoBenchAtLowEnd = false;
 	bool bNoBenchAtHighEnd = false;
 
 	double GetColumnRadius() const { return FMath::Max(0.5 * ColumnDiameter, 3.0); }
 
-	// 步 spacing: bays fall out of the run, not counted; posts inset by a radius so they sit on the
-	// platform. Generator and plan both read posts from here.
+	// Posts inset by a radius so they sit on the platform.
 	int32 GetBayCount(double RunLength) const
 	{
 		return FMath::Max(FMath::RoundToInt32(FMath::Max(RunLength, 1.0) / FMath::Max(BaySpacing, 40.0)), 1);
@@ -160,9 +148,7 @@ struct FHutongCorridorParams
 		return ColR + T * FMath::Max(RunLength - 2.0 * ColR, 1.0);
 	}
 
-	// Cross-run extras beside the walk: back wall, platform lip each side, open column radius. The walk
-	// is measured from column centre; omit the radius and the platform overruns the footprint (in the
-	// compound ring, into the abutting building).
+	// The walk is measured from column centre: the radius keeps the platform inside the footprint.
 	double GetCrossExtras() const
 	{
 		const double Wall = (bClosedSide && bBuildBackWall) ? FMath::Max(WallThickness, 1.0) : 0.0;
@@ -171,7 +157,6 @@ struct FHutongCorridorParams
 
 	double GetFootprintDepth() const { return FMath::Max(Width, 1.0) + GetCrossExtras(); }
 
-	// Clear walk width for a dragged footprint depth, held inside the band.
 	double WalkWidthFromFootprint(double FootprintDepth) const
 	{
 		const double Lo = FMath::Max(WalkWidthMin, 10.0);

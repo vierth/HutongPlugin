@@ -28,7 +28,6 @@ namespace HutongGen
 			const double Tread = FMath::Max(StepTread, 5.0);
 			const double Dir = (Direction < 0.0) ? -1.0 : 1.0;
 
-			// Solid blocks rather than treads.
 			for (int32 i = 1; i <= Steps; ++i)
 			{
 				const double TopZ = FloorHeight * double(Steps + 1 - i) / double(Steps + 1);
@@ -47,7 +46,6 @@ namespace HutongGen
 			double FrontOverhang, double SideProjection,
 			int32 StepCount, double StepTread, double StepX0, double StepX1, bool bPaved)
 		{
-			// Tags 階條石 and 踏跺 as stone here; untagged they read as brick.
 			FSlotScope StoneTag(Mesh, MatSlot_Stone);
 			if (FloorHeight <= 0.0)
 			{
@@ -56,7 +54,6 @@ namespace HutongGen
 
 			const FVector3d Lo(-SideProjection, -FrontOverhang, 0.0);
 			const FVector3d Hi(Width + SideProjection, Depth + SideProjection, FloorHeight);
-			// Paved: 階條石 round the edge and 方磚 inside, flush, over a stone body a course lower.
 			const double Band = FMath::Min(PlatformEdgeCm, 0.2 * FMath::Min(Hi.X - Lo.X, Hi.Y - Lo.Y));
 			const double Course = FMath::Min(4.0, 0.5 * FloorHeight);
 			if (!bPaved || Band <= 1.0)
@@ -96,7 +93,7 @@ namespace HutongGen
 			// Only the bottom drops, so bands aligned across buildings stay aligned.
 			const double Bottom = bToGround ? 0.0 : FloorHeight;
 
-			// Left, right, then back between them: tiling, never overlapping.
+			// Left, right, then back between them: the runs tile without overlap.
 			const bool bGap = SideGapY1 > SideGapY0 && SideGapY0 > 0.0 && SideGapY1 < Depth;
 			auto Side = [&](double X0, double X1)
 			{
@@ -142,8 +139,6 @@ namespace HutongGen
 				return;
 			}
 
-			// 上身 from the ground (past the platform's edge it stood on nothing), its foot in the 下鹼,
-			// proud on the outer side and the front as the wall's is.
 			const double BaseTop = (BaseCourseHeight > 0.0) ? FloorHeight + BaseCourseHeight : 0.0;
 			const double BaseP = FMath::Max(BaseCourseProjection, 0.0);
 			auto Pier = [&](double X0, double X1, double Front, bool bOuterLow, double Top)
@@ -165,11 +160,9 @@ namespace HutongGen
 			const double T = WallThickness;
 			const int32 Steps = FMath::Clamp(FMath::Max(CorbelSteps, 4), 1, 10);
 
-			// Pair at the Y = 0 eave with overhang Over; the rear pair is this turned round, so its low end is built
-			// where the roof's high end will be (bTurned).
+			// Rear pair = this turned round: its low end lands where the roof's high end is (bTurned).
 			auto AppendPair = [&](double Over, bool bTurned)
 			{
-				// Open end: no corner to close.
 				auto IsOpen = [&](bool bRight) { return (bRight != bTurned) ? Roof.bOpenHighEnd : Roof.bOpenLowEnd; };
 				const double Reach = Over - 1.0;
 				const double Body = ChitouBodyProjection(Projection, Over);
@@ -191,7 +184,6 @@ namespace HutongGen
 				for (const bool bRight : { false, true })
 				{
 					if (IsOpen(bRight)) continue;
-					// Flush with the gable face, so nothing pokes past a boundary wall.
 					const double X0 = bRight ? Width - T : 0.0;
 					const double X1 = bRight ? Width : T;
 
@@ -204,15 +196,11 @@ namespace HutongGen
 							FVector3d(X1, 0.0, PanZ + k * StepH));
 					}
 
-					// 戧檐: leans from the top 盤頭 course to just behind the 連檐 face, then plumb to the soffit.
-					// Buries the 連檐's end; stepped under it, the soffit showed.
 					const TArray<FVector2d> Section = {
 						FVector2d(0.0, QiangZ), FVector2d(-(Body + Pan), QiangZ),
 						FVector2d(-Reach, TopZ), FVector2d(-Reach, EaveHeight),
-						// Up with the soffit to the column line, where the ceiling stands above the eave line.
 						FVector2d(0.0, EaveHeight + FMath::Max(Roof.UndersideRise, 0.0)) };
-					// Swept along X: local X→Y, Y→Z, Z→X. Just inside the gable plane, where the roof's end
-					// closes its soffit.
+					// Local X→Y, Y→Z, Z→X; just inside the gable plane, where the roof's end closes its soffit.
 					const FQuat AlongX(FMatrix(FVector(0, 1, 0), FVector(0, 0, 1), FVector(1, 0, 0), FVector::ZeroVector));
 					constexpr double GableClear = 0.5;
 					AppendSweptProfile(Mesh, Section, {
@@ -222,7 +210,6 @@ namespace HutongGen
 			};
 
 			AppendPair(O, false);
-			// Rear 墀頭 only where the rear eave shows rafters; a trimmed one ends on the wall.
 			if (RearO >= FW && RearO > 3.0 * FMath::Max(Roof.RafterSection, 0.0) && RearEaveLift(Roof, Depth) <= 0.0)
 			{
 				const int32 V0 = Mesh.MaxVertexID();
@@ -239,7 +226,6 @@ namespace HutongGen
 			const double D = FMath::Max(Diameter, 0.0);
 			if (D <= 0.0 || X1 - X0 <= D || Y1 <= Y0) return;
 
-			// Same spacing rule as the square row.
 			const double Pitch = FMath::Max(Spacing, D * 1.5);
 			const double Span = X1 - X0;
 			const int32 Count = FMath::Max(FMath::FloorToInt32(Span / Pitch), 1);
@@ -277,7 +263,6 @@ namespace HutongGen
 			const double Span = X1 - X0;
 			const int32 Count = FMath::Max(FMath::FloorToInt32(Span / Pitch), 1);
 
-			// Centred on the span.
 			const double Used = Count * Pitch;
 			const double Start = X0 + 0.5 * (Span - Used) + 0.5 * Pitch;
 
@@ -326,7 +311,6 @@ namespace HutongGen
 			struct FTileRows
 			{
 				double Pitch = 20.0;
-				// First 壟 centre; rows symmetrical about the building.
 				double Start = 0.0;
 				int32 Count = 0;
 
@@ -346,7 +330,6 @@ namespace HutongGen
 					R.Start = 0.5 * (GX0 + GX1) - 0.5 * R.Count * R.Pitch + 0.5 * R.Pitch;
 					return R;
 				}
-				// Closed end keeps half a row clear; open end lets rows run on.
 				const double Lo = GX0 + (Roof.bOpenLowEnd ? 0.0 : 0.5 * R.Pitch);
 				const double Hi = GX1 - (Roof.bOpenHighEnd ? 0.01 : 0.5 * R.Pitch);
 				if (Roof.bHasTileRowPhase)
@@ -365,14 +348,13 @@ namespace HutongGen
 				return R;
 			}
 
-			// 筒瓦 radius = ¼ row: a 三號筒瓦 ~10 cm on a 20 cm 壟, 板瓦 channel as wide between. 勾頭 = its end, inside the eave course.
+			// 筒瓦 radius = ¼ row: a 三號筒瓦 ~10 cm on a 20 cm 壟.
 			double TubeRadius(double Pitch, double FasciaDrop)
 			{
 				const double R = FMath::Max(0.25 * Pitch, 2.0);
 				return FasciaDrop > 0.0 ? FMath::Min(R, FMath::Max(0.9 * FasciaDrop, 2.0)) : R;
 			}
 
-			// 勾頭: round cap closing each 壟, along one eave at the tile pitch.
 			void AppendEaveCaps(FDynamicMesh3& Mesh, const FRoofParams& Roof,
 				double GX0, double GX1, double YFace, double ZLine, double FasciaDrop, double Direction)
 			{
@@ -380,7 +362,6 @@ namespace HutongGen
 
 				const FTileRows Rows = TileRows(Roof, GX0, GX1);
 				const double CapR = TubeRadius(Rows.Pitch, FasciaDrop);
-				// Sunk into the fascia by part of its radius.
 				const double CapLen = FMath::Max(0.8 * CapR, 1.0);
 				const double CapZ = ZLine - 0.5 * FasciaDrop;
 
@@ -396,8 +377,7 @@ namespace HutongGen
 				}
 			}
 
-			// Stations along a gable profile at one X: local Z = tangent, Y = upward slope normal, X = -X
-			// front-to-back, +X back-to-front.
+			// Local Z = tangent, Y = upward slope normal; X = -X front-to-back, +X back-to-front.
 			TArray<FTransform> ProfileStations(const TArray<FVector2d>& Profile,
 				double X, double Y0, double Z0, bool bReverse)
 			{
@@ -410,7 +390,6 @@ namespace HutongGen
 					const FVector Prev = Points[FMath::Max(i - 1, 0)];
 					const FVector Next = Points[FMath::Min(i + 1, Points.Num() - 1)];
 					const FVector T = (Next - Prev).GetSafeNormal();
-					// Upward slope normal in the section plane.
 					FVector Up(0.0, -T.Z, T.Y);
 					if (Up.Z < 0.0) Up = -Up;
 					Out.Add(FTransform(FRotationMatrix::MakeFromZY(T, Up).ToQuat(), Points[i]));
@@ -418,10 +397,8 @@ namespace HutongGen
 				return Out;
 			}
 
-			// Point against a profile from (Y0, Z0): arc length from the front eave to its foot, and depth below.
 			struct FProfileSpot { double S = 0.0; double Below = 0.0; FVector2d Tangent = FVector2d(1.0, 0.0); };
 
-			// Face orientation vs the profile: toward a gable, off the slope, or down the run (end cap).
 			enum class EProfileFace { Gable, Slope, End };
 
 			FProfileSpot SpotOnProfile(const TArray<FVector2d>& Profile, double Y0, double Z0, double Y, double Z)
@@ -442,7 +419,6 @@ namespace HutongGen
 					if (Dist < BestDist)
 					{
 						BestDist = Dist;
-						// Profile runs front to back: below is to its right.
 						const double Side = Dir.X * AP.Y - Dir.Y * AP.X;
 						Best.S = Run + T;
 						Best.Below = Side < 0.0 ? Dist : -Dist;
@@ -453,7 +429,6 @@ namespace HutongGen
 				return Best;
 			}
 
-			// Per-triangle UVs since FirstTri, from each corner's profile position and the face orientation.
 			void MapAlongProfile(FDynamicMesh3& Mesh, int32 FirstTri,
 				const TArray<FVector2d>& Profile, double Y0, double Z0,
 				TFunctionRef<FVector2f(double X, const FProfileSpot& Spot, EProfileFace Face)> UVOf)
@@ -484,9 +459,6 @@ namespace HutongGen
 				}
 			}
 
-			// 壟 courses, one per row, front eave over the ridge to rear: half-round 筒瓦, or a low 蓋瓦 arch
-			// on 合瓦; channels left to the slope. Feet sunk below the slope (no coplanar faces).
-			// One 壟's cross-section, feet sunk below the slope: a half-round 筒瓦, or a low 蓋瓦 arch on 合瓦.
 			TArray<FVector2d> TileSection(EHutongRoofTile Tile, double Pitch, double FasciaDrop)
 			{
 				TArray<FVector2d> Section;
@@ -503,7 +475,7 @@ namespace HutongGen
 				}
 				else
 				{
-					// Covers the texture's 壟, as high as a 板瓦's curve; four smooth facets suffice.
+					// As high as a 板瓦's curve; four smooth facets suffice.
 					constexpr int32 ArcSteps = 4;
 					const double Half = 0.3 * Pitch;
 					const double Crown = 0.15 * Pitch;
@@ -525,8 +497,7 @@ namespace HutongGen
 				for (int32 i = 0; i < Rows.Count; ++i)
 				{
 					TArray<FTransform> Stations = ProfileStations(Profile, Rows.X(i), Y0, Z0, false);
-					// Plumb cut at the eave like a 滴水; square to the slope it faced down and got retagged as soffit.
-					// Slightly proud of the drip course face to avoid coplanarity.
+					// Plumb like a 滴水 so no face points down (retagged soffit); proud of the drip course face against z-fighting.
 					const FQuat Plumb = FRotationMatrix::MakeFromZY(FVector(0.0, 1.0, 0.0), FVector::UpVector).ToQuat();
 					constexpr double NoseProud = 1.0;
 					Stations[0].SetRotation(Plumb);
@@ -535,8 +506,6 @@ namespace HutongGen
 					Stations.Last().AddToTranslation(FVector(0.0, NoseProud, 0.0));
 					AppendSweptProfile(Mesh, Section, Stations);
 				}
-				// Samples a narrow band of its own 壟 in the texture (joints and laps, no painted relief). v folded
-				// at the apex, as on the slope.
 				int32 Apex = 0;
 				for (int32 k = 1; k < Profile.Num(); ++k)
 				{
@@ -558,20 +527,17 @@ namespace HutongGen
 					});
 			}
 
-			// 蠍子尾 (HutongCanon::Roof::Tail*): a straight blade from its root inside the ridge up and out at the lean,
-			// its last stretch hooked outward, tapering; the tip TailTipPastEndCm past the ridge end at EndX.
+			// 蠍子尾 per HutongCanon::Roof::Tail*; the tip TailTipPastEndCm past the ridge end at EndX.
 			void AppendRidgeTail(FDynamicMesh3& Mesh, double EndX, double Dir,
 				double RidgeY, double RootZ, double Rise, double TailW, double TailD)
 			{
 				namespace R = HutongCanon::Roof;
 				const double Lean = FMath::DegreesToRadians(R::TailLeanDeg);
 				const double Hook = FMath::DegreesToRadians(R::TailHookDeg);
-				// The blade's direction at a share T of its length: the lean, turning to the hook over its last stretch.
 				auto AngleAt = [&](double T)
 				{
 					return (T <= 1.0 - R::TailHookShare) ? Lean : FMath::Lerp(Lean, Hook, (T - (1.0 - R::TailHookShare)) / R::TailHookShare);
 				};
-				// Stations along a unit-length path, then scaled so the tip rises Rise and lands past the end.
 				const int32 Steps = 6;
 				TArray<FVector2d> Path = { FVector2d::ZeroVector };
 				for (int32 i = 1; i < Steps; ++i)
@@ -621,7 +587,6 @@ namespace HutongGen
 			const double C = O + FMath::Clamp(Y, 0.0, Depth);
 			if (bVeranda)
 			{
-				// The level ceiling's depth under the slope at the column line, carried up the slope.
 				const double Level = FMath::Min(Roof.UndersideRise, SlopeAt(O) - 1.0);
 				return RoofBase + SlopeAt(C) - (SlopeAt(O) - Level);
 			}
@@ -632,7 +597,6 @@ namespace HutongGen
 			double RoofBase, double X0, double X1, double Y0, double Y1, double BottomZ)
 		{
 			if ((Roof.ShellCover <= 0.0 && Roof.VerandaEnd <= 0.0) || X1 <= X0 || Y1 <= Y0) return;
-			// The underside's creases between the faces, plus the faces; top 1 cm into the shell.
 			double O, RearO, Built, Nominal;
 			RoofSpan(Roof, Depth, O, RearO, Built, Nominal);
 			const TArray<FVector2d> Profile = GableRoofProfile(Nominal, RoofRise(Roof), Roof.Section, Roof.SlopeSegments, Nominal - Built);
@@ -651,7 +615,7 @@ namespace HutongGen
 				Highest = FMath::Max(Highest, Section.Last().Y);
 			}
 			if (Highest <= BottomZ + 1.5) return;
-			// (Y, Z) → world, swept along X: a rotation, never a mirror.
+			// (Y, Z) → world, swept along X: a rotation, so winding holds.
 			const FMatrix Basis(FVector(0, 1, 0), FVector(0, 0, 1), FVector(1, 0, 0), FVector::ZeroVector);
 			FTransform A(Basis), B(Basis);
 			A.SetTranslation(FVector(X0, 0, 0));
@@ -672,21 +636,16 @@ namespace HutongGen
 			double O, RearO, Built, Nominal;
 			RoofSpan(Roof, D, O, RearO, Built, Nominal);
 
-			// 懸山: roof and eave details run past both gables.
 			const double G = FMath::Max(Roof.GableOverhang, 0.0);
 			const double GX0 = -G;
 			const double GX1 = W + G;
 
-			// Rear slope end; the eave line when untrimmed.
 			const double RearEaveZ = Eave + RearEaveLift(Roof, D);
 
-			// Roof slot from here, the 正脊 and soffit stated as they are built.
 			const int32 RoofFirstTri = Mesh.MaxTriangleID();
 			FSlotScope RoofTag(Mesh, MatSlot_Roof);
 			const FTileRows Rows = TileRows(Roof, GX0, GX1);
 
-			// Over rafters, the soffit rises from behind each eave course to the column line, the rooms' ceiling
-			// flat between; a coping without rafters sits flat on its corbels.
 			const double FasciaDrop = FMath::Max(Roof.FasciaDepth, 0.0);
 			const double FasciaW = FMath::Max(Roof.FasciaWidth, 0.0);
 			FGableUnderside Under;
@@ -695,7 +654,6 @@ namespace HutongGen
 				Under.InnerStart = O;
 				Under.InnerEnd = O + D;
 				Under.FrontLap = FasciaW;
-				// A rear soffit only where the overhang reaches past the eave course, as at the front.
 				Under.RearLap = (RearO > FasciaW + 1.0 && RearEaveZ <= Eave + 1.0) ? FasciaW : 0.0;
 				Under.Drop = FasciaDrop;
 				Under.InnerRise = Roof.UndersideRise;
@@ -716,7 +674,6 @@ namespace HutongGen
 				&GableFaces,
 				Under);
 			const int32 SlabEndTri = Mesh.MaxTriangleID();
-			// 封護檐: rear slope trimmed to end over the wall, above the eave.
 			const bool bSealedRear = RearEaveZ > Eave + 1.0;
 			const double SealFace = D + RearO;
 			TArrayView<const HutongCanon::Cornice::FCourse> Courses;
@@ -728,7 +685,7 @@ namespace HutongGen
 			default:                                Courses = HutongCanon::Cornice::IceTray; break;
 			}
 			const double SealCornice = FMath::Max(Courses.Last().ProudCm, Courses.Last().OuterCm);
-			constexpr double SealLap = 3.0;        // drip course lap past the cornice
+			constexpr double SealLap = 3.0;
 
 			// Slope u in 壟 from the first row, so texture 壟 align with 勾頭 and courses.
 			if (UE::Geometry::FDynamicMeshUVOverlay* SlopeUV =
@@ -747,8 +704,7 @@ namespace HutongGen
 				}
 			}
 
-			// Eave course: 花邊瓦 over 滴水 on 合瓦; plus 勾頭 on 筒瓦.
-			// Eave course and ridge stop just inside the gable; on its plane they z-fought the roof's end face.
+			// Stops just inside the gable, off the plane of the roof's end face.
 			constexpr double EndInset = 0.5;
 			const double CX0 = GX0 + (Roof.bOpenLowEnd ? 0.0 : EndInset);
 			const double CX1 = GX1 - (Roof.bOpenHighEnd ? 0.0 : EndInset);
@@ -762,7 +718,6 @@ namespace HutongGen
 				FasciaBoxes.Emplace(BoxFirst, Mesh.MaxTriangleID());
 				AppendEaveCaps(Mesh, Roof, GX0, GX1, -O, Eave, FasciaDrop, -1.0);
 
-				// Sealed rear eave: no drip course.
 				if (RearO >= FasciaW)
 				{
 					const int32 RearBoxFirst = Mesh.MaxTriangleID();
@@ -772,7 +727,6 @@ namespace HutongGen
 					FasciaBoxes.Emplace(RearBoxFirst, Mesh.MaxTriangleID());
 					AppendEaveCaps(Mesh, Roof, GX0, GX1, D + RearO, RearEaveZ, FasciaDrop, 1.0);
 				}
-				// 封護檐 drip course sits on the cornice and laps past it.
 				else if (bSealedRear)
 				{
 					const double DripFace = SealFace + SealCornice + SealLap;
@@ -785,7 +739,6 @@ namespace HutongGen
 
 			const double RoofY0 = -O;
 			const TArray<FVector2d> Profile = GableRoofProfile(Nominal, Rise, Roof.Section, Roof.SlopeSegments, Nominal - Built);
-			// The roof's surface at a cross position from the eave edge.
 			auto TopAt = [&](double C)
 			{
 				for (int32 i = 0; i + 1 < Profile.Num(); ++i)
@@ -809,7 +762,6 @@ namespace HutongGen
 			if (Roof.bHasRidgeCourse && RcH > 0.0 && RcW > 0.0)
 			{
 				const double ApexZ = Eave + Rise;
-				// Apex = middle of the profile's span.
 				const double RidgeY = -O + 0.5 * Nominal;
 
 				// Sunk by its width so the underside stays buried at any pitch; buried faces cull.
@@ -821,35 +773,30 @@ namespace HutongGen
 				if (Kick > 0.0)
 				{
 					namespace R = HutongCanon::Roof;
-					const double TailW = 0.8 * RcW;          // thinner than the ridge
+					const double TailW = 0.8 * RcW;
 					const double TailD = FMath::Max(0.9 * RcH, 8.0);
 					const double BlockTop = ApexZ + RcH * (1.0 + R::EndBlockAboveCourses);
 					const double HalfBlock = 0.5 * R::EndBlockWidthShare * RcW;
 					const double BlockRun = FMath::Max(Kick / FMath::Tan(FMath::DegreesToRadians(R::TailLeanDeg)), RcW);
-					// Root in the 盤子, its section clear of the block's top.
 					const double RootZ = BlockTop - 0.5 * TailD;
 					for (const bool bHigh : { false, true })
 					{
 						if (bHigh ? Roof.bOpenHighEnd : Roof.bOpenLowEnd) continue;
 						const double EndX = bHigh ? CX1 : CX0;
 						const double Dir = bHigh ? 1.0 : -1.0;
-						// 盤子 at the ridge end, sunk into the roof like the ridge.
-						// 1 cm past the ridge's end, or their end faces share a plane.
+						// 1 cm past the ridge's end, off its end-face plane.
 						const double BX0 = bHigh ? EndX - BlockRun : EndX - 1.0;
 						const double BX1 = bHigh ? EndX + 1.0 : EndX + BlockRun;
 						AppendBox(Mesh, FVector3d(BX0, RidgeY - HalfBlock, ApexZ - RcW), FVector3d(BX1, RidgeY + HalfBlock, BlockTop));
-						// The tip's top, not its centre line, Kick over the ridge.
+						// Kick measured to the tip's top.
 						AppendRidgeTail(Mesh, EndX, Dir, RidgeY, RootZ, Kick + (ApexZ + RcH - RootZ) - 0.5 * R::TailTipTaper * TailD, TailW, TailD);
 					}
 				}
 			}
 
-			// 正脊 and 蠍子尾 last: coursed, not tiled.
 			RidgeTag.Close();
 			RoofTag.Close();
 
-			// 封護檐: back wall carried up to the roof, topped by a four-course 冰盤檐 under the drip course.
-			// The trimmed roof end is brick wall face; cornice flush with the gables.
 			if (bSealedRear)
 			{
 				for (int32 tid = RoofFirstTri; tid < SlabEndTri; ++tid)
@@ -866,7 +813,6 @@ namespace HutongGen
 				const double Top = RearEaveZ - FasciaDrop;
 				double Stack = 0.0;
 				for (const HutongCanon::Cornice::FCourse& C : Courses) Stack += C.HeightCm;
-				// Down the wall face where the roof stops on it; above the eave line where it overhangs.
 				const double FloorZ = (RearO > 1.0 || Roof.SealedCorniceFloorZ < -1.0e8) ? Eave : FMath::Min(Roof.SealedCorniceFloorZ, Top);
 				const double Scale = FMath::Clamp((Top - FloorZ) / Stack, 3.0 / 6.5, 1.0);
 				double CZ = Top - Scale * Stack;
@@ -875,7 +821,7 @@ namespace HutongGen
 					const double CZ1 = CZ + Scale * C.HeightCm;
 					if (C.Kind == ECourse::Round)
 					{
-						// Half round across the wall, (Y, Z) swept along X: a rotation, never a mirror.
+						// Half round across the wall, (Y, Z) swept along X: a rotation, so winding holds.
 						TArray<FVector2d> CourseSection = { FVector2d(SealFace - 2.0, CZ) };
 						constexpr int32 Arc = 6;
 						for (int32 k = 0; k <= Arc; ++k)
@@ -911,10 +857,9 @@ namespace HutongGen
 			// The eave course's underside is the 連檐 and 瓦口: timber.
 			for (const UE::Geometry::FIndex2i& Box : FasciaBoxes) TagUndersides(Mesh, Box.A, Box.B, MatSlot_Wood);
 
-			// 硬山: the end face is the brick 山牆 pediment. 懸山: it is the roof's open end.
 			if (G <= 0.0 && GableFaces.B > GableFaces.A)
 			{
-				// Closed ends only; an open end is buried in the next roof.
+				// An open end is buried in the next roof.
 				const double MidX = 0.5 * (GX0 + GX1);
 				for (int32 tid = GableFaces.A; tid < GableFaces.B; ++tid)
 				{
@@ -925,24 +870,28 @@ namespace HutongGen
 				}
 			}
 
-			// 徹上明造: the attic triangle over the ceiling line, closed by the 山牆 carried up (硬山) or the 山花
-			// board (懸山), its top 1 cm into the shell.
 			if (Roof.ShellCover > 0.0 && Profile.Num() >= 2)
 			{
 				const double Ceil = Eave + Roof.UndersideRise;
 				TArray<FVector2d> Attic = { FVector2d(0.0, Ceil), FVector2d(D, Ceil) };
+				// Creases within WallClear of a wall are skipped: a zero-length edge leaves the outline untriangulable.
+				constexpr double WallClear = 0.5;
 				for (int32 i = Profile.Num() - 1; i >= 0; --i)
 				{
 					const double Y = Profile[i].X - O;
-					if (Y > 0.0 && Y < D) Attic.Add(FVector2d(Y, Eave + Profile[i].Y - Roof.ShellCover + 1.0));
+					if (Y > WallClear && Y < D - WallClear) Attic.Add(FVector2d(Y, Eave + Profile[i].Y - Roof.ShellCover + 1.0));
 				}
 				Attic.Insert(FVector2d(D, TopAt(O + D) - Roof.ShellCover + 1.0), 2);
 				Attic.Add(FVector2d(0.0, TopAt(O) - Roof.ShellCover + 1.0));
+				for (int32 i = Attic.Num() - 1; i >= 0 && Attic.Num() > 3; --i)
+				{
+					if (FVector2d::Distance(Attic[i], Attic[(i + 1) % Attic.Num()]) < 0.1) Attic.RemoveAt(i);
+				}
 				const bool bBrick = G <= 0.0;
 				const double Thick = bBrick ? FMath::Max(Roof.GableWallThickness, 0.0) : 2.0;
 				if (Thick > 0.0)
 				{
-					// (Y, Z) → world: profile X → Y, profile Y → Z, swept along X; a rotation, never a mirror.
+					// (Y, Z) → world: profile X → Y, profile Y → Z, swept along X; a rotation, so winding holds.
 					const FMatrix Basis(FVector(0, 1, 0), FVector(0, 0, 1), FVector(1, 0, 0), FVector::ZeroVector);
 					auto Prism = [&](double X0, double X1)
 					{
@@ -957,8 +906,7 @@ namespace HutongGen
 				}
 			}
 
-			// 博縫 (brick band) and 排山勾滴 (tile course) swept down each gable edge along the roof creases.
-			// Buried a few cm into the 山牆 so no face lies on the gable plane or slope.
+			// Buried a few cm into the 山牆, off the gable plane and slope.
 			const double RakeD = FMath::Max(Roof.RakeDepth, 0.0);
 			const double RakeP = FMath::Max(Roof.RakeProjection, 0.0);
 			if (G <= 0.0 && RakeD > 0.0 && RakeP > 0.0)
@@ -966,23 +914,19 @@ namespace HutongGen
 				if (Profile.Num() >= 2)
 				{
 					constexpr double Bury = 4.0;
-					// Band top just under the slope; tiles straddle it.
 					const TArray<FVector2d> Brick = {
 						FVector2d(-Bury, -RakeD), FVector2d(RakeP, -RakeD),
 						FVector2d(RakeP, -1.0), FVector2d(-Bury, -1.0) };
 					const double TileTop = FMath::Min(7.0, 0.3 * FMath::Max(Roof.RidgeCourseHeight, 7.0));
-					// Outer face leans out rather than overhanging: a ledge underside would be retagged as soffit.
+					// Outer face leans out so no underside points down (those are retagged soffit).
 					const TArray<FVector2d> Tile = {
 						FVector2d(-Bury, -2.0), FVector2d(RakeP, -2.0),
 						FVector2d(RakeP + 1.5, TileTop), FVector2d(-Bury, TileTop) };
 
-					// Local X points outward: sweep front-to-back on -X gable, back-to-front on +X.
 					const TArray<FTransform> Left = ProfileStations(Profile, GX0, RoofY0, Eave, false);
 					const TArray<FTransform> Right = ProfileStations(Profile, GX1, RoofY0, Eave, true);
 
-					// Full depth down the rake; near the eave the underside levels off just below the eave line and
-					// runs to the eave end: the shoulder onto the 墀頭 (Fig 2-10). Not tapered (ran to a point),
-					// not cut square (read as cut off), not full depth (foot hung out of a boundary wall).
+					// Near the eave the underside levels off into the shoulder onto the 墀頭 (Fig 2-10).
 					const double Ledge = 0.6 * RakeD;
 					auto Shouldered = [&](TArray<FTransform> Stations, bool bReverse)
 					{
@@ -1001,7 +945,7 @@ namespace HutongGen
 					if (!Roof.bOpenHighEnd) AppendSweptProfile(Mesh, Brick, Shouldered(Right, true));
 					BrickTag.Close();
 
-					// 方磚博縫: one course of 尺四方磚 on edge, joints square to the rake (not box-projected level courses).
+					// 方磚博縫: one course of 尺四方磚 on edge, joints square to the rake.
 					constexpr double FangzhuanLength = 44.8;
 					const double PerU = HutongGen::BrickPattern::FaceLength / 100.0 / FangzhuanLength;
 					const double PerV = HutongGen::BrickPattern::CourseHeight / 100.0 / RakeD;
@@ -1023,14 +967,12 @@ namespace HutongGen
 				}
 			}
 
-			// 博縫板 and 梅花釘 down each 懸山 rake; 山花 boarded behind.
 			if (G > 0.0 && Roof.bWoodenGable && Profile.Num() >= 3)
 			{
 				if (GableFaces.B > GableFaces.A) SetMaterialIDForTriangleRange(Mesh, GableFaces.A, GableFaces.B, MatSlot_Wood);
 
 				const double BD = FMath::Max(Roof.BargeboardDepth, 8.0);
 				const double BT = FMath::Max(Roof.BargeboardThickness, 2.0);
-				// Local X outward, Y slope normal; board hangs under the tile edge, buried 1 cm into the roof end.
 				const TArray<FVector2d> Board = {
 					FVector2d(-1.0, -BD), FVector2d(BT, -BD), FVector2d(BT, -1.0), FVector2d(-1.0, -1.0) };
 				const TArray<FTransform> Left = ProfileStations(Profile, GX0, RoofY0, Eave, false);
@@ -1040,7 +982,6 @@ namespace HutongGen
 				AppendSweptProfile(Mesh, Board, Right);
 				BoardTag.Close();
 
-				// 梅花釘: quincunx of five studs, three sets per slope.
 				FSlotScope StudTag(Mesh, MatSlot_Paint);
 				const double Stud = 2.4, Ring = 0.2 * BD;
 				auto Cluster = [&](const FTransform& At)
@@ -1048,7 +989,6 @@ namespace HutongGen
 					const FVector2d Offsets[5] = { {0, 0}, {Ring, 0}, {-Ring, 0}, {0, Ring}, {0, -Ring} };
 					for (const FVector2d& O : Offsets)
 					{
-						// Across the board (local Y), along the rake (local Z), proud of its face.
 						const int32 V0 = Mesh.MaxVertexID();
 						AppendBox(Mesh, FVector3d(BT - 0.5, -0.5 * BD + O.X - 0.5 * Stud, O.Y - 0.5 * Stud),
 							FVector3d(BT + 1.5, -0.5 * BD + O.X + 0.5 * Stud, O.Y + 0.5 * Stud));
@@ -1067,33 +1007,28 @@ namespace HutongGen
 				StudTag.Close();
 			}
 
-			// 椽頭 last and tagged separately.
 			const double RSec = FMath::Max(Roof.RafterSection, 0.0);
 			if (RSec > 0.0)
 			{
 				FSlotScope RafterTag(Mesh, MatSlot_Paint);
-				// Tops pushed into the drip course: no face coplanar with its underside.
+				// Tops pushed into the drip course, off its underside plane.
 				const double TopZ = Eave - 0.5 * FasciaDrop;
 				const double Reach = 3.0 * RSec;
 
-				// Set back behind the drip course face.
 				const double Setback = (FasciaDrop > 0.0 && FasciaW > 0.0)
 					? FMath::Min(0.5 * FasciaW, 0.4 * Reach)
 					: 0.0;
 
-				// Clear of the 墀頭 at each closed end.
 				const double Inset = FMath::Max(Roof.RafterEndInset, 0.0);
 				const double RX0 = GX0 + (Roof.bOpenLowEnd ? 0.0 : Inset);
 				const double RX1 = GX1 - (Roof.bOpenHighEnd ? 0.0 : Inset);
 
-				// Two courses, as an eave shows.
 				if (Roof.bFlyingRafters)
 				{
 					AppendRafterEnds(Mesh, RX0, RX1, -O + Setback, -O + Reach,
 						TopZ, RSec, Roof.RafterSpacing);
 				}
 
-				// 檐椽 behind the 飛椽, from their ends up the soffit to the column line, tops buried 1 cm in it.
 				const double EaveRafterIn = Roof.bFlyingRafters ? (Setback + 0.5 * Reach) : Setback;
 				const double RoundD = 1.05 * RSec;
 				const double Climb = (Under.Drop > 0.0 && O > FasciaW + 1.0) ? (FasciaDrop + Under.InnerRise) / (O - FasciaW) : 0.0;
@@ -1102,8 +1037,6 @@ namespace HutongGen
 				AppendRoundRafterEnds(Mesh, RX0, RX1, -O + EaveRafterIn, 0.0,
 					FrontZ, RoundD, Roof.RafterSpacing, 6, Climb * (O - EaveRafterIn));
 
-				// Over a 前廊 the 檐椽 run on from the column line up to the 金檁, under the open underside, their
-				// tops buried in the wall on the 金柱 line.
 				if (Roof.ShellCover <= 0.0 && Under.VerandaEnd > O + 1.0)
 				{
 					const double Level = FMath::Min(Eave + Under.InnerRise, TopAt(O) - 1.0);
@@ -1113,7 +1046,7 @@ namespace HutongGen
 					AppendRoundRafterEnds(Mesh, RX0, RX1, 0.0, Under.VerandaEnd - O, Za, RoundD, Roof.RafterSpacing, 6, Zb - Za);
 				}
 
-				// Sealed rear eave shows brick, not rafters (same test as the drip course).
+				// Same test as the drip course.
 				if (RearO >= FasciaW && RearO > Reach)
 				{
 					const double RearTopZ = RearEaveZ - 0.5 * FasciaDrop;
@@ -1124,7 +1057,6 @@ namespace HutongGen
 					}
 					if (Under.RearLap > 0.0)
 					{
-						// Built as a front row, then turned half round: no mirroring.
 						const double RearClimb = (RearO > FasciaW + 1.0) ? (FasciaDrop + Under.InnerRise) / (RearO - FasciaW) : 0.0;
 						const double RearFrontZ = Eave - (FasciaDrop - RearClimb * (EaveRafterIn - FasciaW)) - 0.5 * RoundD + 1.0;
 						const int32 V0 = Mesh.MaxVertexID();
@@ -1142,11 +1074,9 @@ namespace HutongGen
 					}
 				}
 
-				// 徹上明造: the 檐椽 run on as 花架椽 and 腦椽, purlin line to purlin line, under the shell.
 				if (Roof.ShellCover > 0.0 && Under.Drop > 0.0 && Profile.Num() >= 2)
 				{
 					const double Cover = Roof.ShellCover;
-					// Purlin lines: the section's creases, both slopes, between the column lines.
 					const double Scale = 0.5 * Nominal / FMath::Max(Roof.Section.HalfSpan(), 1e-6);
 					TArray<double> Lines = { O, O + D };
 					double Acc = 0.0;
@@ -1159,7 +1089,6 @@ namespace HutongGen
 						}
 					}
 					Lines.Sort();
-					// 羅鍋椽: where the underside bends between two lines (a 捲棚's crown) the rafters follow it.
 					{
 						TArray<double> Bent;
 						for (int32 i = 0; i + 1 < Lines.Num(); ++i)
@@ -1188,7 +1117,6 @@ namespace HutongGen
 					}
 				}
 
-				// 椽頭 take the 彩畫 slot, never the frame's red.
 				RafterTag.Close();
 			}
 		}
@@ -1199,7 +1127,6 @@ namespace HutongGen
 		{
 			using HutongMeshUtils::FRoofPanel;
 
-			// 壟: one course per row along each eave, square to it, up the slope until it meets a hip.
 			const double Pitch = FMath::Max(D.TileRowSpacing, 4.0);
 			if (D.bTileRuns)
 			{
@@ -1208,7 +1135,6 @@ namespace HutongGen
 				for (const FVector2d& Pt : Section) HalfWidth = FMath::Max(HalfWidth, FMath::Abs(Pt.X));
 				FSlotScope RoofTag(Mesh, MatSlot_Roof);
 				int32 Steps = CourseStations;
-				// 勾頭 at each 筒瓦 course's foot, square to its eave, sunk into the eave course as on a hipped roof's own row.
 				const bool bCaps = HutongGen::RoofTile::HasEaveCaps(D.Tile) && D.FasciaDrop > 0.0;
 				const double CapR = FMath::Clamp(0.34 * Pitch, 1.5, 0.9 * D.FasciaDrop);
 				const double CapLen = FMath::Max(0.8 * CapR, 1.0);
@@ -1232,7 +1158,6 @@ namespace HutongGen
 						{
 							const double V = Pn.VMax * s / Steps;
 							if (Inside(V)) { Vs.Add(V); continue; }
-							// Where the course meets the hip.
 							double Lo = Vs.Last(), Hi = V;
 							for (int32 i = 0; i < 10; ++i) { const double M = 0.5 * (Lo + Hi); (Inside(M) ? Lo : Hi) = M; }
 							if (Lo > Vs.Last() + 1e-4) Vs.Add(Lo);
@@ -1256,8 +1181,6 @@ namespace HutongGen
 							const FQuat Rot = FRotationMatrix::MakeFromZY(FVector(T), FVector(N.GetSafeNormal())).ToQuat();
 							Stations.Add(FTransform(Rot, FVector(Pts[i])));
 						}
-						// The course's own 壟 in the tile pattern: its crown band across, rows up its length (and the profile's height, so an end cap is no line). Left to the
-						// box projection the pattern lay across the tubes at odd angles and read as blobs.
 						const int32 FirstV = Mesh.MaxVertexID(), FirstT = Mesh.MaxTriangleID();
 						AppendSweptProfile(Mesh, Section, Stations);
 						TArray<double> Arc = { 0.0 };
@@ -1278,8 +1201,6 @@ namespace HutongGen
 				RoofTag.Close();
 			}
 
-			// 椽頭 under the eave course, each square to its eave, fanning toward the corner diagonal
-			// under a 翼角; clear of the corners, where the 角梁 is.
 			const double RSec = FMath::Max(D.RafterSection, 0.0);
 			if (RSec > 0.0)
 			{
@@ -1298,7 +1219,6 @@ namespace HutongGen
 					const FVector2d Dir = Run / FMath::Max(EL, 1e-6);
 					const FVector2d Out(Dir.Y, -Dir.X);
 					const double Margin = Reach + RSec;
-					// The unflared eave line, where the soffit meets the column line.
 					const double EaveZ = Pn.Sample(Pn.SolveU(0.5 * EL, 0.0), 0.0).Z;
 					const int32 Count = D.bNoCorners ? FMath::Max(FMath::RoundToInt32(EL / Spacing), 1)
 						: FMath::FloorToInt32((EL - 2.0 * Margin) / Spacing) + 1;
@@ -1313,14 +1233,11 @@ namespace HutongGen
 						Wt = Wt * Wt * (3.0 - 2.0 * Wt);
 						const FVector2d Diag = (A < EL - A) ? Pn.DiagA : Pn.DiagB;
 						const FVector2d OutF = (Out * (1.0 - 0.6 * Wt) + Diag * (0.6 * Wt)).GetSafeNormal();
-						// Built as a front eave (face at y = 0, outward -Y), then turned onto OutF.
 						const double Yaw = FMath::RadiansToDegrees(FMath::Atan2(OutF.X, -OutF.Y));
-						// Tops inside the eave course, which rises with the 翼角.
 						const double TopZ = B.Z - 0.5 * D.FasciaDrop;
 						const int32 V0 = Mesh.MaxVertexID();
 						if (D.bFlyingRafters) AppendRafterEnds(Mesh, -0.75 * RSec, 0.75 * RSec, Setback, Reach, TopZ, RSec, 1e6);
-						// Up the soffit from the eave course's base toward the column line, tops buried 1 cm in it;
-						// shortening into a 翼角, where rafters converging on the corner would cross.
+						// Shortened into a 翼角, where rafters converging on the corner would cross.
 						const double Len = FMath::Max(D.EaveOverhang * FMath::Square(1.0 - Wt), RoundOut);
 						if (D.EaveOverhang > RoundIn + 1.0)
 						{
@@ -1339,7 +1256,6 @@ namespace HutongGen
 				PaintTag.Close();
 			}
 
-			// 垂脊 up each hip, 正脊 along the top where the long panels meet on a ridge.
 			if (D.RidgeWidth > 0.0 && D.RidgeHeight > 0.0 && Panels.Num() == 4)
 			{
 				FSlotScope RidgeTag(Mesh, MatSlot_Ridge);
@@ -1349,7 +1265,6 @@ namespace HutongGen
 					const FRoofPanel& Pn = Panels[p];
 					for (const int32 e : { 0, 1 })
 					{
-						// From a ridge height in from the eave corner.
 						const double V0 = HutongMeshUtils::HipStartV([&](double V) { return Pn.Sample((double)e, V); }, 1.5 * D.RidgeHeight, Pn.VMax);
 						TArray<FVector3d> Path;
 						for (int32 s = 0; s <= 16; ++s) Path.Add(Pn.Sample((double)e, FMath::Lerp(V0, Pn.VMax, s / 16.0)));
@@ -1381,7 +1296,6 @@ namespace HutongGen
 			for (const FVector2d& Pt : Section) HalfWidth = FMath::Max(HalfWidth, FMath::Abs(Pt.X));
 			auto Height = [&](double R) { return Centre.Z + HutongMeshUtils::RoundRoofHeight(Spec, R); };
 
-			// Stations down each meridian, finer where the slope turns.
 			const int32 Steps = FMath::Max(CourseStationsFor(Re - Stop) + 4, 8);
 			TArray<double> Rs, Arc;
 			for (int32 s = 0; s <= Steps; ++s) Rs.Add(FMath::Lerp(Re, Stop, double(s) / Steps));
@@ -1405,7 +1319,6 @@ namespace HutongGen
 					const FVector3d T = (Out * (Rn - Rp) + FVector3d(0.0, 0.0, Height(Rn) - Height(Rp))).GetSafeNormal();
 					FVector3d N = T.Cross(Across);
 					if (N.Z < 0.0) N = -N;
-					// Tapered 筒瓦: the course narrows with the circle, so all reach the top.
 					const double Scale = R / Re;
 					Stations.Add(FTransform(FRotationMatrix::MakeFromZY(FVector(T), FVector(N)).ToQuat(),
 						FVector(Centre.X + R * Out.X, Centre.Y + R * Out.Y, Height(R)), FVector(Scale, Scale, 1.0)));

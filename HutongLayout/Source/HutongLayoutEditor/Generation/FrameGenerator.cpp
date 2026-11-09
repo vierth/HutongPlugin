@@ -36,7 +36,6 @@ namespace HutongGen
 		L.Step = FMath::Max(Depth, 1.0) / (N - 1);
 		const TArray<double> Ju = Jiajia::DefaultRatios(Purlins);
 
-		// 舉架 from the 檐檁 up; the far slope mirrors the near.
 		L.Y.SetNum(N);
 		L.Support.SetNum(N);
 		double Z = ColumnTop;
@@ -58,7 +57,6 @@ namespace HutongGen
 
 namespace
 {
-	// Round member along X.
 	void AppendLog(FDynamicMesh3& Mesh, double X0, double X1, double Y, double Z, double Radius, int32 Sides)
 	{
 		const int32 Mark = Mesh.MaxVertexID();
@@ -67,7 +65,6 @@ namespace
 		TransformVerticesFrom(Mesh, Mark, FTransform(FQuat(FVector::YAxisVector, HALF_PI), FVector(X0, Y, Z)));
 	}
 
-	// Member across the depth on the frame line at X.
 	void AppendBeam(FDynamicMesh3& Mesh, double X, double Y0, double Y1, double Bottom, double Height, double Width)
 	{
 		AppendBox(Mesh,
@@ -75,7 +72,6 @@ namespace
 			FVector3d(X + 0.5 * Width, FMath::Max(Y0, Y1), Bottom + Height));
 	}
 
-	// 瓜柱: square, head bevelled across the depth to seat the 檁.
 	void AppendStrut(FDynamicMesh3& Mesh, double X, double Y, double Bottom, double Top, double Section)
 	{
 		if (Top <= Bottom) return;
@@ -121,7 +117,6 @@ namespace
 		const double Eave = L.Support[0];
 		const int32 Mark = Mesh.MaxVertexID();
 		FSlotScope WoodTag(Mesh, MatSlot_Wood);
-		// Beams across the depth, held inside the limits.
 		auto Beam = [&](double X, double Y0, double Y1, double Bottom, double Height, double Width)
 		{
 			const double A = FMath::Clamp(FMath::Min(Y0, Y1), Options.FrontLimit, Options.RearLimit);
@@ -129,9 +124,7 @@ namespace
 			if (B - A > 0.5) AppendBeam(Mesh, X, A, B, Bottom, Height, Width);
 		};
 		const double BoardH = C::BoardHeight * D;
-		// A 瓜柱 stands to its purlin's underside; the line's 枋 and 墊板 tenon into its sides.
 		auto PurlinFoot = [&](int32 i) { return L.Support[i] + BoardH; };
-		// Post top: into the 檁's lower third, head notched to seat it.
 		auto PurlinSeat = [&](int32 i)
 		{
 			return PurlinFoot(i) + C::StrutIntoPurlin * C::PurlinDiameter * D;
@@ -147,19 +140,16 @@ namespace
 		const double TieDrop = 1.2 * D + Tie;
 		const int32 RidgeIdx = L.Ridge();
 
-		// Cross frame (排架) on each line asked for.
 		for (const double X : FrameX)
 		{
 
-			// 廊: 抱頭梁 from 檐柱 (carrying the 檐檁) into the 金柱; 穿插枋 under it through both.
 			auto Veranda = [&](double OuterY, double InnerY)
 			{
 				const double Out = (OuterY < InnerY) ? -1.0 : 1.0;
 				Beam(X, OuterY + Out * D, InnerY, Eave, HeadH, HeadW);
 				if (!Options.bVerandaTies) return;
 
-				// 穿插枋 runs axis to axis; past each column shows its 出頭: half height, a little narrower,
-				// flush with the member's underside.
+				// 出頭 past each column: half height, a little narrower, flush with the member's underside.
 				const double Bottom = Eave - TieDrop;
 				Beam(X, OuterY, InnerY, Bottom, Tie, TieT);
 				const double TenonH = C::TenonHeight * Tie;
@@ -181,20 +171,18 @@ namespace
 			}
 			else if (L.bFrontVeranda)
 			{
-				// 圖5-3-2: the 插梁 runs from the 鑽金柱 at 抱頭梁 height over the 後檐柱; a 瓜柱 on it carries
-				// the main beams' rear end.
+				// 圖5-3-2: the 插梁 runs from the 鑽金柱 over the 後檐柱; a 瓜柱 on it carries the main beams' rear end.
 				Veranda(L.Y[N - 1], L.Y[L.Front]);
 				AppendStrut(Mesh, X, L.Y[L.Rear], Eave + HeadH, PurlinSeat(L.Rear), Strut);
 			}
 
-			// 角背 at a post's foot: flat top, ends straight up off the beam with a short steep corner cut, sunk 1 cm
-			// into the beam so its foot is not the post's.
+			// 角背 sunk 1 cm into the beam, its foot clear of the post's faces.
 			auto Brace = [&](double Yr, double Top, double PostTop, double Foot)
 			{
 				if (!Options.bRidgeBraces || PostTop <= Top) return;
 				const double Cut = FMath::Min(C::BraceCut * L.Step, 0.4 * Foot);
 				const double Rise = C::BraceHeight * (PostTop - Top);
-				// Thinner than the post, so no side is its.
+				// Thinner than the post, so none of its sides is coplanar with the post's.
 				const double HalfW = FMath::Min(0.5 * C::BraceThickness * Rise, 0.5 * Strut - 1.0);
 				const double Straight = Top + C::BraceStraight * Rise;
 				const double Crown = Top + Rise;
@@ -211,7 +199,6 @@ namespace
 				Frame::AppendColumn(Mesh, X, L.Y[RidgeIdx], R, R, L.Floor, PurlinSeat(RidgeIdx));
 				for (const int32 Dir : { 1, -1 })
 				{
-					// 雙步梁 below, as the 大柁; each 步梁 above it a layer smaller.
 					FBeamSection Section = LowestBeam(D);
 					for (int32 i = (Dir > 0) ? L.Front : L.Rear; i != RidgeIdx; i += Dir)
 					{
@@ -227,7 +214,6 @@ namespace
 				continue;
 			}
 
-			// Main beams, each on the posts of the one below, down to the ridge post.
 			int32 Lo = L.Front, Hi = L.Rear;
 			// The lowest is the 大柁 whatever its span (a 卷棚's 四架梁 at the figure's 1.3).
 			FBeamSection Section = LowestBeam(D, (Hi - Lo == 3) ? C::RollBeamDepthOfWidth : C::MainBeamDepthOfWidth);
@@ -237,9 +223,7 @@ namespace
 				const double BH = Section.H, BW = Section.W;
 				const double Bottom = L.Support[Lo];
 				const double Top = Bottom + BH;
-				// Heads run past their posts to carry the purlins.
 				Beam(X, L.Y[Lo] - 0.6 * D, L.Y[Hi] + 0.6 * D, Bottom, BH, BW);
-				// 隨梁枋 under the 五架梁 between the 金柱, or a 卷棚's 四架梁 between the columns.
 				if (Lo == L.Front && (L.bRearVeranda || Options.bTieUnderMainBeam))
 				{
 					Beam(X, L.Y[Lo], L.Y[Hi], Bottom - TieDrop, Tie, FollowT);
@@ -248,13 +232,11 @@ namespace
 				const int32 NextLo = Lo + 1, NextHi = Hi - 1;
 				if (NextHi - NextLo >= 2)
 				{
-					// 金瓜柱.
 					AppendStrut(Mesh, X, L.Y[NextLo], Top, PurlinSeat(NextLo), Strut);
 					AppendStrut(Mesh, X, L.Y[NextHi], Top, PurlinSeat(NextHi), Strut);
 				}
 				else if (NextHi == NextLo)
 				{
-					// 脊瓜柱 to the 脊檁 underside, braced by its 角背.
 					AppendStrut(Mesh, X, L.Y[RidgeIdx], Top, PurlinSeat(RidgeIdx), Strut);
 					Brace(L.Y[RidgeIdx], Top, PurlinFoot(RidgeIdx), C::BraceReach * L.Step);
 				}
@@ -296,7 +278,6 @@ namespace
 			if (Options.LineExtent) Options.LineExtent(i, A, B);
 		};
 
-		// 檁 per line, end to end.
 		for (int32 i = 0; i < N; ++i)
 		{
 			if (Skip(i)) continue;
@@ -308,7 +289,6 @@ namespace
 		}
 		WoodTag.Close();
 
-		// 枋 and 墊板 under each 檁 (carry 彩畫).
 		FSlotScope PaintTag(Mesh, MatSlot_Paint);
 		const double BoardT = C::BoardThickness * D;
 		for (int32 i = 0; i < N; ++i)
@@ -354,15 +334,12 @@ namespace
 		const double ColR = H.GetColumnRadius();
 		auto BayX = [&](int32 i) { return H.GetBayBoundary(i, Bays, W, ColR); };
 
-		// Column rows front to back: position, diameter, top.
 		struct FRow { double Y, Diameter, Top; };
 		TArray<FRow> Rows = { { L.Y[0], D, Eave } };
 		if (L.bFrontVeranda) Rows.Add({ L.Y[L.Front], L.GoldD, L.Support[L.Front] });
 		if (L.bRearVeranda)  Rows.Add({ L.Y[L.Rear], L.GoldD, L.Support[L.Rear] });
 		Rows.Add({ L.Y[N - 1], D, Eave });
 
-		// 臺明: brick body, 階條 round the edge, 方磚 floor, 柱頂石 under each column, 踏跺 before the
-		// door bay between 垂帶 on its column lines.
 		const bool bPlatform = P.bHasPlatform && Floor > 0.0;
 		const double ColumnFoot = bPlatform ? Floor + 0.12 * D : Floor;
 		if (bPlatform)
@@ -424,8 +401,7 @@ namespace
 
 		WoodTag.Close();
 
-		// Every member passes the end columns by one reach, so 檁, 墊板 and 枋 end on one plane past the
-		// gable frame.
+		// Every member passes the end columns by one reach, so 檁, 墊板 and 枋 end on one plane.
 		const double RunOut = C::RunProjection * D;
 		TArray<double> FrameX;
 		for (int32 j = 0; j <= Bays; ++j) FrameX.Add(BayX(j));
@@ -435,7 +411,6 @@ namespace
 
 		if (!P.bHasRafters) return;
 
-		// 椽 one 椽徑 apart: 檐椽 over each eave, 花架椽 between, 腦椽 to the ridge.
 		FSlotScope RafterTag(Mesh, MatSlot_Wood);
 		const double Cd = C::RafterDiameter * D;
 		const double Pitch = 2.0 * Cd;
@@ -443,7 +418,6 @@ namespace
 		const double FirstX = 0.5 * (W - (Count - 1) * Pitch);
 		const double Board = P.bHasRoofBoards ? FMath::Max(0.2 * Cd, 1.5) : 0.0;
 
-		// 上檐出 splits between 檐椽 and 飛椽.
 		const double Fly = P.bHasFlyingRafters ? C::FlyingShareOfEave : 0.0;
 		const double FrontFly = Fly * Over, RearFly = Fly * RearOver;
 		const double FrontOut = Over - FrontFly, RearOut = RearOver - RearFly;
@@ -472,7 +446,6 @@ namespace
 				AppendBox(Mesh, FVector3d(0.0, U0, Cd), FVector3d(W, U1, Cd + Board));
 			}
 
-			// Eave: 小連檐 across 檐椽 ends, 飛椽 on top reaching the rest out, 大連檐 across theirs.
 			auto EaveEnd = [&](double Tip, double Dir, double FlyOut)
 			{
 				if (P.bHasEaveBoards)

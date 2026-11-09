@@ -2,6 +2,7 @@
 
 #include "Containers/Ticker.h"
 #include "DynamicMeshBuilder.h"
+#include "EngineUtils.h"
 #include "Engine/CollisionProfile.h"
 #include "Engine/Selection.h"
 #include "Engine/Engine.h"
@@ -29,28 +30,23 @@
 
 namespace
 {
-	constexpr float FillAlpha = 0.18f;
-	// Selected: fill this strong, outline in HutongPlanColours::Selected this thick. Every type
-	// colour is a hue; white is none of them, so a selected plan reads apart from its neighbours.
-	constexpr float SelectedFillAlpha = 0.38f;
-	constexpr float SelectedOutlineThickness = 7.0f;
-	// Hatch ticks along the facade: this far apart, this long, standing this far in off the edge
-	// (on it they fought the neighbours' lines).
+	constexpr float FillAlpha = 0.30f;
+	constexpr float SelectedFillAlpha = 0.45f;
+	constexpr float SelectedOutlineThickness = 9.0f;
+	// Hatch ticks along the facade, inset off the edge to clear the neighbours' lines.
 	constexpr double HatchSpacing = 60.0;
 	constexpr double HatchDepth = 35.0;
 	constexpr double HatchGap = 15.0;
-	// Facing chevron behind the ticks in every bay, pointing out through the facade: half-width limits.
 	constexpr double ChevronMin = 30.0;
 	constexpr double ChevronMax = 120.0;
-	// An arrow mark's square, at most (a city wall's ramp).
+	constexpr double FacadeBandShare = 0.2;
+	constexpr double FacadeBandMax = 250.0;
+	constexpr float FacadeBandAlpha = 0.55f;
 	constexpr double ArrowMarkSize = 300.0;
-	// A wall's openings: the tool's orange for a handle being dragged.
 	const FLinearColor OpeningColor(1.0f, 0.45f, 0.1f, 1.0f);
 	// Slightly above ground to avoid z-fighting a map plane at Z = 0.
 	constexpr double Lift = 2.0;
-	// Edges this close count as one line.
 	constexpr double SharedEdgeTolerance = 1.0;
-	// The layer's neighbour search buckets plans in squares this wide.
 	constexpr double LayerGridCell = 5000.0;
 
 	double QuadArea(const FVector C[4])
@@ -63,7 +59,7 @@ namespace
 	const TCHAR* VisibilitySection = TEXT("/Script/HutongLayoutEditor.HutongPlanOutlineComponent");
 	const TCHAR* VisibilityKey = TEXT("bShowPlanOutlines");
 
-	// The proxy cannot stop drawing, so toggling rebuilds every plan's proxy (as PlaceLabels' fill).
+	// Visibility is baked into each proxy: toggling rebuilds them all (as PlaceLabels' fill).
 	void OnPlanVisibilityChanged(IConsoleVariable* Var)
 	{
 		GConfig->SetBool(VisibilitySection, VisibilityKey, Var->GetBool(), GEditorPerProjectIni);
@@ -132,10 +128,11 @@ namespace
 	FDelegateHandle GSelectionChangedHandle;
 	FDelegateHandle GSelectObjectHandle;
 
-	// Worlds whose plans' drawing may have changed since the last tick; their layers rebuild on the next.
 	// Render state is created off the game thread, hence the lock.
 	FCriticalSection GDirtyWorldsLock;
 	TSet<TObjectKey<UWorld>> GDirtyWorlds;
+	TSet<TObjectKey<UWorld>> GStaleOnSelection;
+	bool GSelectionDirty = false;
 
 	void MarkWorldDirty(const UWorld* World)
 	{
@@ -144,18 +141,28 @@ namespace
 		GDirtyWorlds.Add(TObjectKey<UWorld>(World));
 	}
 
-	// The layer leaves selected plans to their own proxies, so a selection change redraws it.
+	// Selection is readable on the game thread only; off it, the world is marked dirty.
+	void MarkPlanChanged(const UHutongPlanOutlineComponent& C)
+	{
+		const UWorld* World = C.GetWorld();
+		if (!World) return;
+		const bool bSelected = IsInGameThread() && C.ShouldRenderSelected();
+		FScopeLock Lock(&GDirtyWorldsLock);
+		(bSelected ? GStaleOnSelection : GDirtyWorlds).Add(TObjectKey<UWorld>(World));
+	}
+
+	// A rebuild takes seconds of render thread on a city map; a selection change only resends the hidden set.
 	void OnPlanSelectionChanged(UObject*)
 	{
 		FScopeLock Lock(&GDirtyWorldsLock);
-		for (const TPair<TObjectKey<UWorld>, FPlanWorld>& Pair : GPlanWorlds) GDirtyWorlds.Add(Pair.Key);
+		GSelectionDirty = true;
+		GDirtyWorlds.Append(GStaleOnSelection);
+		GStaleOnSelection.Reset();
 	}
 
 	UMaterial* GPlanMaterial = nullptr;
 
-	// Translucent, unlit, vertex colour; a line's corners carry their offset from the centre line in
-	// pixels (UV0) and the vertex shader turns it into world units for this view: depth over the
-	// projection's focal length in perspective, the ortho width per pixel in ortho. True when made now.
+	// UV0: a line corner's offset in pixels; the vertex shader scales it to world units for this view.
 	bool EnsurePlanMaterial()
 	{
 		if (GPlanMaterial || GUsingNullRHI) return false;
@@ -223,7 +230,6 @@ namespace
 		return Resource && Resource->IsCompilationFinished();
 	}
 
-	// Triangles in world space, vertex colour, UV0 = a line corner's offset in pixels.
 	struct FPlanMesh
 	{
 		TArray<FDynamicMeshVertex> Vertices;
@@ -237,7 +243,6 @@ namespace
 			Indices.Append({ Base, Base + 1, Base + 2, Base, Base + 2, Base + 3 });
 		}
 
-		// Square-capped, Pixels wide on screen at any zoom.
 		void Line(const FVector& A, const FVector& B, const FLinearColor& Colour, float Pixels)
 		{
 			FVector2f Along(float(B.X - A.X), float(B.Y - A.Y));
@@ -262,7 +267,6 @@ namespace
 		}
 	};
 
-	// What a plan draws, copied off the component for the render thread.
 	struct FPlanDraw
 	{
 		FMatrix LocalToWorld = FMatrix::Identity;
@@ -277,7 +281,6 @@ namespace
 		int32 DoorBay = INDEX_NONE;
 		TArray<FVector4> ArrowMarks;
 		FLinearColor Colour = FLinearColor::White;
-		// Neighbours' edges drawn by them, left out of this plan's outline (never when selected).
 		TArray<TPair<FVector, FVector>> Yielded;
 
 		explicit FPlanDraw(const UHutongPlanOutlineComponent& C)
@@ -297,7 +300,6 @@ namespace
 		}
 	};
 
-	// A line along a plan's edge, less the stretches a neighbour draws.
 	void AppendOwnPart(FPlanMesh& Out, const TArray<TPair<FVector, FVector>>& Yielded, const FVector& A, const FVector& B,
 		const FLinearColor& Colour, float Thickness)
 	{
@@ -352,12 +354,10 @@ namespace
 		static const TArray<TPair<FVector, FVector>> NoneYielded;
 		const TArray<TPair<FVector, FVector>>& Yielded = bSelected ? NoneYielded : P.Yielded;
 		FLinearColor Line = P.Colour;
-		Line.A = bSelected ? 1.0f : 0.7f;
-		const float Thickness = bSelected ? 3.0f : 2.0f;
-		// Facade marks: same hue, heavier, so a plan shows type and facing.
+		Line.A = bSelected ? 1.0f : 0.95f;
+		const float Thickness = bSelected ? 4.0f : 3.0f;
 		const FLinearColor FacadeColor = P.Colour * FLinearColor(1.0f, 0.72f, 0.45f, 1.0f);
 
-		// Faint fill: a street of them reads as a tint.
 		FLinearColor Fill = P.Colour;
 		Fill.A = bSelected ? SelectedFillAlpha : FillAlpha;
 		Under.Quad(World, Fill);
@@ -368,8 +368,6 @@ namespace
 		}
 		for (int32 i = 0, j = 3; i < 4; j = i++) AppendOwnPart(Over, Yielded, World[j], World[i], Line, Thickness);
 
-		// Openings (a wall's gate or garden doorway): an orange patch across the thickness, edged in the
-		// same orange — the slider's while dragged — so a gate reads unselected (user, 2026-10-06).
 		for (const FVector2D& O : P.Openings)
 		{
 			const double A = O.X - 0.5 * O.Y, B = O.X + 0.5 * O.Y;
@@ -385,7 +383,6 @@ namespace
 			for (int32 k = 0; k < 4; ++k) Over.Line(Q[k], Q[(k + 1) % 4], OpeningColor, Thickness + 1.0f);
 		}
 
-		// Arrow marks: a square, an arrow across it in the mark's direction, in the facade hue.
 		for (const FVector4& M : P.ArrowMarks)
 		{
 			const double Half = 0.5 * FMath::Min(ArrowMarkSize, 0.3 * FMath::Min(W, D));
@@ -411,7 +408,6 @@ namespace
 			}
 		}
 
-		// Bay divisions (間) at the columns; end boundaries are left to the outline.
 		for (int32 i = 1; i + 1 < P.BayBoundaries.Num(); ++i)
 		{
 			const double T = P.BayBoundaries[i];
@@ -422,7 +418,6 @@ namespace
 			Over.Line(A, B, Division, FMath::Max(Thickness - 1.0f, 1.5f));
 		}
 
-		// Facade: short ticks just inside the edge, and a chevron per bay pointing out through it.
 		if (P.bHasFacade)
 		{
 			const HutongGen::BaySide::FEdge E = HutongGen::BaySide::GetEdge((HutongGen::EBaySide)P.Facade, 0.0, 0.0, W, D);
@@ -435,7 +430,6 @@ namespace
 			FLinearColor Hatch = FacadeColor;
 			Hatch.A = Line.A;
 			auto OnEdge = [&](double T) { return E.bAlongX ? FVector2D(T, E.FixedCoord) : FVector2D(E.FixedCoord, T); };
-			// End ticks would lie on the side edges: inner ones only.
 			for (int32 k = 1; k < Count; ++k)
 			{
 				const FVector2D A = OnEdge(k * Step) - E.OutDir * Gap;
@@ -443,14 +437,30 @@ namespace
 				Over.Line(At(A.X, A.Y), At(B.X, B.Y), Hatch, Thickness);
 			}
 
-			// Bays as drawn; a type without them gets one chevron across the whole front.
-			TArray<double> Spans = P.BayBoundaries.Num() >= 2 ? P.BayBoundaries : TArray<double>{ 0.0, Along };
+			// Without bays nothing else marks the front: a band along it, and a chevron every footprint's depth or so.
+			const bool bBays = P.BayBoundaries.Num() >= 2;
+			TArray<double> Spans = bBays ? P.BayBoundaries : TArray<double>{ 0.0, Along };
+			if (!bBays)
+			{
+				const FVector2D In0 = OnEdge(0.0) - E.OutDir * Gap, In1 = OnEdge(Along) - E.OutDir * Gap;
+				const double BandDepth = FMath::Min(FacadeBandShare * Across, FacadeBandMax);
+				const FVector Band[4] = { At(In0.X, In0.Y), At(In1.X, In1.Y),
+					At((In1 - E.OutDir * BandDepth).X, (In1 - E.OutDir * BandDepth).Y),
+					At((In0 - E.OutDir * BandDepth).X, (In0 - E.OutDir * BandDepth).Y) };
+				FLinearColor BandFill = FacadeColor;
+				BandFill.A = FacadeBandAlpha;
+				Under.Quad(Band, BandFill);
+				const int32 Marks = FMath::Max(1, FMath::RoundToInt32(Along / FMath::Max(1.2 * Across, 4.0 * ChevronMax)));
+				Spans.Reset();
+				for (int32 m = 0; m <= Marks; ++m) Spans.Add(Along * m / Marks);
+			}
 			Spans.Sort();
 			const double TipIn = Gap + Depth + Gap;
 			const FVector2D Tangent = E.bAlongX ? FVector2D(1.0, 0.0) : FVector2D(0.0, 1.0);
+			const double MaxHalf = bBays ? ChevronMax : FMath::Max(ChevronMax, 0.25 * Across);
 			for (int32 b = 0; b + 1 < Spans.Num(); ++b)
 			{
-				const double Half = FMath::Min(FMath::Clamp(0.3 * (Spans[b + 1] - Spans[b]), ChevronMin, ChevronMax),
+				const double Half = FMath::Min(FMath::Clamp(0.3 * (Spans[b + 1] - Spans[b]), ChevronMin, MaxHalf),
 					0.5 * (0.8 * Across - TipIn));
 				if (Half <= 0.0) continue;
 				const FVector2D Tip = OnEdge(0.5 * (Spans[b] + Spans[b + 1])) - E.OutDir * TipIn;
@@ -459,11 +469,10 @@ namespace
 				Over.Line(At(L.X, L.Y), At(Tip.X, Tip.Y), FacadeColor, Thickness + 1.5f);
 				Over.Line(At(Tip.X, Tip.Y), At(R.X, R.Y), FacadeColor, Thickness + 1.5f);
 			}
-			// Facade edge, heavier, in the preview street colour.
 			const FVector2D F0 = OnEdge(0.0), F1 = OnEdge(Along);
 			AppendOwnPart(Over, Yielded, At(F0.X, F0.Y), At(F1.X, F1.Y), Hatch, Thickness + 1.5f);
 
-			// Door bay heavier still: the 明間 is not always central, and it places the steps.
+			// Door bay heavier still: it places the steps and may sit off-centre.
 			if (P.BayBoundaries.IsValidIndex(P.DoorBay) && P.BayBoundaries.IsValidIndex(P.DoorBay + 1))
 			{
 				const FVector2D D0 = OnEdge(P.BayBoundaries[P.DoorBay]), D1 = OnEdge(P.BayBoundaries[P.DoorBay + 1]);
@@ -476,7 +485,7 @@ namespace
 	struct FPlanEdgeKey
 	{
 		FVector Quad[4];
-		// Whole cm², so float noise in a transform cannot reorder like plans and the order stays strict.
+		// Whole cm², so float noise in a transform keeps the order of like plans strict.
 		int64 Area = 0;
 		FBox Box;
 		FString Path;
@@ -491,7 +500,6 @@ namespace
 
 		FBox Near() const { return Box.ExpandBy(FVector(SharedEdgeTolerance, SharedEdgeTolerance, 100.0)); }
 
-		// Larger first, then by name: the layer's draw order within a type.
 		bool DrawsBefore(const FPlanEdgeKey& Other) const
 		{
 			return Area != Other.Area ? Area > Other.Area : Path < Other.Path;
@@ -517,13 +525,6 @@ namespace
 		return C.IsRegistered() && C.IsVisibleInEditor() && HasFootprint(C) && !(Owner && Owner->IsHiddenEd());
 	}
 
-	// What the world's layer draws: a selected plan is drawn whole by its own proxy instead, so moving it
-	// redraws nothing else and nothing of it is drawn twice.
-	bool IsPlanInLayer(const UHutongPlanOutlineComponent& C)
-	{
-		return IsPlanDrawn(C) && !C.ShouldRenderSelected();
-	}
-
 	FPlanWorld* FindPlanWorld(const UWorld* World)
 	{
 		return World ? GPlanWorlds.Find(TObjectKey<UWorld>(World)) : nullptr;
@@ -540,7 +541,6 @@ namespace
 		}
 	}
 
-	// A layer per world with plans in it, rebuilt (render state) when any of its plans' drawing changed.
 	bool TickLayers(float)
 	{
 		// Plans that registered before the material existed hold the fallback in their proxies.
@@ -555,10 +555,13 @@ namespace
 			}
 		}
 		TSet<TObjectKey<UWorld>> Dirty;
+		bool bSelectionDirty = false;
 		{
 			FScopeLock Lock(&GDirtyWorldsLock);
 			Dirty = MoveTemp(GDirtyWorlds);
 			GDirtyWorlds.Reset();
+			bSelectionDirty = GSelectionDirty;
+			GSelectionDirty = false;
 		}
 		for (auto It = GPlanWorlds.CreateIterator(); It; ++It)
 		{
@@ -582,6 +585,10 @@ namespace
 			else if (Dirty.Contains(It.Key()))
 			{
 				PlanWorld.Layer->MarkRenderStateDirty();
+			}
+			else if (bSelectionDirty)
+			{
+				PlanWorld.Layer->SendSelection();
 			}
 		}
 		return true;
@@ -627,7 +634,7 @@ namespace HutongPlanOutline
 		FWorldDelegates::OnWorldCleanup.Remove(GWorldCleanupHandle);
 		USelection::SelectionChangedEvent.Remove(GSelectionChangedHandle);
 		USelection::SelectObjectEvent.Remove(GSelectObjectHandle);
-		// At editor exit modules unload after every UObject is gone, rooted or not: forget, never touch.
+		// At editor exit modules unload after every UObject is gone, rooted or not: only forget them.
 		const bool bObjectsAlive = UObjectInitialized() && !IsEngineExitRequested();
 		if (bObjectsAlive)
 		{
@@ -640,8 +647,6 @@ namespace HutongPlanOutline
 	}
 }
 
-// One plan's own proxy: the selected overlay, and the fill in the hit-proxy pass so a click selects the
-// building. Otherwise it draws nothing; the layer has it.
 class FHutongPlanOutlineSceneProxy final : public FPrimitiveSceneProxy
 {
 public:
@@ -706,15 +711,14 @@ public:
 	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override
 	{
 		FPrimitiveViewRelevance Result;
-		Result.bDrawRelevance = IsShown(View) && (IsSelected() || View->Family->EngineShowFlags.HitProxies);
+		Result.bDrawRelevance = IsShown(View) && IsSelected();
 		Result.bDynamicRelevance = true;
 		Result.bShadowRelevance = false;
 		MaterialRelevance.SetPrimitiveViewRelevance(Result);
 		return Result;
 	}
 
-	// Never occlusion-culled: the bounds are a slab a few centimetres thick lying on the map, and the last
-	// frame's coarse depth test judged a thin wall hidden one frame and shown the next (user, 2026-10-06).
+	// Thin slab bounds on the map flicker under the coarse occlusion test.
 	virtual bool CanBeOccluded() const override { return false; }
 
 	virtual uint32 GetMemoryFootprint() const override { return sizeof(*this) + GetAllocatedSize(); }
@@ -727,7 +731,7 @@ private:
 	FHitProxyId HitProxyId;
 };
 
-// Every plan of a world, one vertex buffer built once per change, one batch a frame.
+// The editor renders the hit-proxy pass on every mouse move: one small batch per plan over its fill.
 class FHutongPlanLayerSceneProxy final : public FPrimitiveSceneProxy
 {
 public:
@@ -737,9 +741,12 @@ public:
 		return reinterpret_cast<size_t>(&UniquePointer);
 	}
 
-	FHutongPlanLayerSceneProxy(const UHutongPlanLayerComponent* C, TArray<FPlanDraw>&& InPlans)
+	FHutongPlanLayerSceneProxy(const UHutongPlanLayerComponent* C, TArray<FPlanDraw>&& InPlans,
+		TArray<const UHutongPlanOutlineComponent*>&& InComponents, TArray<int32>&& InHidden)
 		: FPrimitiveSceneProxy(C)
 		, Plans(MoveTemp(InPlans))
+		, Components(MoveTemp(InComponents))
+		, Hidden(MoveTemp(InHidden))
 		, VertexFactory(GetScene().GetFeatureLevel(), "FHutongPlanLayerSceneProxy")
 		, Material(PlanMaterialProxy())
 		, MaterialRelevance(PlanMaterialRelevance(GetScene().GetShaderPlatform()))
@@ -748,21 +755,45 @@ public:
 		bWillEverBeLit = false;
 	}
 
+	virtual HHitProxy* CreateHitProxies(UPrimitiveComponent*, TArray<TRefCountPtr<HHitProxy>>& OutHitProxies) override
+	{
+		HitProxyIds.Reserve(Components.Num());
+		for (const UHutongPlanOutlineComponent* C : Components)
+		{
+			HHitProxy* Proxy = new HActor(C->GetOwner(), C);
+			OutHitProxies.Add(Proxy);
+			HitProxyIds.Add(Proxy->Id);
+		}
+		Components.Empty();
+		return nullptr;
+	}
+
 	virtual void CreateRenderThreadResources(FRHICommandListBase& RHICmdList) override
 	{
 		// All fills first, then all lines: no plan's tint lies over another's outline.
 		FPlanMesh Under, Over;
-		for (const FPlanDraw& P : Plans) AppendPlan(P, P.LocalToWorld, /*bSelected*/ false, Under, Over);
+		Ranges.SetNum(Plans.Num());
+		for (int32 i = 0; i < Plans.Num(); ++i)
+		{
+			FPlanRange& R = Ranges[i];
+			R.FillFirst = Under.Indices.Num();
+			R.LineFirst = Over.Indices.Num();
+			AppendPlan(Plans[i], Plans[i].LocalToWorld, /*bSelected*/ false, Under, Over);
+			R.FillCount = Under.Indices.Num() - R.FillFirst;
+			R.LineCount = Over.Indices.Num() - R.LineFirst;
+		}
 		Plans.Empty();
+		for (FPlanRange& R : Ranges) R.LineFirst += Under.Indices.Num();
 		Under.Append(Over);
 		if (Under.Indices.IsEmpty() || !Material) return;
 
-		NumTriangles = Under.Indices.Num() / 3;
+		NumIndices = Under.Indices.Num();
 		NumVertices = Under.Vertices.Num();
 		IndexBuffer.Indices = MoveTemp(Under.Indices);
 		VertexBuffers.InitFromDynamicVertex(RHICmdList, &VertexFactory, Under.Vertices);
 		IndexBuffer.InitResource(RHICmdList);
 		bHasMesh = true;
+		UpdateShown();
 	}
 
 	virtual void DestroyRenderThreadResources() override
@@ -776,43 +807,64 @@ public:
 		bHasMesh = false;
 	}
 
+	void SetHidden(TArray<int32>&& InHidden)
+	{
+		Hidden = MoveTemp(InHidden);
+		if (bHasMesh) UpdateShown();
+	}
+
 	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views,
 		const FSceneViewFamily& ViewFamily, uint32 VisibilityMap,
 		FMeshElementCollector& Collector) const override
 	{
 		if (!bHasMesh) return;
+		const bool bHitTesting = ViewFamily.EngineShowFlags.HitProxies;
 		for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ++ViewIndex)
 		{
 			if ((VisibilityMap & (1 << ViewIndex)) == 0) continue;
-			FMeshBatch& Mesh = Collector.AllocateMesh();
-			FMeshBatchElement& Element = Mesh.Elements[0];
-			Element.IndexBuffer = &IndexBuffer;
-			Mesh.VertexFactory = &VertexFactory;
-			Mesh.MaterialRenderProxy = Material;
-
 			FDynamicPrimitiveUniformBuffer& UniformBuffer = Collector.AllocateOneFrameResource<FDynamicPrimitiveUniformBuffer>();
 			FPrimitiveUniformShaderParametersBuilder Builder;
 			BuildUniformShaderParameters(Builder);
 			UniformBuffer.Set(Collector.GetRHICommandList(), Builder);
-			Element.PrimitiveUniformBufferResource = &UniformBuffer.UniformBuffer;
 
-			Element.FirstIndex = 0;
-			Element.NumPrimitives = NumTriangles;
-			Element.MinVertexIndex = 0;
-			Element.MaxVertexIndex = NumVertices - 1;
-			Mesh.Type = PT_TriangleList;
-			Mesh.DepthPriorityGroup = DPG;
-			Mesh.bDisableBackfaceCulling = true;
-			Mesh.bCanApplyViewModeOverrides = false;
-			Collector.AddMesh(ViewIndex, Mesh);
+			auto Add = [&](uint32 First, uint32 Count, FHitProxyId HitProxyId)
+			{
+				FMeshBatch& Mesh = Collector.AllocateMesh();
+				FMeshBatchElement& Element = Mesh.Elements[0];
+				Element.IndexBuffer = &IndexBuffer;
+				Element.PrimitiveUniformBufferResource = &UniformBuffer.UniformBuffer;
+				Element.FirstIndex = First;
+				Element.NumPrimitives = Count / 3;
+				Element.MinVertexIndex = 0;
+				Element.MaxVertexIndex = NumVertices - 1;
+				Mesh.VertexFactory = &VertexFactory;
+				Mesh.MaterialRenderProxy = Material;
+				Mesh.BatchHitProxyId = HitProxyId;
+				Mesh.Type = PT_TriangleList;
+				Mesh.DepthPriorityGroup = DPG;
+				Mesh.bDisableBackfaceCulling = true;
+				Mesh.bCanApplyViewModeOverrides = false;
+				Collector.AddMesh(ViewIndex, Mesh);
+			};
+			if (bHitTesting)
+			{
+				for (int32 i = 0; i < Ranges.Num(); ++i)
+				{
+					if (!HiddenBits[i] && Ranges[i].FillCount > 0 && HitProxyIds.IsValidIndex(i)) Add(Ranges[i].FillFirst, Ranges[i].FillCount, HitProxyIds[i]);
+				}
+			}
+			else
+			{
+				// In index order: translucent batches of one primitive draw in the order added.
+				for (const FUintPoint& Span : Shown) Add(Span.X, Span.Y, FHitProxyId());
+			}
 		}
 	}
 
 	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override
 	{
 		FPrimitiveViewRelevance Result;
-		// Owned by no actor, it has no hit proxy to draw: the plans' own proxies take the clicks.
-		Result.bDrawRelevance = bHasMesh && IsShown(View) && !View->Family->EngineShowFlags.HitProxies;
+		Result.bDrawRelevance = bHasMesh && IsShown(View);
 		Result.bDynamicRelevance = true;
 		Result.bShadowRelevance = false;
 		MaterialRelevance.SetPrimitiveViewRelevance(Result);
@@ -824,7 +876,45 @@ public:
 	virtual uint32 GetMemoryFootprint() const override { return sizeof(*this) + GetAllocatedSize(); }
 
 private:
+	struct FPlanRange
+	{
+		uint32 FillFirst = 0, FillCount = 0, LineFirst = 0, LineCount = 0;
+	};
+
+	void UpdateShown()
+	{
+		HiddenBits.Init(false, Ranges.Num());
+		for (const int32 i : Hidden)
+		{
+			if (Ranges.IsValidIndex(i)) HiddenBits[i] = true;
+		}
+		TArray<FUintPoint> Cuts;
+		for (const bool bLines : { false, true })
+		{
+			for (int32 i = 0; i < Ranges.Num(); ++i)
+			{
+				if (!HiddenBits[i]) continue;
+				const FPlanRange& R = Ranges[i];
+				Cuts.Add(bLines ? FUintPoint(R.LineFirst, R.LineCount) : FUintPoint(R.FillFirst, R.FillCount));
+			}
+		}
+		Shown.Reset();
+		uint32 From = 0;
+		for (const FUintPoint& Cut : Cuts)
+		{
+			if (Cut.X > From) Shown.Emplace(From, Cut.X - From);
+			From = FMath::Max(From, Cut.X + Cut.Y);
+		}
+		if (NumIndices > From) Shown.Emplace(From, NumIndices - From);
+	}
+
 	TArray<FPlanDraw> Plans;
+	TArray<const UHutongPlanOutlineComponent*> Components;
+	TArray<FHitProxyId> HitProxyIds;
+	TArray<int32> Hidden;
+	TBitArray<> HiddenBits;
+	TArray<FPlanRange> Ranges;
+	TArray<FUintPoint> Shown;
 	FStaticMeshVertexBuffers VertexBuffers;
 	FDynamicMeshIndexBuffer32 IndexBuffer;
 	FLocalVertexFactory VertexFactory;
@@ -832,7 +922,7 @@ private:
 	FMaterialRelevance MaterialRelevance;
 	uint8 DPG;
 	bool bHasMesh = false;
-	uint32 NumTriangles = 0;
+	uint32 NumIndices = 0;
 	uint32 NumVertices = 0;
 };
 
@@ -842,7 +932,6 @@ UHutongPlanOutlineComponent::UHutongPlanOutlineComponent()
 	bHiddenInGame = true;
 	bUseEditorCompositing = false;
 	CastShadow = false;
-	// The selected overlay draws over the layer.
 	TranslucencySortPriority = 1;
 	SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
 	SetGenerateOverlapEvents(false);
@@ -895,12 +984,12 @@ TArray<TPair<FVector, FVector>> UHutongPlanOutlineComponent::CollectWinningNeigh
 {
 	TArray<TPair<FVector, FVector>> Edges;
 	const FPlanWorld* PlanWorld = FindPlanWorld(GetWorld());
-	if (!PlanWorld || !IsPlanInLayer(*this)) return Edges;
+	if (!PlanWorld || !IsPlanDrawn(*this)) return Edges;
 	const FPlanEdgeKey Mine(*this);
 	for (const TWeakObjectPtr<UHutongPlanOutlineComponent>& Weak : PlanWorld->Plans)
 	{
 		const UHutongPlanOutlineComponent* Other = Weak.Get();
-		if (!Other || Other == this || !IsPlanInLayer(*Other)) continue;
+		if (!Other || Other == this || !IsPlanDrawn(*Other)) continue;
 		const FPlanEdgeKey Theirs(*Other);
 		if (Mine.YieldsTo(Theirs)) Theirs.AddEdgesTo(Edges);
 	}
@@ -910,7 +999,7 @@ TArray<TPair<FVector, FVector>> UHutongPlanOutlineComponent::CollectWinningNeigh
 void UHutongPlanOutlineComponent::OnRegister()
 {
 	Super::OnRegister();
-	// Plans are hidden in game: a game world (PIE) gets no layer.
+	// Plans are hidden in game: only editor worlds get a layer.
 	UWorld* World = GetWorld();
 	if (World && !World->IsGameWorld())
 	{
@@ -932,22 +1021,19 @@ void UHutongPlanOutlineComponent::OnUnregister()
 void UHutongPlanOutlineComponent::OnUpdateTransform(EUpdateTransformFlags UpdateTransformFlags, ETeleportType Teleport)
 {
 	Super::OnUpdateTransform(UpdateTransformFlags, Teleport);
-	// A selected plan is not in the layer: dragging it redraws only its own proxy.
-	if (!ShouldRenderSelected()) MarkWorldDirty(GetWorld());
+	MarkPlanChanged(*this);
 }
 
-// Every path that changes what a plan draws (SetPlan, hiding, the visibility switches) recreates its
-// render state; the layer follows.
 void UHutongPlanOutlineComponent::CreateRenderState_Concurrent(FRegisterComponentContext* Context)
 {
 	Super::CreateRenderState_Concurrent(Context);
-	MarkWorldDirty(GetWorld());
+	MarkPlanChanged(*this);
 }
 
 void UHutongPlanOutlineComponent::DestroyRenderState_Concurrent()
 {
 	Super::DestroyRenderState_Concurrent();
-	MarkWorldDirty(GetWorld());
+	MarkPlanChanged(*this);
 }
 
 FBoxSphereBounds UHutongPlanOutlineComponent::CalcBounds(const FTransform& LocalToWorld) const
@@ -973,6 +1059,7 @@ UHutongPlanLayerComponent::UHutongPlanLayerComponent()
 
 FPrimitiveSceneProxy* UHutongPlanLayerComponent::CreateSceneProxy()
 {
+	PlanIndices.Reset();
 	const FPlanWorld* PlanWorld = FindPlanWorld(GetWorld());
 	if (!PlanWorld || !GPlanMaterial || !HutongPlanOutline::ArePlansVisible()) return nullptr;
 
@@ -980,14 +1067,13 @@ FPrimitiveSceneProxy* UHutongPlanLayerComponent::CreateSceneProxy()
 	for (const TWeakObjectPtr<UHutongPlanOutlineComponent>& Weak : PlanWorld->Plans)
 	{
 		const UHutongPlanOutlineComponent* C = Weak.Get();
-		if (C && IsPlanInLayer(*C)) Drawn.Add(C);
+		if (C && IsPlanDrawn(*C)) Drawn.Add(C);
 	}
 	TArray<FPlanEdgeKey> Keys;
 	Keys.Reserve(Drawn.Num());
 	for (const UHutongPlanOutlineComponent* C : Drawn) Keys.Emplace(*C);
 
-	// Bottom layer first (HutongPlanColours::Layers), larger before smaller, then by name: a fixed order,
-	// so where two plans overlap the same one shows every frame.
+	// A fixed order, so where two plans overlap the same one shows every frame.
 	TArray<int32> Order;
 	Order.Reserve(Drawn.Num());
 	for (int32 i = 0; i < Drawn.Num(); ++i) Order.Add(i);
@@ -1000,7 +1086,6 @@ FPrimitiveSceneProxy* UHutongPlanLayerComponent::CreateSceneProxy()
 		return Keys[L].DrawsBefore(Keys[R]);
 	});
 
-	// Shared edges: each plan asks only the plans in the grid squares its bounds touch.
 	TMap<FIntPoint, TArray<int32>> Grid;
 	auto Cells = [](const FBox& Box, auto&& Visit)
 	{
@@ -1018,10 +1103,16 @@ FPrimitiveSceneProxy* UHutongPlanLayerComponent::CreateSceneProxy()
 
 	TArray<FPlanDraw> Plans;
 	Plans.Reserve(Order.Num());
+	TArray<const UHutongPlanOutlineComponent*> Components;
+	Components.Reserve(Order.Num());
+	TArray<int32> Hidden;
 	TArray<int32> SeenBy;
 	SeenBy.Init(INDEX_NONE, Keys.Num());
 	for (const int32 i : Order)
 	{
+		PlanIndices.Add(Drawn[i], Plans.Num());
+		if (Drawn[i]->ShouldRenderSelected()) Hidden.Add(Plans.Num());
+		Components.Add(Drawn[i]);
 		FPlanDraw& Plan = Plans.Emplace_GetRef(*Drawn[i]);
 		Cells(Keys[i].Near(), [&](const FIntPoint& Cell)
 		{
@@ -1035,7 +1126,23 @@ FPrimitiveSceneProxy* UHutongPlanLayerComponent::CreateSceneProxy()
 			}
 		});
 	}
-	return new FHutongPlanLayerSceneProxy(this, MoveTemp(Plans));
+	return new FHutongPlanLayerSceneProxy(this, MoveTemp(Plans), MoveTemp(Components), MoveTemp(Hidden));
+}
+
+void UHutongPlanLayerComponent::SendSelection()
+{
+	if (!SceneProxy) return;
+	TArray<int32> Hidden;
+	for (const TPair<TObjectKey<UHutongPlanOutlineComponent>, int32>& Pair : PlanIndices)
+	{
+		const UHutongPlanOutlineComponent* C = Pair.Key.ResolveObjectPtr();
+		if (C && C->ShouldRenderSelected()) Hidden.Add(Pair.Value);
+	}
+	FHutongPlanLayerSceneProxy* Proxy = static_cast<FHutongPlanLayerSceneProxy*>(SceneProxy);
+	ENQUEUE_RENDER_COMMAND(HutongPlanLayerSelection)([Proxy, Hidden = MoveTemp(Hidden)](FRHICommandListImmediate&) mutable
+	{
+		Proxy->SetHidden(MoveTemp(Hidden));
+	});
 }
 
 void UHutongPlanLayerComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials) const

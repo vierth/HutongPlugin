@@ -50,7 +50,7 @@ void UPlaceLabelSubsystem::UnregisterRegion(UPlaceRegionComponent* Region)
 {
 	Regions.Remove(Region);
 
-	// Else a region leaving with the player inside leaves a stale chain on a dead component.
+	// Clears the chain when a region leaves with the player inside.
 	for (const FPlaceLabelEntry& Entry : CurrentChain)
 	{
 		if (Entry.Region.Get() == Region)
@@ -155,7 +155,6 @@ UPlaceRegionComponent* UPlaceLabelSubsystem::FindInnermostRegion(const FVector& 
 	int32 BestPriority = TNumericLimits<int32>::Lowest();
 	double BestArea = TNumericLimits<double>::Max();
 
-	// Brute force with a bounds reject inside ContainsWorldPoint.
 	for (const TWeakObjectPtr<UPlaceRegionComponent>& Weak : Regions)
 	{
 		UPlaceRegionComponent* Region = Weak.Get();
@@ -190,7 +189,6 @@ void UPlaceLabelSubsystem::BuildChain(
 	const UPlaceLabelSettings* Settings = GetDefault<UPlaceLabelSettings>();
 	const int32 MaxDepth = Settings ? FMath::Max(Settings->MaxChainDepth, 1) : 16;
 
-	// Both a visited set and a depth cap.
 	TSet<const UPlaceRegionComponent*> Visited;
 	UPlaceRegionComponent* Current = Innermost;
 	int32 Depth = 0;
@@ -253,7 +251,7 @@ void UPlaceLabelSubsystem::TryCreateHUD()
 	UWorld* World = GetWorld();
 	if (World && World->GetNetMode() == NM_DedicatedServer)
 	{
-		// Chain resolution stays useful server-side; only the widget is pointless there.
+		// Chain resolution runs server-side too; the widget is client only.
 		bHUDCreationPending = false;
 		return;
 	}
@@ -287,7 +285,6 @@ void UPlaceLabelSubsystem::TryCreateHUD()
 	HUDWidget = CreateWidget<UPlaceLabelHUDWidget>(PC, WidgetClass);
 	if (HUDWidget)
 	{
-		// AddToPlayerScreen rather than AddToViewport.
 		HUDWidget->AddToPlayerScreen(Settings->HUDZOrder);
 		HUDWidget->SetChain(CurrentChain);
 	}

@@ -24,7 +24,6 @@ using UE::Geometry::FDynamicMesh3;
 
 namespace
 {
-	// Trapezoid: +X end wall angled, rest unchanged. Offsets are along the run, so both modes agree.
 	FHutongFootprintSkew EndWallSkew(EHutongSkewMode Mode = EHutongSkewMode::Ends)
 	{
 		FHutongFootprintSkew S;
@@ -62,7 +61,6 @@ namespace
 		return B;
 	}
 
-	// Plan distance of P from line AB.
 	double DistanceToLine(const FVector2D& A, const FVector2D& B, const FVector2D& P)
 	{
 		const FVector2D D = (B - A).GetSafeNormal();
@@ -81,7 +79,6 @@ bool FHutongFootprintWarpBoxTest::RunTest(const FString& Parameters)
 	FVector2D Corners[4];
 	HutongFootprint::Corners(FVector2D(W, D), Whole, Corners);
 
-	// The face at x == W now lies on the line between the moved corners; z untouched.
 	FDynamicMesh3 Mesh;
 	HutongMeshUtils::AppendBox(Mesh, FVector3d(0, 0, 0), FVector3d(W, D, H));
 	TArray<int32> EndFace;
@@ -104,8 +101,7 @@ bool FHutongFootprintWarpBoxTest::RunTest(const FString& Parameters)
 			DistanceToLine(Corners[1], Corners[2], FVector2D(P.X, P.Y)) < 1.0e-6);
 		TestTrue(TEXT("z is untouched"), FMath::IsNearlyEqual(P.Z, Heights[i], 1.0e-9));
 	}
-	// UVs projected before the warp, in the building's frame: the end face keeps (y, z) as built, so brick
-	// courses run along the skewed wall rather than being re-projected across it.
+	// UVs projected before the warp: the end face keeps (y, z) as built, so brick courses run along the skewed wall.
 	{
 		const UE::Geometry::FDynamicMeshUVOverlay* UV = Mesh.Attributes()->PrimaryUV();
 		int32 Checked = 0, Kept = 0;
@@ -151,7 +147,6 @@ bool FHutongFootprintWarpBoxTest::RunTest(const FString& Parameters)
 	const double ExpectedVolume = HutongFootprint::QuadArea(Corners) * H;
 	TestTrue(TEXT("the volume is the quadrilateral's"), FMath::IsNearlyEqual(Report.Volume, ExpectedVolume, 1.0e-3 * ExpectedVolume));
 
-	// Zero offsets = identity.
 	{
 		FDynamicMesh3 Plain, Same;
 		HutongMeshUtils::AppendBox(Plain, FVector3d(0, 0, 0), FVector3d(W, D, H));
@@ -165,7 +160,6 @@ bool FHutongFootprintWarpBoxTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("zero offsets move nothing"), bIdentical);
 	}
 
-	// A corner dragged past the opposite edge folds the quad; refused whole.
 	{
 		FDynamicMesh3 Before, After;
 		HutongMeshUtils::AppendBox(Before, FVector3d(0, 0, 0), FVector3d(W, D, H));
@@ -193,7 +187,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFootprintHouseGableTest,
 
 bool FHutongFootprintHouseGableTest::RunTest(const FString& Parameters)
 {
-	// Whole house through the component's build: the unwarped +X gable wall lands on the skewed end line.
 	const FVector2D Footprint(1040.0, 600.0);
 	UHutongSiheyuanBuildingComponent* B = NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
 	B->DetailLevel = EHutongDetail::Near;
@@ -204,8 +197,7 @@ bool FHutongFootprintHouseGableTest::RunTest(const FString& Parameters)
 	B->BuildLODs(Plain);
 	if (!TestTrue(TEXT("the plain house builds"), Plain.Num() == 1 && Plain[0].TriangleCount() > 0)) return false;
 
-	// Gable plane: the x plane near +X, in the wall band below the eave, with the most vertices. Max x
-	// alone is a 墀頭 or 散水 edge with a handful.
+	// Max x alone is a 墀頭 or 散水 edge with a handful of vertices.
 	const double Eave = B->Params.GetEaveHeight();
 	TMap<int64, int32> Planes;
 	for (int32 vid : Plain[0].VertexIndicesItr())
@@ -230,7 +222,6 @@ bool FHutongFootprintHouseGableTest::RunTest(const FString& Parameters)
 		if (FMath::IsNearlyEqual(P.X, GableX, 0.006) && P.Z > 10.0 && P.Z < Eave - 10.0) Wall.Add(vid);
 	}
 	TestTrue(TEXT("the gable plane carries vertices"), Wall.Num() >= 4);
-	// The plane's own x, not the rounded key.
 	if (Wall.Num() > 0) GableX = Plain[0].GetVertex(Wall[0]).X;
 
 	B->FootprintSkew = EndWallSkew();
@@ -239,7 +230,6 @@ bool FHutongFootprintHouseGableTest::RunTest(const FString& Parameters)
 	// The end-zone split adds vertices; built ones keep their ids and are probed.
 	if (!TestTrue(TEXT("the skewed house builds"), Skewed.Num() == 1 && Skewed[0].VertexCount() >= Plain[0].VertexCount())) return false;
 
-	// Plane x == GableX maps to the line between its mapped ends.
 	const FHutongFootprintSkew Built = B->GetFootprintSkew();
 	const FVector2D L0 = HutongFootprint::Map(Footprint, Built, GableX, 0.0);
 	const FVector2D L1 = HutongFootprint::Map(Footprint, Built, GableX, Footprint.Y);
@@ -252,8 +242,6 @@ bool FHutongFootprintHouseGableTest::RunTest(const FString& Parameters)
 	TestTrue(FString::Printf(TEXT("the gable wall lies on the skewed line (worst %.4f cm)"), Worst), Worst < 1.0e-3);
 	TestTrue(TEXT("the skewed end is off the rectangle"), FMath::Abs(L0.X - L1.X) > 50.0);
 
-	// Only the end bay moves: the zone stops at the end-side face of the last inner column, and
-	// every vertex short of it is where the plain house had it.
 	FHutongPlanBays Bays;
 	B->GetPlanBays(Bays);
 	Bays.Boundaries.Sort();
@@ -277,7 +265,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFootprintEndsWallTest,
 
 bool FHutongFootprintEndsWallTest::RunTest(const FString& Parameters)
 {
-	// Wall end cut on the bias: the body short of the end zone is as built; long faces stay on their lines.
 	const double L = 1200.0, T = 37.0, H = 300.0;
 	const FVector2D Size(L, T);
 	FHutongFootprintSkew Skew;
@@ -286,7 +273,6 @@ bool FHutongFootprintEndsWallTest::RunTest(const FString& Parameters)
 
 	FDynamicMesh3 Mesh;
 	HutongMeshUtils::AppendBox(Mesh, FVector3d(0, 0, 0), FVector3d(L, T, H));
-	// A second box overlapping the run, like a 下鹼 or cap.
 	HutongMeshUtils::AppendBox(Mesh, FVector3d(-5.0, -5.0, 0), FVector3d(L + 5.0, T + 5.0, 60.0));
 	const int32 BuiltVertices = Mesh.VertexCount();
 	TestTrue(TEXT("the ends-cut skew is valid"), HutongFootprint::IsSkewValid(Size, Skew));
@@ -307,9 +293,7 @@ bool FHutongFootprintEndsWallTest::RunTest(const FString& Parameters)
 	for (int32 vid : Mesh.VertexIndicesItr())
 	{
 		const FVector3d P = Mesh.GetVertex(vid);
-		// Ends never moves y: split vertices land on face diagonals, within the two boxes' across extent.
 		TestTrue(TEXT("nothing moves across the run"), P.Y >= -5.0 - 1e-6 && P.Y <= T + 5.0 + 1e-6);
-		// Short of the zone, as built: on x == 0, x == -5 or the seam.
 		if (P.X < L - Zone - 1.0)
 		{
 			TestTrue(TEXT("the body keeps its x"),
@@ -328,8 +312,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFootprintEndsAcrossTest,
 
 bool FHutongFootprintEndsAcrossTest::RunTest(const FString& Parameters)
 {
-	// Corner pulled across the run under Ends: end face turns, long face runs straight from seam to moved
-	// corner, nothing short of the seam moves.
 	const double L = 1200.0, T = 37.0, H = 300.0;
 	const FVector2D Size(L, T);
 	FHutongFootprintSkew Skew;
@@ -340,7 +322,6 @@ bool FHutongFootprintEndsAcrossTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("an across pull opens a zone"), Zone > T && Zone < 0.5 * L);
 	TestTrue(TEXT("the start end is untouched"), HutongFootprint::EndZone(Size, Skew, true) == 0.0);
 
-	// Seam stays, corner lands, +Y face between them is straight.
 	const FVector2D Seam = HutongFootprint::Map(Size, Skew, L - Zone, T);
 	const FVector2D End = HutongFootprint::Map(Size, Skew, L, T);
 	const FVector2D Mid = HutongFootprint::Map(Size, Skew, L - 0.5 * Zone, T);
@@ -367,7 +348,6 @@ bool FHutongFootprintEndsAcrossTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("the corner's vertices landed"), OnCorner >= 2);
 
-	// Pushed past the other corner's line, the end edge reverses: refused.
 	FHutongFootprintSkew Fold;
 	Fold.Corner11 = FVector2D(0.0, -T - 10.0);
 	TestFalse(TEXT("a corner pushed past its neighbour is refused"), HutongFootprint::IsSkewValid(Size, Fold));
@@ -380,9 +360,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFootprintEndsOverhangTest,
 
 bool FHutongFootprintEndsOverhangTest::RunTest(const FString& Parameters)
 {
-	// Shallow bias cut: one corner pulled far along the run. Cap and 下鹼 stand proud by c, so on the cut
-	// plane they reach c / tan(angle) past the corner, metres at a few degrees. Nothing may reach past
-	// the corner by more than it stands proud.
+	// Cap and 下鹼 stand proud by c, so on a shallow cut plane they reach c / tan(angle) past the corner.
 	const double L = 1200.0, T = 37.0;
 	FHutongWallParams P;
 	FDynamicMesh3 Plain;
@@ -419,7 +397,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFootprintCornerUndoTest,
 
 bool FHutongFootprintCornerUndoTest::RunTest(const FString& Parameters)
 {
-	// A corner moved in a transaction undoes in one step, on a bare NewObject component as tools make.
 	if (!GEditor || !GEditor->Trans) { AddError(TEXT("no transaction buffer to undo through")); return false; }
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
@@ -471,9 +448,7 @@ bool FHutongFootprintQuadHitTest::RunTest(const FString& Parameters)
 	HutongFootprint::Corners(Size, EndWallSkew(), Q);
 
 	TestTrue(TEXT("the middle is inside"), HutongFootprint::PointInQuad(Q, FVector2D(200.0, 150.0)));
-	// Past the rectangle's +X edge, inside the pushed-out front corner.
 	TestTrue(TEXT("the pushed-out corner's ground is inside"), HutongFootprint::PointInQuad(Q, FVector2D(430.0, 20.0)));
-	// Inside the rectangle, outside the pulled-in rear corner.
 	TestFalse(TEXT("the pulled-in corner's ground is outside"), HutongFootprint::PointInQuad(Q, FVector2D(390.0, 280.0)));
 	TestFalse(TEXT("far away is outside"), HutongFootprint::PointInQuad(Q, FVector2D(-10.0, 150.0)));
 
@@ -492,7 +467,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFootprintSnapCacheTest,
 
 bool FHutongFootprintSnapCacheTest::RunTest(const FString& Parameters)
 {
-	// A skewed building offers its own corners and bearings to snapping.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
@@ -513,7 +487,6 @@ bool FHutongFootprintSnapCacheTest::RunTest(const FString& Parameters)
 	const FVector RectCorner = Xform.TransformPosition(FVector(Footprint.X, Footprint.Y, 0.0));
 	TestFalse(TEXT("and not the rectangle's"), Cache.Items[0].Corners[2].Equals(RectCorner, 1.0));
 
-	// Trapezoid bearings: long sides still parallel, ends not.
 	const TArray<double> Yaws = HutongSnap::GatherEdgeYaws(Cache.Items, Expected, 200.0, nullptr);
 	TestEqual(TEXT("a trapezoid offers three bearings"), Yaws.Num(), 3);
 
@@ -523,7 +496,6 @@ bool FHutongFootprintSnapCacheTest::RunTest(const FString& Parameters)
 	const HutongSnap::FResult R = HutongSnap::FindSnap(Cache.Items, Expected + Outward * 30.0, 80.0, nullptr);
 	TestTrue(TEXT("the skewed corner snaps"), R.bSnapped && R.Point.Equals(Expected, 1.0e-3));
 
-	// A laid-out one's plan outline carries the same corners.
 	UHutongBuildingComponent* Plan = PlaceSkewed(World, UHutongSiheyuanBuildingComponent::StaticClass(),
 		Footprint, EndWallSkew(), FTransform(FVector(9000.0, 0.0, 0.0)), TEXT("PlanSkew"), /*bPlanOnly*/ true);
 	if (TestNotNull(TEXT("the plan places"), Plan))
@@ -548,8 +520,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFootprintSnapAlongLineTest,
 
 bool FHutongFootprintSnapAlongLineTest::RunTest(const FString& Parameters)
 {
-	// A line-held corner snaps to the line's crossing with a neighbour's face, however far the cursor
-	// is, if the corner is within reach of the crossing.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
@@ -564,12 +534,10 @@ bool FHutongFootprintSnapAlongLineTest::RunTest(const FString& Parameters)
 	const FVector A = Cache.Items[0].Corners[0], Bc = Cache.Items[0].Corners[1];
 	const FVector M = A + (Bc - A) * 0.4;
 	const FVector2D Edge = FVector2D(Bc.X - A.X, Bc.Y - A.Y).GetSafeNormal();
-	// A line 50° off the face, through M.
 	const double Rad = FMath::DegreesToRadians(50.0);
 	const FVector2D Dir(Edge.X * FMath::Cos(Rad) - Edge.Y * FMath::Sin(Rad), Edge.X * FMath::Sin(Rad) + Edge.Y * FMath::Cos(Rad));
 	const FVector Origin = M - FVector(Dir.X, Dir.Y, 0.0) * 300.0;
 
-	// Corner 40 cm short of the face: lands on it.
 	{
 		const FVector Query = M - FVector(Dir.X, Dir.Y, 0.0) * 40.0;
 		const HutongSnap::FResult R = HutongSnap::FindSnapAlongLine(Cache.Items, Origin, Dir, Query, 100.0);
@@ -578,21 +546,18 @@ bool FHutongFootprintSnapAlongLineTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the face's bearing comes back"), R.bSnapped && FMath::Abs(FMath::FindDeltaAngleDegrees(R.EdgeYawDeg,
 			FMath::RadiansToDegrees(FMath::Atan2(Edge.Y, Edge.X)))) < 1.0e-3);
 	}
-	// Too far short: no snap. A line parallel to the face crosses nothing.
 	{
 		const FVector Far = M - FVector(Dir.X, Dir.Y, 0.0) * 250.0;
 		TestFalse(TEXT("out of reach does not snap"), HutongSnap::FindSnapAlongLine(Cache.Items, Origin, Dir, Far, 100.0).bSnapped);
 		const FVector Beside = M + FVector(-Edge.Y, Edge.X, 0.0) * 30.0;
 		TestFalse(TEXT("a parallel line does not snap"), HutongSnap::FindSnapAlongLine(Cache.Items, Beside, Edge, Beside, 100.0).bSnapped);
 	}
-	// Crossing well past the segment end finds nothing.
 	{
 		const FVector Past = Bc + FVector(Edge.X, Edge.Y, 0.0) * 400.0;
 		const FVector O2 = Past - FVector(Dir.X, Dir.Y, 0.0) * 300.0;
 		const FVector Q2 = Past - FVector(Dir.X, Dir.Y, 0.0) * 40.0;
 		TestFalse(TEXT("past the segment does not snap"), HutongSnap::FindSnapAlongLine(Cache.Items, O2, Dir, Q2, 100.0).bSnapped);
 	}
-	// The corner's own start is never a target.
 	{
 		const HutongSnap::FResult R = HutongSnap::FindSnapAlongLine(Cache.Items, M, Dir, M, 100.0);
 		TestFalse(TEXT("the origin itself is refused"), R.bSnapped && FVector::Dist2D(R.Point, M) < 2.0);
@@ -608,8 +573,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFootprintToolForBuildingTest,
 
 bool FHutongFootprintToolForBuildingTest::RunTest(const FString& Parameters)
 {
-	// Each placed kind names its tool so a click brings it up; a wall names its role's tool. The
-	// compound's passage has no tool and names none.
 	TArray<UClass*> Classes;
 	GetDerivedClasses(UHutongBuildingComponent::StaticClass(), Classes, /*bRecursive*/ true);
 	for (UClass* Class : Classes)
@@ -634,7 +597,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFootprintExchangeTest,
 
 bool FHutongFootprintExchangeTest::RunTest(const FString& Parameters)
 {
-	// Corners travel in the blob and the ghost's record.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
@@ -645,7 +607,6 @@ bool FHutongFootprintExchangeTest::RunTest(const FString& Parameters)
 		Footprint, FHutongFootprintSkew(), FTransform(FVector(5000.0, 0.0, 0.0)), TEXT("Plain"), false);
 	if (!Skewed || !Plain) { World->DestroyWorld(false); return false; }
 
-	// Component blob: present when set, pruned when rectangular.
 	{
 		TSharedPtr<FJsonObject> Blob = HutongExchange::WriteComponent(Skewed);
 		TestTrue(TEXT("a skewed blob carries the offsets"), Blob.IsValid() && Blob->HasField(TEXT("footprintSkew")));
@@ -658,7 +619,6 @@ bool FHutongFootprintExchangeTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the offsets are restored"), Target->FootprintSkew == EndWallSkew());
 	}
 
-	// The courtyard unit travels with the placement (a wall may list two courts).
 	Skewed->Court = TEXT("3M6_Courtyard_1; 3M6_Courtyard_2");
 	Skewed->CourtRole = EHutongCourtRole::MainHall;
 	{
@@ -681,7 +641,6 @@ bool FHutongFootprintExchangeTest::RunTest(const FString& Parameters)
 		IFileManager::Get().Delete(*Path);
 	}
 
-	// The record: the skew travels; the ghost's corners follow.
 	{
 		HutongExchange::FSceneFile File;
 		HutongExchange::FResult Result;
@@ -701,7 +660,6 @@ bool FHutongFootprintExchangeTest::RunTest(const FString& Parameters)
 			TestTrue(TEXT("the ghost's end wall has the skewed length"), FMath::IsNearlyEqual(RectEnd, SkewEnd, 1.0e-3));
 		}
 
-		// Through a file into a fresh world.
 		const FString Path = FPaths::Combine(FPaths::AutomationTransientDir(), TEXT("HutongSkew.hutong.json"));
 		TestTrue(TEXT("the file writes"), HutongExchange::Write(File, Path, Result));
 		UWorld* Other = UWorld::CreateWorld(EWorldType::Editor, false);
@@ -737,7 +695,6 @@ bool FHutongFootprintConvertTest::RunTest(const FString& Parameters)
 	const HutongDetailOps::FConvertTarget LaneWall = HutongDetailOps::FindConvertTarget(TEXT("Lane Wall (院牆)"));
 	if (!TestTrue(TEXT("the targets exist"), House.IsValid() && LaneWall.IsValid())) { World->DestroyWorld(false); return false; }
 
-	// 鋪面房 → 房 keeps the corners, as does 房 → 院牆 (a wall end can be cut on the bias).
 	UHutongBuildingComponent* Shop = PlaceSkewed(World, UHutongShopfrontBuildingComponent::StaticClass(),
 		FVector2D(1120.0, 640.0), EndWallSkew(), FTransform(FVector(0.0, 0.0, 0.0)), TEXT("Shop"), false);
 	if (!TestNotNull(TEXT("the shop places"), Shop)) { World->DestroyWorld(false); return false; }
@@ -763,7 +720,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongFootprintBoxPickTest,
 
 bool FHutongFootprintBoxPickTest::RunTest(const FString& Parameters)
 {
-	// A footprint turned 30°, 1000 × 500, about the origin.
 	FVector2D C[4];
 	const FVector2D Local[4] = { FVector2D(-500, -250), FVector2D(500, -250), FVector2D(500, 250), FVector2D(-500, 250) };
 	for (int32 i = 0; i < 4; ++i) C[i] = Local[i].GetRotated(30.0);
@@ -772,7 +728,6 @@ bool FHutongFootprintBoxPickTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a box inside it picks it"), QuadOverlapsBox(C, FVector2D(-20.0, -20.0), FVector2D(20.0, 20.0)));
 	TestTrue(TEXT("a box round it picks it"), QuadOverlapsBox(C, FVector2D(-2000.0, -2000.0), FVector2D(2000.0, 2000.0)));
 	TestFalse(TEXT("a box clear of it does not"), QuadOverlapsBox(C, FVector2D(700.0, -1000.0), FVector2D(800.0, -600.0)));
-	// Inside the turned footprint's bounds but off its edge: only the quad's own axes separate it.
 	TestFalse(TEXT("a box in the corner of its bounds, off the footprint, does not"), QuadOverlapsBox(C, FVector2D(-560.0, 350.0), FVector2D(-520.0, 400.0)));
 	return true;
 }

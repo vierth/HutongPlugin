@@ -39,10 +39,8 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UHutongCorridorToolProperties> Settings;
 
-	// Which side the colonnade opens onto.
 	virtual void AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse) override;
 
-	// Deliberately not reset between placements.
 	bool bFlipOpenSide = false;
 
 	UPROPERTY()

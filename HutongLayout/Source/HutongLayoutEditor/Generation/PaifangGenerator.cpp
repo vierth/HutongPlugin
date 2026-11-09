@@ -24,7 +24,6 @@ namespace HutongGen
 		const int32 BeamSlot = P.bHasRoofs ? MatSlot_Paint : MatSlot_Stone;
 		FSlotScope ColumnTag(Mesh, ColumnSlot);
 
-		// Wider 明間; the params own the arithmetic so plan and build cannot drift.
 		const int32 CentralBay = N / 2;
 		auto BoundaryX = [&](int32 i) { return P.GetBayBoundary(i, N, L, ColR); };
 
@@ -32,20 +31,16 @@ namespace HutongGen
 		const double ArchT = FMath::Max(P.ArchitraveThickness, 5.0);
 		const double ArchD = FMath::Max(P.ArchitraveDepth, 8.0);
 
-		// Side-bay lintels sit lower than the central one.
 		const double Drop = FMath::Clamp(P.SideBayDrop, 0.0, 0.6) * H;
 		auto BayTopZ = [&](int32 Bay) { return (Bay == CentralBay) ? H : H - Drop; };
 
-		// Columns, ground to own height; on a 衝天式 they continue past the roofs.
 		const double ColumnExtra = P.bColumnsThroughRoof ? (1.6 * ArchD + P.GetRoofRise()) : 0.0;
 		for (int32 i = 0; i <= N; ++i)
 		{
-			// Height follows the taller adjacent bay.
 			double Top = BayTopZ(FMath::Clamp(i, 0, N - 1));
 			if (i > 0) Top = FMath::Max(Top, BayTopZ(FMath::Clamp(i - 1, 0, N - 1)));
 			Top += ArchD + ColumnExtra;
 
-			// Shared helper so the post gets the same 收分 as every column.
 			Frame::AppendColumn(Mesh, BoundaryX(i), CenterY, ColR,
 				Frame::TaperedTopRadius(ColR, Top, P.ColumnTaperRatio),
 				0.0, Top, 0.0, 24);
@@ -86,7 +81,6 @@ namespace HutongGen
 
 			if (!P.bHasLowerArchitrave) continue;
 
-			// 小額枋 below, gap between for the 花板 / 匾額.
 			const double Gap = FMath::Clamp(P.PanelGap, 5.0, Top * 0.5);
 			const double LowerD = 0.6 * ArchD;
 			const double LowerTop = Top - Gap;
@@ -112,7 +106,6 @@ namespace HutongGen
 			return;
 		}
 
-		// 樓, one per bay.
 		FSlotScope RoofTag(Mesh, MatSlot_Roof);
 		struct FLouRoof { TArray<FRoofPanel> Panels; };
 		TArray<FLouRoof> Lous;
@@ -134,7 +127,6 @@ namespace HutongGen
 			// The central roof overhangs its columns, so its ends are clear.
 			if (Bay == CentralBay) { X0 -= ColR; X1 += ColR; }
 
-			// 樓 is 廡殿: hipped all four sides, corners sweep up.
 			FHipRoofSpec Hip;
 			Hip.Width = X1 - X0;
 			Hip.Depth = Dep + 2.0 * O;
@@ -150,7 +142,6 @@ namespace HutongGen
 			Hip.FlareRun = FMath::Max(P.RoofFlareRun, 0.0);
 			// Far enough back for the sweep to read as a curve.
 			Hip.FlareLength = 0.4 * FMath::Min(Hip.Width, Hip.Depth);
-			// 勾頭滴水 is the solid's own lower edge.
 			Hip.FasciaDrop = FasciaDrop;
 			Hip.EaveOverhang = O;
 			Hip.EaveSegments = P.RoofEaveSegments;
@@ -164,7 +155,6 @@ namespace HutongGen
 
 		RoofTag.Close();
 
-		// Each 樓 dressed like any roof: 壟, 椽頭, 垂脊 and 正脊.
 		for (const FLouRoof& Lou : Lous)
 		{
 			Shell::FRoofDressing Dress;

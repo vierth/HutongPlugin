@@ -8,7 +8,6 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// A street row partitions its length into buildings and gates, and a gate built at a bay's width still builds.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongStreetRowLayoutTest,
 	"HutongLayout.Row.Layout",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -33,7 +32,6 @@ bool FHutongStreetRowLayoutTest::RunTest(const FString& Parameters)
 		TestEqual(FString::Printf(TEXT("%s: every bay is in a piece"), What), Bays, N);
 	};
 
-	// One gate in the middle: house, gate, house.
 	{
 		const TArray<FPiece> P = LayOut(1800.0, 6, { 2 });
 		TestEqual(TEXT("three pieces"), P.Num(), 3);
@@ -48,14 +46,12 @@ bool FHutongStreetRowLayoutTest::RunTest(const FString& Parameters)
 		}
 		Tiles(P, 1800.0, 6, TEXT("middle gate"));
 	}
-	// No gate: one building the whole length.
 	{
 		const TArray<FPiece> P = LayOut(1800.0, 6, {});
 		TestEqual(TEXT("one piece"), P.Num(), 1);
 		if (P.Num() == 1) TestEqual(TEXT("with every bay"), P[0].BayCount, 6);
 		Tiles(P, 1800.0, 6, TEXT("no gate"));
 	}
-	// Gates at both ends plus two adjacent: each gate its own piece, house runs between.
 	{
 		const TArray<FPiece> P = LayOut(2100.0, 7, { 0, 3, 4, 6 });
 		TestEqual(TEXT("six pieces"), P.Num(), 6);
@@ -64,7 +60,6 @@ bool FHutongStreetRowLayoutTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("four gates"), Gates, 4);
 		Tiles(P, 2100.0, 7, TEXT("ends and adjacent"));
 	}
-	// A gate bay off the row is ignored.
 	{
 		const TArray<FPiece> P = LayOut(900.0, 3, { 7 });
 		TestEqual(TEXT("ignored"), P.Num(), 1);
@@ -76,7 +71,6 @@ bool FHutongStreetRowLayoutTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("nothing before the row"), BayAt(-1.0, 900.0, 3), INDEX_NONE);
 	TestEqual(TEXT("nothing after it"), BayAt(901.0, 900.0, 3), INDEX_NONE);
 
-	// A row shares one eave: one- and three-bay RowHouse pieces derive the same figure, unlike standalone.
 	{
 		FHutongSiheyuanParams House;
 		House.bDeriveProportions = true;
@@ -97,7 +91,6 @@ bool FHutongStreetRowLayoutTest::RunTest(const FString& Parameters)
 		TestNearlyEqual(TEXT("a fixed eave is left alone"), RowHouse(Fixed, 1500.0, 600.0, 5).EaveHeight, 333.0, 0.01);
 	}
 
-	// A gate at a house bay's width, off the band, with its ridge held above the row's.
 	{
 		FHutongGateHouseParams Gate;
 		Gate.bConstrainToHistoricalSize = false;
@@ -111,8 +104,7 @@ bool FHutongStreetRowLayoutTest::RunTest(const FString& Parameters)
 		UHutongGateHouseBuildingComponent::BuildGateHouseMesh(Gate, EHutongBaySide::MinusY, 380.0, 600.0, Mesh);
 		TestTrue(TEXT("a gate builds at a 380 cm bay"), Mesh.TriangleCount() > 0);
 
-		// Measured off meshes: the lift's estimate must match the built roof or the gate ridge sits below the
-		// row's. Gable vertices exist only at the ends, so cast down at mid-run, clear of the 蠍子尾.
+		// Gable vertices exist only at the ends, so cast down at mid-run, clear of the 蠍子尾.
 		auto RidgeZ = [](const UE::Geometry::FDynamicMesh3& M, double Width, double Depth)
 		{
 			UE::Geometry::FDynamicMeshAABBTree3 Tree(&M, true);

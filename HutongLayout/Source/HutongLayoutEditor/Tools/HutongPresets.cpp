@@ -28,7 +28,6 @@ void UHutongPresetLibrary::RegisterBuiltIn(FName ToolKey, const FString& Name,
 {
 	if (Name.IsEmpty() || !Type || !Data) return;
 
-	// Serialised through the same converter user presets go through.
 	FString Json;
 	if (!FJsonObjectConverter::UStructToJsonObjectString(Type, Data, Json)) return;
 
@@ -80,7 +79,6 @@ bool UHutongPresetLibrary::LoadPreset(FName ToolKey, const FString& Name, const 
 
 void UHutongPresetLibrary::DeletePreset(FName ToolKey, const FString& Name)
 {
-	// Only ever removes the user's copy.
 	if (Presets.Remove(MakeKey(ToolKey, Name)) > 0)
 	{
 		SaveConfig();

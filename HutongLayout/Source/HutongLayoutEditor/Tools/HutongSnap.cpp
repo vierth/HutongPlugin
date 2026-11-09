@@ -13,7 +13,6 @@ namespace
 		return Y;
 	}
 
-	// Calls Fn with each cached footprint and its four world-space corners, in order.
 	template <typename FnType>
 	void ForEachFootprint(const TArray<HutongSnap::FFootprint>& Footprints,
 		const AActor* Ignore, FnType&& Fn)
@@ -42,12 +41,10 @@ namespace HutongSnap
 		LastRefreshSeconds = FPlatformTime::Seconds();
 		if (!World) return;
 
-		// Same walk as promote, rebuild and export, not a second answer to which actors are buildings.
 		for (UHutongBuildingComponent* Building : HutongDetailOps::CollectLoaded(World))
 		{
 			AActor* Actor = Building ? Building->GetOwner() : nullptr;
 			if (!Actor) continue;
-			// Nothing unseen is a target: an actor hidden in the editor, a plan while plans are switched off.
 			if (Actor->IsHiddenEd() || (Building->bPlanOnly && !HutongPlanOutline::ArePlansVisible())) continue;
 
 			FFootprint F;
@@ -56,15 +53,13 @@ namespace HutongSnap
 			F.ActorToWorld = Actor->GetActorTransform();
 			F.Size = Building->GetFootprintSize();
 			F.bPlanOnly = Building->bPlanOnly;
-			// The mesh is built from the actor origin; the corners are the placement's own, which differ
-			// with a skew. Never derive them from Size.
+			// Corners are the placement's own, which differ from Size with a skew.
 			FVector2D Local[4];
 			Building->GetFootprintCorners(Local);
 			for (int32 i = 0; i < 4; ++i)
 			{
 				F.Corners[i] = F.ActorToWorld.TransformPosition(FVector(Local[i].X, Local[i].Y, 0.0));
 			}
-			// Dropped here, not tested per query: an empty footprint is no snap neighbour.
 			if (F.Size.X > 1.0 && F.Size.Y > 1.0) Items.Add(MoveTemp(F));
 		}
 	}
@@ -95,14 +90,12 @@ namespace HutongSnap
 				const FVector A = C[i];
 				const FVector B = C[(i + 1) % 4];
 
-				// Corner.
 				const double DC = FVector::Dist2D(Query, A);
 				if (DC * DC <= R2 && DC * 0.66 < BestScore)
 				{
 					BestScore = DC * 0.66;
 					Best.bSnapped = true;
 					Best.Point = FVector(A.X, A.Y, Query.Z);
-					// The two edges meeting here; the drawn run usually continues one.
 					Best.EdgeYawDeg = NormalizeYaw(
 						FMath::RadiansToDegrees(FMath::Atan2(B.Y - A.Y, B.X - A.X)));
 					const FVector P = C[(i + 3) % 4];
@@ -112,7 +105,6 @@ namespace HutongSnap
 					Best.Building = F.Building;
 				}
 
-				// Nearest point along the edge, clamped to the segment.
 				const FVector2D AB(B.X - A.X, B.Y - A.Y);
 				const double LenSq = AB.SizeSquared();
 				if (LenSq < 1.0) continue;
@@ -127,7 +119,7 @@ namespace HutongSnap
 					Best.Point = P;
 					Best.EdgeYawDeg = NormalizeYaw(FMath::RadiansToDegrees(FMath::Atan2(AB.Y, AB.X)));
 					Best.EdgeYaw2Deg = -1000.0;
-					// Perpendicular pointing at the centre: footprint winding is not assumed.
+					// Perpendicular pointing at the centre, whatever the footprint's winding.
 					FVector2D N(-AB.Y, AB.X);
 					N.Normalize();
 					if (FVector2D::DotProduct(N, Centre - FVector2D(P.X, P.Y)) < 0.0) N = -N;
@@ -148,8 +140,7 @@ namespace HutongSnap
 
 		ForEachFootprint(Footprints, IgnoreActor, [&](const FFootprint& F, const FVector C[4])
 		{
-			// All four edges: a skewed footprint has four bearings; AddUnique folds a rectangle's parallel
-			// pairs to two.
+			// A skewed footprint has four bearings; AddUnique folds a rectangle's parallel pairs to two.
 			bool bNear = false;
 			for (int32 i = 0; i < 4 && !bNear; ++i)
 			{
@@ -195,7 +186,6 @@ namespace HutongSnap
 				// Nearly parallel lines meet nowhere worth snapping to.
 				const double Denominator = D.X * E.Y - D.Y * E.X;
 				if (FMath::Abs(Denominator) < 0.05) continue;
-				// O + D*Along == A + E*OnEdge.
 				const FVector2D AO = O - A;
 				const double Along = (AO.Y * E.X - AO.X * E.Y) / Denominator;
 				const double OnEdge = (AO.Y * D.X - AO.X * D.Y) / Denominator;
@@ -224,7 +214,6 @@ namespace HutongSnap
 
 		for (const double Cand : CandidatesDeg)
 		{
-			// Every quarter turn off a neighbour's line is a candidate too.
 			for (int32 Q = 0; Q < 4; ++Q)
 			{
 				const double Target = Cand + 90.0 * Q;
@@ -233,7 +222,7 @@ namespace HutongSnap
 				if (Delta < BestDelta)
 				{
 					BestDelta = Delta;
-					// Keep the caller's turn count: snapping must not spin the rect a half turn.
+					// Keeps the caller's turn count, so snapping leaves the rect on its own half turn.
 					Best = YawDeg + (Target - YawDeg > 180.0 ? Target - 360.0 - YawDeg
 						: (Target - YawDeg < -180.0 ? Target + 360.0 - YawDeg : Target - YawDeg));
 				}
@@ -273,7 +262,6 @@ namespace HutongSnap
 					if (Delta > AngleToleranceDeg) continue;
 				}
 
-				// Only where the query lies across from the edge.
 				const FVector2D Dir = E / Len;
 				const double Along = FVector2D::DotProduct(Q - A, Dir);
 				if (Along < -0.25 * Len || Along > 1.25 * Len) continue;

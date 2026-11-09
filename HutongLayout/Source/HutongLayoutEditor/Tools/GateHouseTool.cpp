@@ -30,7 +30,6 @@ void UHutongGateHouseToolProperties::PostEditChangeProperty(FPropertyChangedEven
 	}
 	Params.EaveHeight = FMath::Max(Params.EaveHeight, Params.GetMinEaveHeight());
 
-	// Keep the door head under the eave whatever the style did.
 	Params.DoorHeadHeight = FMath::Min(Params.DoorHeadHeight, Params.EaveHeight - 20.0);
 }
 #endif
@@ -44,7 +43,6 @@ void UHutongGateHouseTool::GetEffectiveRectBounds(
 	const FHutongGateHouseParams::FSizeRange R = Settings->Params.GetSizeRange();
 	if (R.FrontageMax <= 0.0) return;
 
-	// The drag anchor is one end of each extent; grow the other.
 	auto ClampAxis = [](double& Lo, double& Hi, double MinLen, double MaxLen)
 	{
 		const double Want = FMath::Clamp(Hi - Lo, MinLen, MaxLen);
@@ -52,12 +50,9 @@ void UHutongGateHouseTool::GetEffectiveRectBounds(
 		else          Lo = Hi - Want;
 	};
 
-	// Row depth beats the band's: the street face is one masonry run. The body stands behind
-	// the front line whichever side the cursor is on: the anchor is the row's front corner, and a
-	// gate grown into the lane would put its back on the row's front.
+	// Row depth beats the band's: the street face is one masonry run.
 	const double RowDepth = MatchedRowDepth();
-	// Depth has a floor, no ceiling: a gate is as deep as the row it stands in, and the band's top
-	// (3.5 m for a 如意門) stopped a gate drawn across a 6 m row short of its back.
+	// Depth has a floor only: a gate is as deep as the row it stands in.
 	constexpr double DepthCap = 1.0e7;
 	auto PinDepth = [&](double& Lo, double& Hi, double Inward)
 	{
@@ -118,12 +113,10 @@ void UHutongGateHouseTool::TakeRowBearing()
 	EHutongBaySide RowSide = EHutongBaySide::MinusY;
 	if (!Owner || !Row->GetFacade(RowSide)) return;
 
-	// The gate's run is the row's run, whatever the snap or the camera said.
 	const FTransform& Xf = Owner->GetActorTransform();
 	const bool bRowAlongX = HutongGen::BaySide::IsAlongX(RowSide);
 	PlacementYawDeg = HutongGen::GateRow::RunYawDeg(Xf.Rotator().Yaw, bRowAlongX);
 
-	// Faces the row's outward facade normal, carried into the gate's frame (now the row's).
 	const FVector2D Size = Row->GetFootprintSize();
 	const HutongGen::BaySide::FEdge Edge =
 		HutongGen::BaySide::GetEdge(RowSide, 0.0, 0.0, Size.X, Size.Y);
@@ -132,13 +125,10 @@ void UHutongGateHouseTool::TakeRowBearing()
 	const FVector2D OutLocal = WorldXYToLocalRect(Origin + OutWorld) - WorldXYToLocalRect(Origin);
 	BaySide = HutongGen::BaySide::DefaultFromCameraDelta(OutLocal.X, OutLocal.Y);
 
-	// The body extends away from the front line, across the facade.
 	RowInwardLocal = FVector2D::ZeroVector;
 	if (HutongGen::BaySide::IsAlongX(BaySide)) RowInwardLocal.Y = OutLocal.Y < 0.0 ? 1.0 : -1.0;
 	else                                        RowInwardLocal.X = OutLocal.X < 0.0 ? 1.0 : -1.0;
 
-	// Anchor onto the row's nearer front corner: the snap put it anywhere on the end face, and a
-	// set-in gate's front is on the row's front line.
 	const FVector CornerA = Edge.bAlongX
 		? Xf.TransformPosition(FVector(0.0, Edge.FixedCoord, 0.0))
 		: Xf.TransformPosition(FVector(Edge.FixedCoord, 0.0, 0.0));
@@ -190,7 +180,7 @@ void UHutongGateHouseTool::AttachBuildingComponent(AStaticMeshActor* Actor, doub
 		Building->Palette = Appearance->Palette;
 	}
 
-	// AddInstanceComponent as well as RegisterComponent, or the component is hidden in Details and not saved with the actor.
+	// AddInstanceComponent as well as RegisterComponent: the component shows in Details and saves with the actor.
 	StampDetail(Building);
 
 	Actor->AddInstanceComponent(Building);
@@ -207,10 +197,8 @@ void UHutongGateHouseTool::AdjustHeight(double DeltaCm)
 	const FHutongGateHouseParams::FSizeRange R = P.GetSizeRange();
 	const double Lo = FMath::Max3(P.DoorHeadHeight + 20.0, R.EaveMin, P.GetMinEaveHeight());
 	double Hi = (R.EaveMax > 0.0) ? R.EaveMax : 5000.0;
-	// Set into a row, the eave stays where the row put it; the band's ceiling gives way.
 	const double Matched = MatchedGateEave();
 	if (Matched > 0.0) Hi = FMath::Max(Hi, Matched);
-	// Otherwise held inside the style's band, so - and = cannot raise a 如意門 to hall height.
 	P.EaveHeight = FMath::Clamp(P.EaveHeight + DeltaCm, Lo, FMath::Max(Hi, Lo));
 }
 
@@ -248,7 +236,6 @@ HutongGen::EBaySide UHutongGateHouseTool::ComputeClosestSide(double Hx, double H
 	double MinX, MinY, MaxX, MaxY;
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
 
-	// Front or back only.
 	return HutongGen::BaySide::ClosestOnAxis(
 		HutongGen::BaySide::IsAlongX(BaySide), Local.X, Local.Y, MinX, MinY, MaxX, MaxY);
 }
@@ -258,14 +245,12 @@ void UHutongGateHouseTool::OnPlacementStarted(const FVector& HitWorld)
 	BaySide = ComputeDefaultBaySide();
 	RowInwardLocal = FVector2D::ZeroVector;
 
-	// Reroll which leaf is shut and how far the other stands.
 	if (Settings)
 	{
 		Settings->Params.RandomSeed = FMath::Rand();
 	}
 
-	// Set into a row: runs and faces as the row, ridge clear of the row's. The eave is written onto
-	// the params like the height keys, so - and = still move it and the preview matches the build.
+	// The eave is written onto the params so - and = still move it and the preview matches the build.
 	if (MatchedRowDepth() > 0.0)
 	{
 		TakeRowBearing();
@@ -277,9 +262,7 @@ void UHutongGateHouseTool::OnPlacementStarted(const FVector& HitWorld)
 
 bool UHutongGateHouseTool::OnRectCommitted(const FVector& HitWorld)
 {
-	// Whichever of the two 面闊 sides the camera is on.
 	BaySide = ComputeCameraFacingOnAxis();
-	// Defer to a third click so the facing side is picked by hovering.
 	return false;
 }
 
@@ -287,7 +270,6 @@ void UHutongGateHouseTool::OnPlacementHover(const FVector& HitWorld)
 {
 	if (bRotateModeActive) return;
 
-	// Before commit the facing stays as the first click set it.
 	if (bRectCommitted)
 	{
 		BaySide = ComputeClosestSide(HitWorld.X, HitWorld.Y);
@@ -350,7 +332,6 @@ void UHutongGateHouseTool::Render(IToolsContextRenderAPI* RenderAPI)
 	const double SizeY = MaxY - MinY;
 	if (SizeX < 1.0 || SizeY < 1.0) return;
 
-	// Facing is the one thing to get right at placement; a single edge line was too quiet against the footprint.
 	const FLinearColor Green(0.25f, 1.0f, 0.45f);
 	const FLinearColor Dark(0.02f, 0.35f, 0.12f);
 
@@ -368,12 +349,10 @@ void UHutongGateHouseTool::Render(IToolsContextRenderAPI* RenderAPI)
 
 	const double Reach = FMath::Clamp(0.22 * FMath::Min(SizeX, SizeY), 40.0, 220.0);
 
-	// A heavy double bar on the edge itself.
 	DrawPreviewLine(PDI, EdgePoint(SpanMin, 0.0), EdgePoint(SpanMax, 0.0), Green, 14.0f);
 	DrawPreviewLine(PDI, EdgePoint(SpanMin, 0.32 * Reach), EdgePoint(SpanMax, 0.32 * Reach),
 		Dark, 6.0f);
 
-	// Hatching between them, so the facing side reads as a band.
 	const int32 Hatches = FMath::Clamp(FMath::RoundToInt32(Span / 45.0), 4, 40);
 	for (int32 i = 0; i <= Hatches; ++i)
 	{
@@ -381,7 +360,6 @@ void UHutongGateHouseTool::Render(IToolsContextRenderAPI* RenderAPI)
 		DrawPreviewLine(PDI, EdgePoint(A, 0.0), EdgePoint(A, 0.32 * Reach), Green, 3.0f);
 	}
 
-	// Three arrows pointing out the way the gate faces.
 	for (int32 i = 1; i <= 3; ++i)
 	{
 		const double A = FMath::Lerp(SpanMin, SpanMax, double(i) / 4.0);

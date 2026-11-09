@@ -11,7 +11,6 @@ namespace HutongGen
 	{
 		// Smaller than this (bounding volume, cm³) stops nobody: a 3 x 3 cm lattice bar two metres long is 1,800.
 		constexpr double MinPieceVolume = 20000.0;
-		// Thinner than this is a sheet, not a solid.
 		constexpr double MinPieceThickness = 1.0;
 	}
 
@@ -91,7 +90,6 @@ namespace HutongGen
 		for (const FConvexShape3d& C : Shapes.Convexes)
 		{
 			const FDynamicMesh3& H = C.Mesh;
-			// Signed volume picks which side of each face is inside.
 			double Vol = 0.0;
 			for (const int32 Tid : H.TriangleIndicesItr())
 			{

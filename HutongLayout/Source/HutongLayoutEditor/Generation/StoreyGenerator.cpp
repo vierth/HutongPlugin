@@ -11,8 +11,7 @@ namespace HutongGen
 {
 	namespace
 	{
-		// 腰檐: tiled band from wall to outer edge, built like the 散水: a prism with its ridge pressed into
-		// the wall so the vertical face is buried, not coplanar with the masonry.
+		// 腰檐: a prism with its ridge pressed into the wall so the vertical face is buried.
 		void AppendSkirtRoof(FDynamicMesh3& Mesh, double X0, double X1, double FaceY,
 			double TopZ, double Projection, double Drop)
 		{
@@ -26,7 +25,6 @@ namespace HutongGen
 				X1 - X0, Projection + Bury, Drop, EAxis2D::X, /*ApexFraction*/ 1.0);
 		}
 
-		// Railing: posts on bay boundaries, top and bottom rails, balusters between.
 		void AppendRailing(FDynamicMesh3& Mesh, const TFunctionRef<double(int32)>& BoundaryX,
 			int32 BayCount, double OuterY, double DeckTopZ, double Height,
 			double Section, double Spacing)
@@ -38,7 +36,6 @@ namespace HutongGen
 			const double Y1 = OuterY;
 			const double TopZ = DeckTopZ + Height;
 
-			// Top rail and baluster base rail, full front.
 			const double RunX0 = BoundaryX(0);
 			const double RunX1 = BoundaryX(BayCount);
 			AppendBox(Mesh,
@@ -48,7 +45,6 @@ namespace HutongGen
 				FVector3d(RunX0, Y0, DeckTopZ + 0.30 * Height),
 				FVector3d(RunX1, Y1, DeckTopZ + 0.30 * Height + Section));
 
-			// Posts at bay boundaries, proud of the rails both faces.
 			for (int32 i = 0; i <= BayCount; ++i)
 			{
 				const double CX = BoundaryX(i);
@@ -90,10 +86,8 @@ namespace HutongGen
 		const double T = FMath::Clamp(P.WallThickness, 1.0, FMath::Min(W, D) * 0.2);
 		const double Floor = FMath::Clamp(P.FloorHeight, 0.0, 120.0);
 
-		// The storey line defines the type.
 		const double StoreyLine = P.GetStoreyLineHeight();
 		const double Eave = P.GetEaveHeight();
-		// Roof on the frame's line; walls to the ceiling under it; columns at the column top.
 		const double RoofZ = Eave + P.GetRoofLift();
 		const double CeilZ = RoofZ + P.GetUndersideRise();
 		const double OpenTop = FMath::Min(P.GetOpeningTopHeight(), StoreyLine - 20.0);
@@ -108,11 +102,9 @@ namespace HutongGen
 		const double BaseP = FMath::Max(P.BaseCourseProjection, 0.0);
 		const double WallBottom = (BaseH > 0.0 && BaseP > 0.0) ? Floor + BaseH : Floor;
 
-		// 1) 臺基.
 		const double PlatO = FMath::Max(P.PlatformOverhang, ColR);
 		Shell::AppendPlatform(Mesh, W, D, Floor, PlatO, /*SideProjection*/ 0.0, 0, 30.0, 0.0, 0.0);
 
-		// 2) 下鹼 and the three closed walls, full two storeys.
 		{
 			FSlotScope BaseTag(Mesh, MatSlot_BaseCourse);
 			Shell::AppendBaseCourseU(Mesh, W, D, T, Floor, BaseH, BaseP,
@@ -124,7 +116,6 @@ namespace HutongGen
 		AppendBox(Mesh, FVector3d(0.0, 0.0, WallBottom), FVector3d(T, D, CeilZ));
 		AppendBox(Mesh, FVector3d(W - T, 0.0, WallBottom), FVector3d(W, D, CeilZ));
 
-		// 3) Shop below: ground-storey columns, header over the opening, a 鋪面房's 排板門 and 櫃檯.
 		{
 			FSlotScope WoodTag(Mesh, MatSlot_Wood);
 			const double ColTopR = Frame::TaperedTopRadius(ColR, StoreyLine - Floor, P.ColumnTaperRatio);
@@ -135,7 +126,7 @@ namespace HutongGen
 			}
 
 			ShopBay::FFront Front;
-			// A hair proud of the wall plane: boards start inside the side walls and z-fought the wall at each corner.
+			// A hair proud of the wall plane, so the boards clear the side walls at each corner.
 			Front.FaceY = -0.5;
 			Front.BoardWidth = P.BoardWidth;
 			Front.BoardThickness = P.BoardThickness;
@@ -151,7 +142,6 @@ namespace HutongGen
 			WoodTag.Close();
 		}
 
-		// 4) 腰檐 across the front with 椽頭 under it; tiled because it is a roof, marking two storeys.
 		const double SkirtProj = FMath::Max(P.SkirtProjection, 10.0);
 		const double SkirtDrop = FMath::Max(P.SkirtDrop, 4.0);
 		if (P.bHasSkirtRoof)
@@ -163,7 +153,6 @@ namespace HutongGen
 			}
 			TagUndersides(Mesh, SkirtFirstTri, Mesh.MaxTriangleID(), MatSlot_Wood);
 
-			// Its 壟, the house roof's courses on a lean-to: one panel from the outer edge up to the wall.
 			{
 				const double X0 = -0.5 * T, X1 = W + 0.5 * T, Low = StoreyLine - SkirtDrop;
 				HutongMeshUtils::FRoofPanel Panel;
@@ -183,7 +172,7 @@ namespace HutongGen
 			{
 				FSlotScope RafterTag(Mesh, MatSlot_Paint);
 				const double Sec = FMath::Max(P.RafterEndSection, 1.0);
-				// Set back behind and under the band's edge, as an eave row behind its fascia: flush is coplanar.
+				// Set back behind the band's edge: flush would be coplanar.
 				Shell::AppendRafterEnds(Mesh, T, W - T,
 					-SkirtProj + 0.35 * Sec, -0.25 * SkirtProj,
 					StoreyLine - SkirtDrop, Sec, FMath::Max(P.RafterEndSpacing, 4.0));
@@ -191,7 +180,6 @@ namespace HutongGen
 			}
 		}
 
-		// 5) Gallery: deck over the skirt, railing at its edge; deck held within the skirt's projection.
 		const double GalleryDepth = P.bHasGallery
 			? FMath::Clamp(P.GalleryDepth, 20.0, P.bHasSkirtRoof ? SkirtProj : 140.0)
 			: 0.0;
@@ -209,7 +197,6 @@ namespace HutongGen
 			GalleryTag.Close();
 		}
 
-		// 6) Upper front: boarded 檻牆 under the sill, windows, header to the eave.
 		const double DeckZ = StoreyLine + (P.bHasGallery ? DeckT : 0.0);
 		const double SillZ = DeckZ + FMath::Clamp(P.UpperSillHeight, 0.0, 90.0);
 		const double HeadZ = Eave - FMath::Clamp(P.UpperHeaderDrop, 5.0, 90.0);
@@ -218,20 +205,18 @@ namespace HutongGen
 			const double ColTopR = Frame::TaperedTopRadius(ColR, Eave - DeckZ, P.ColumnTaperRatio);
 			Frame::AppendColumnRow(Mesh, BayBoundaryX, N, 0.0, ColR, ColTopR, DeckZ, Eave, 1.0, 24);
 
-			// 額枋 under the eave, header band down to the window heads.
 			Frame::AppendArchitrave(Mesh, BayBoundaryX(0), BayBoundaryX(N), 0.0, 0.8 * T,
 				Eave - 1.1 * T, Eave);
 			if (Eave - 1.1 * T > HeadZ)
 			{
 				AppendBox(Mesh, FVector3d(T, 0.0, HeadZ), FVector3d(W - T, 0.7 * T, Eave - 1.1 * T));
 			}
-			// Boarding under the sill, behind the railing.
 			if (SillZ > DeckZ + 2.0)
 			{
 				AppendBox(Mesh, FVector3d(T, 0.0, DeckZ), FVector3d(W - T, 0.7 * T, SillZ));
 			}
 
-			// 抱框 at every bay boundary, or the window band is a hole at each column.
+			// 抱框 at every bay boundary, closing the window band at each column.
 			for (int32 i = 1; i < N; ++i)
 			{
 				const double CX = BayBoundaryX(i);
@@ -242,7 +227,6 @@ namespace HutongGen
 			UpperWoodTag.Close();
 		}
 
-		// 7) Windows: 窗紙 behind 欞條, tagged per bay.
 		if (HeadZ - SillZ > 10.0)
 		{
 			const double BarT = FMath::Clamp(P.WindowLatticeThickness, 1.0, 0.5 * T);
@@ -272,7 +256,6 @@ namespace HutongGen
 						FVector3d(CX - 0.5 * BarT, 0.0,   SillZ),
 						FVector3d(CX + 0.5 * BarT, BarT,  HeadZ));
 				}
-				// Crossing bars deeper than the uprights, as on every window here.
 				const double MidZ = 0.5 * (SillZ + HeadZ);
 				AppendBox(Mesh,
 					FVector3d(X0, 0.4 * BarT, MidZ - 0.5 * BarT),
@@ -281,7 +264,6 @@ namespace HutongGen
 			}
 		}
 
-		// 8) 匾額 on the gallery rail, readable from the street.
 		if (P.bHasSignboard && N > 0 && P.bHasGallery)
 		{
 			int32 OpenLo = 0, OpenHi = -1;
@@ -303,7 +285,7 @@ namespace HutongGen
 			}
 		}
 
-		// 9) Roof: 硬山 like the rest of the lane; a commercial 樓 is entitled to no more, and stands in a terrace.
+		// 硬山: a commercial 樓 is entitled to no more, and stands in a terrace.
 		Shell::FRoofParams Roof;
 		Roof.FrontOverhang = FMath::Max(P.RoofOverhang, 0.0);
 		Roof.UndersideRise = P.GetUndersideRise();
@@ -326,7 +308,6 @@ namespace HutongGen
 		Roof.RafterSection = P.RafterEndSection;
 		Roof.RafterSpacing = P.RafterEndSpacing;
 
-		// 封護檐: the roof builds the wall carried up under it, cornice and drip course.
 		Roof.bTileRuns = P.bHasTileRuns;
 		if (RoofZ > Eave) Frame::AppendEaveStack(Mesh, 0.5 * T, W - 0.5 * T, 0.0, FMath::Max(P.ColumnDiameter, 2.0), Eave);
 		Shell::AppendGableRoof(Mesh, W, D, RoofZ, Roof);

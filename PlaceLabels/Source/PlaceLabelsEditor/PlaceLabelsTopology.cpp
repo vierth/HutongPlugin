@@ -9,7 +9,6 @@ namespace PlaceLabelsTopology
 
 namespace
 {
-	// Distance from a point to a closed polygon's boundary.
 	double DistanceToBoundary(const TArray<FVector2D>& Poly, const FVector2D& P)
 	{
 		const PlaceLabelsEdit::FEdgeHit Hit =
@@ -18,7 +17,6 @@ namespace
 										   : FMath::Sqrt(Hit.DistSq);
 	}
 
-	// Minimal union-find.
 	struct FUnionFind
 	{
 		TArray<int32> Parent;
@@ -134,7 +132,6 @@ namespace
 				continue;
 			}
 
-			// Confined to one polygon: two corners of one outline coincide.
 			TMap<int32, int32> CornersPerPolygon;
 			for (int32 Index : Members)
 			{
@@ -145,8 +142,7 @@ namespace
 				continue;
 			}
 
-			// Refuse a cluster that would take a polygon below three corners: zero area, no
-			// containment, no fill.
+			// Refuse a cluster that would take a polygon below three corners.
 			bool bWouldDegenerate = false;
 			for (const TPair<int32, int32>& Pair : CornersPerPolygon)
 			{
@@ -230,7 +226,6 @@ namespace
 						continue;
 					}
 
-					// Already has a partner corner, from pass 1 or from being drawn on it.
 					double NearestVertexSq = TNumericLimits<double>::Max();
 					PlaceLabelsEdit::ClosestVertex(Polygons[s], P, NearestVertexSq);
 					if (NearestVertexSq <= TolSq)
@@ -238,7 +233,6 @@ namespace
 						continue;
 					}
 
-					// Or an insertion queued this pass, not yet in the polygon.
 					bool bQueued = false;
 					for (const FPendingInsert& Queued : Inserts[s])
 					{
@@ -288,7 +282,7 @@ namespace
 				continue;
 			}
 
-			// Descending, so insertions do not shift pending indices.
+			// Descending, so insertions leave pending indices in place.
 			Inserts[s].Sort([](const FPendingInsert& A, const FPendingInsert& B)
 			{
 				return A.EdgeIndex != B.EdgeIndex ? A.EdgeIndex > B.EdgeIndex : A.Param > B.Param;
@@ -303,7 +297,6 @@ namespace
 		}
 	}
 
-	// Pass 3, cleanup: removes zero-length edges a weld can leave.
 	void RemoveDuplicateCorners(TArray<TArray<FVector2D>>& Polygons, TArray<bool>& Changed,
 		FWeldReport& OutReport)
 	{
@@ -363,7 +356,6 @@ void FindSeamMarks(const TArray<FVector2D>& A, const TArray<FVector2D>& B, doubl
 
 	const double Tol = FMath::Max(ToleranceCm, CoincidentEpsilonCm);
 
-	// Every edge of A against every edge of B.
 	for (int32 i = 0; i < NA; ++i)
 	{
 		const FVector A1(A[i].X, A[i].Y, 0.0);
@@ -522,7 +514,6 @@ void WeldBoundaries(const TArray<UPlaceRegionComponent*>& Regions, double Tolera
 
 	for (int32 i = 0; i < Live.Num(); ++i)
 	{
-		// Untouched regions must not be dirtied.
 		if (!Changed[i])
 		{
 			continue;
@@ -552,4 +543,4 @@ void WeldPair(UPlaceRegionComponent* A, UPlaceRegionComponent* B, double Toleran
 	WeldBoundaries(Pair, ToleranceCm, OutReport);
 }
 
-} // namespace PlaceLabelsTopology
+}

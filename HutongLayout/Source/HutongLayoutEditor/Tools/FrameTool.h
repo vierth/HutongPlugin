@@ -45,12 +45,10 @@ protected:
 	virtual void OnPlacementHover(const FVector& HitWorld) override;
 	virtual void RenderIdlePreview(FPrimitiveDrawInterface* PDI, const FVector& CursorGround) override;
 
-	// Preset's frontage and depth along the actor's axes, front on Side.
 	FVector2D StampSize(EHutongBaySide Side) const;
 	int32 BayCount() const;
 	bool IsFullHouse() const { return Settings && Settings->bFullHouse; }
 
-	// Green front edge, a mark per column line, round a footprint centred on Origin.
 	void DrawFront(FPrimitiveDrawInterface* PDI, const FVector& Origin, EHutongBaySide Side) const;
 
 	UPROPERTY()

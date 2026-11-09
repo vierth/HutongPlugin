@@ -13,8 +13,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongGalleryCoverageTest,
 
 bool FHutongGalleryCoverageTest::RunTest(const FString& Parameters)
 {
-	// The gallery is where every type is seen side by side: a building type it does not place is one
-	// nobody checks by eye.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to attach in"), World)) return false;
 	UHutongGalleryToolProperties* S = NewObject<UHutongGalleryToolProperties>();
@@ -27,7 +25,6 @@ bool FHutongGalleryCoverageTest::RunTest(const FString& Parameters)
 		if (C->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists)) continue;
 		if (C->GetName().StartsWith(TEXT("SKEL_")) || C->GetName().StartsWith(TEXT("REINST_"))) continue;
 		++Types;
-		// Nothing to see: a type that only traces a footprint.
 		if (!C->GetDefaultObject<UHutongBuildingComponent>()->HasGeometry()) continue;
 		TestTrue(FString::Printf(TEXT("the gallery places a %s"), *C->GetName()), Placed.Contains(C));
 	}
@@ -46,7 +43,6 @@ bool FHutongGalleryClusterTest::RunTest(const FString& Parameters)
 	const TArray<HutongGallery::FPlacedPiece> All = HutongGallery::Plan(S);
 	TestTrue(TEXT("the whole gallery places something"), All.Num() > 0);
 
-	// The category tools split the whole gallery: every piece in exactly one of them.
 	TArray<FString> FromCategories;
 	for (const EHutongGalleryCategory C : { EHutongGalleryCategory::Walls, EHutongGalleryCategory::Houses,
 		EHutongGalleryCategory::Gates, EHutongGalleryCategory::Courtyard, EHutongGalleryCategory::Street,
@@ -67,7 +63,6 @@ bool FHutongGalleryClusterTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("%s is in a category gallery"), *P.Label), FromCategories.Contains(P.Label));
 	}
 
-	// Laid out: no two footprints touch, a cluster's pieces are one run, categories are bands.
 	for (int32 i = 0; i < All.Num(); ++i)
 	{
 		for (int32 j = i + 1; j < All.Num(); ++j)

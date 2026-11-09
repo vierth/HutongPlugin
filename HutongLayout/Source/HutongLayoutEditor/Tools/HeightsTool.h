@@ -14,19 +14,14 @@ struct FHutongEaveRow
 {
 	GENERATED_BODY()
 
-	// Actor label, and the type (with its court) beneath it.
 	FString Label;
 	FString Detail;
 	EHutongCourtRole Role = EHutongCourtRole::Other;
-	// The eave of a roofed type, the body top of a wall (UHutongBuildingComponent::GetEditHeight).
 	double CurrentEave = 0.0;
 	double NewEave = 0.0;
-	// False where the type's height is not one number (亭, the 大式 殿, 牌坊).
 	bool bEditable = true;
-	// Preset as placed, and as Apply will set it.
 	FString Preset;
 	FString NewPreset;
-	// Ridge over the eave as built, so a row's ridge follows its New Eave; zero for walls.
 	double RidgeAboveEave = 0.0;
 };
 
@@ -69,12 +64,10 @@ public:
 
 	void OpenWindow();
 
-	// The window's model: rows, and a revision that changes when the set of rows does.
 	const TArray<FHutongEaveRow>& GetRows() const { return Rows; }
 	int32 GetRowsRevision() const { return RowsRevision; }
 	int32 GetReferenceRow() const { return ReferenceRow(Rows); }
 	double GetSuggestion(int32 Index) const { return Suggested.IsValidIndex(Index) ? Suggested[Index] : -1.0; }
-	// Why the suggestion is what it is ("0.84 × Main Hall", "ridge 35 cm over …").
 	FString GetSuggestionNote(int32 Index) const { return SuggestionNotes.IsValidIndex(Index) ? SuggestionNotes[Index] : FString(); }
 	TArray<FString> GetPresetOptions(int32 Index) const;
 	void SetNewEave(int32 Index, double Cm);
@@ -92,15 +85,11 @@ public:
 	void Reset();
 	void AssignCourt();
 	void SelectCourt();
-	// Fills Court Name with the next free name on the map tile under the selection.
 	void SuggestCourtName();
-	// Every court in the level, and selecting one whole (the selection then fills the table).
 	TArray<FString> GetAllCourts() const;
 	void OpenCourt(const FString& Court);
 
-	// The row whose building ranks highest (正房 first, then the tallest), or INDEX_NONE.
 	static int32 ReferenceRow(const TArray<FHutongEaveRow>& Rows);
-	// Each row's suggestion from the reference row's role and New Eave; negative where none.
 	static TArray<double> Suggestions(const TArray<FHutongEaveRow>& Rows);
 
 protected:
@@ -108,9 +97,7 @@ protected:
 	virtual void BuildMeshForRect(double, double, UE::Geometry::FDynamicMesh3&, EHutongDetail) override {}
 	virtual void SpawnFinalActor() override {}
 
-	// Rows from the selection when it changed; bForce re-reads the eaves as built.
 	void RefreshRows(bool bForce);
-	// Ratio suggestions, then each gate's: its ridge the canon step over the building beside it.
 	void RefreshSuggestions();
 	void SyncPanel();
 
@@ -120,10 +107,8 @@ protected:
 	TArray<FHutongEaveRow> Rows;
 	TArray<double> Suggested;
 	TArray<FString> SuggestionNotes;
-	// Parallel to Rows.
 	TArray<TWeakObjectPtr<class UHutongBuildingComponent>> RowBuildings;
 	int32 RowsRevision = 0;
-	// The court name was filled by SuggestCourtName, not typed; a new selection may replace it.
 	bool bCourtNameSuggested = false;
 	bool bPanelDirty = false;
 

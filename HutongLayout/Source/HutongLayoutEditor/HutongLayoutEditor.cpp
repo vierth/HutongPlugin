@@ -4,6 +4,7 @@
 #include "Tools/HutongPresetDefaults.h"
 #include "Tools/HutongPanelCustomizations.h"
 #include "Tools/HutongContextMenu.h"
+#include "Tools/HutongSaveState.h"
 #include "Generation/HutongPlanOutlineComponent.h"
 #include "Generation/HutongActorSpawn.h"
 #include "Modules/ModuleManager.h"
@@ -19,19 +20,19 @@ void FHutongLayoutEditorModule::StartupModule()
 	HutongPresets::RegisterBuiltInPresets();
 
 	HutongPanelCustomizations::Register();
-	// A Hutong section in the level editor's right-click menu on selected buildings.
 	HutongContextMenu::Register();
 
-	// Plans draw whether or not the mode is active, so load their visibility before anyone enters it.
+	// Plans draw in every mode, so load their visibility at startup.
 	HutongPlanOutline::LoadVisibilityFromConfig();
 	HutongPlanOutline::StartLayers();
 
-	// New library meshes are saved once their background build is done (and all before a level save).
 	HutongGen::StartLibrarySaver();
+	HutongSaveState::Start();
 }
 
 void FHutongLayoutEditorModule::ShutdownModule()
 {
+	HutongSaveState::Stop();
 	HutongGen::StopLibrarySaver();
 	HutongPlanOutline::StopLayers();
 	HutongContextMenu::Unregister();

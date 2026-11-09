@@ -5,7 +5,6 @@ namespace HutongGen
 {
 	namespace
 	{
-		// Segment containing a distance from the ridge.
 		void LocateFromRidge(
 			const FHutongRoofSection& S, double DistanceFromRidge,
 			int32& OutSegment, double& OutRunIntoSegment)
@@ -28,7 +27,6 @@ namespace HutongGen
 			OutRunIntoSegment = 0.0;
 		}
 
-		// Height above eave and local slope at a distance from the ridge.
 		void PolylineAt(
 			const FHutongRoofSection& S, double DistanceFromRidge,
 			double& OutHeight, double& OutSlope)
@@ -62,8 +60,7 @@ namespace HutongGen
 			return H;
 		}
 
-		// 捲棚: Hermite from the band edge (matching value and slope) to a level crown. Crown sits half
-		// the band's climb below the fold; at fold height it bulged above both slopes.
+		// 捲棚: Hermite to a level crown half the band's climb below the fold, so it stays under both slopes.
 		double JoinH = 0.0, JoinSlope = 0.0;
 		PolylineAt(*this, Roll, JoinH, JoinSlope);
 
@@ -103,7 +100,6 @@ namespace HutongGen
 			return (PurlinCount(Purlins) - 1) / 2;
 		}
 
-		// constexpr canon array → TArray.
 		template <SIZE_T N>
 		TArray<double> Ratios(const double (&Canon)[N])
 		{
@@ -136,7 +132,6 @@ namespace HutongGen
 			const double Steps = FMath::Max(HalfDepth, 1.0) / N;
 			const double Over = FMath::Max(EaveOverhang, 0.0);
 
-			// Overhang takes the eave step's 舉.
 			if (Over > 0.0)
 			{
 				S.Run.Add(Over);

@@ -30,10 +30,9 @@ bool FHutongCollisionGalleryTest::RunTest(const FString& Parameters)
 			UE_LOG(LogTemp, Display, TEXT("collision: %-60s pieces %4d kept %4d boxes %4d hulls %4d centre %s"),
 				*Label, Stats.Pieces, Stats.Kept, Stats.Boxes, Stats.Convexes, Blocked ? TEXT("blocked") : TEXT("open"));
 			TestTrue(FString::Printf(TEXT("%s: has collision"), *Label), Stats.Kept == 0 || Geom.GetElementCount() > 0);
-			// A way through stays a way through; a solid wall stays solid.
 			const bool bPassage = Label.Contains(TEXT("Doorway")) || Label.Contains(TEXT("Moon Gate"))
 				|| Label.Contains(TEXT("Corridor")) || Label.Contains(TEXT("Pavilion")) || Label.Contains(TEXT("Inner Gate ("))
-				|| Label.Contains(TEXT("Wall Gate")) || Label.Contains(TEXT("Memorial Arch"));
+				|| Label.Contains(TEXT("Wall Gate")) || Label.Contains(TEXT("Wall-Set Gate")) || Label.Contains(TEXT("Memorial Arch"));
 			if (bPassage)
 			{
 				++Passages;

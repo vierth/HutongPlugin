@@ -41,6 +41,9 @@ public:
 	UPROPERTY(EditAnywhere, Category="Placement", meta=(DisplayName="Update Matching Placements", ToolTip="Updates buildings whose id matches an imported record in place."))
 	bool bUpdateMatchingPlacements = true;
 
+	UPROPERTY(EditAnywhere, Category="Placement", meta=(DisplayName="Build Geometry", ToolTip="Builds the imported buildings that were built in the file. Off: every building arrives laid out, to be built later with Generate."))
+	bool bBuildGeometry = false;
+
 	// Back to the file's recorded coordinates, no drag.
 	UFUNCTION(CallInEditor, Category="Placement", meta=(DisplayName="Place At Recorded Coordinates", ToolTip="Places the loaded set at the world coordinates the file recorded."))
 	void PlaceAtRecordedCoordinates();
@@ -62,10 +65,8 @@ public:
 	virtual TArray<FText> GetToolHelpLines() const override;
 	virtual FText GetStagePromptText() const override;
 
-	// Opens the dialog, loads, refreshes the preview. Called from the property set's buttons.
 	void BrowseForFile();
-	// bPrompt: may an unknown type raise a modal now. The last session's file loads on tool start, where a
-	// dialog is unasked for; that case is asked at placement instead.
+	// The last session's file loads on tool start with bPrompt false; unknown types are asked at placement.
 	void LoadFile(const FString& InPath, bool bPrompt = true);
 	void PlaceAtRecordedCoordinates();
 
@@ -78,17 +79,14 @@ protected:
 	virtual FString GetPlacementDetail() const override;
 	virtual double GetPreviewHeight() const override { return 0.0; }
 
-	// Nothing to bake: each record carries its own params and detail level.
 	virtual void BuildMeshForRect(double, double, UE::Geometry::FDynamicMesh3&, EHutongDetail) override {}
 
 	UPROPERTY()
 	TObjectPtr<UHutongImportToolProperties> Settings;
 
 private:
-	// Four corners per record, set frame, record's relative yaw applied.
 	void RebuildPreview();
 
-	// Beyond this many footprints only the set's bounds are drawn.
 	static constexpr int32 MaxPreviewFootprints = 400;
 
 	FString FilePath;

@@ -27,7 +27,6 @@ FText DescribeIssue(EIssue Issue)
 
 bool IsSevere(EIssue Issue)
 {
-	// The line is whether the region still works at runtime.
 	switch (Issue)
 	{
 	case EIssue::SelfIntersecting:
@@ -50,7 +49,6 @@ void ValidateRegions(const TArray<TWeakObjectPtr<UPlaceRegionComponent>>& Region
 {
 	OutReport = FReport();
 
-	// Keyed on type plus the primary written name.
 	TMap<TPair<FName, FString>, TWeakObjectPtr<UPlaceRegionComponent>> SeenNames;
 
 	auto AddIssue = [&OutReport](const TWeakObjectPtr<UPlaceRegionComponent>& Region, EIssue Issue,
@@ -126,11 +124,9 @@ void ValidateRegions(const TArray<TWeakObjectPtr<UPlaceRegionComponent>>& Region
 						FText::AsNumber(Crossings.Num())));
 			}
 		}
-
-		// Deliberately no "this region found no parent" check.
 	}
 
-	// Second pass, so a parent later in the array does not read as missing.
+	// Second pass, so a parent later in the array is found.
 	for (const TWeakObjectPtr<UPlaceRegionComponent>& Weak : Regions)
 	{
 		UPlaceRegionComponent* Region = Weak.Get();

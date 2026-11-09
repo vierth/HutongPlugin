@@ -67,7 +67,6 @@ void UHutongWaterJarTool::AttachBuildingComponent(AStaticMeshActor* Actor, doubl
 	if (!Building) return;
 
 	if (Settings) Building->Params = Settings->Params;
-	// The dragged belly, not the panel's.
 	Building->Params.BellyDiameter = DraggedBellyDiameter();
 	if (Appearance) Building->Palette = Appearance->Palette;
 

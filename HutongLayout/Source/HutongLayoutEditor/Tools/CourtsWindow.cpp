@@ -42,7 +42,6 @@ namespace
 				return SNew(SBox).Padding(Pad).VAlign(VAlign_Center)
 				[
 					SNew(STextBlock).Text(FText::FromString(Name)).Font(FAppStyle::GetFontStyle("BoldFont"))
-					// The courts the selection is in stand out.
 					.ColorAndOpacity_Lambda([this, Name]()
 					{
 						return Tool.IsValid() && Tool->IsSelectionIn(Name) ? FSlateColor(FLinearColor(0.45f, 0.85f, 1.0f)) : FSlateColor::UseForeground();
@@ -115,7 +114,6 @@ namespace
 						SNew(STextBlock).AutoWrapText(true)
 						.Text_Lambda([this]() { return Tool.IsValid() ? FText::FromString(Tool->GetSelectionText()) : FText(); })
 					]
-					// A new court from the selection.
 					+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 8.0f)
 					[
 						SNew(SHorizontalBox)

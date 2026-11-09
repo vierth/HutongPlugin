@@ -11,7 +11,6 @@ class UHutongMeasureToolProperties : public UInteractiveToolPropertySet
 {
 	GENERATED_BODY()
 public:
-	// --- Reading ---
 
 	UPROPERTY(VisibleAnywhere, Category="Measurement", meta=(DisplayName="Distance", Units="cm", ToolTip="Measured distance between the two clicked points, in cm."))
 	double DistanceCm = 0.0;
@@ -21,8 +20,6 @@ public:
 
 	UPROPERTY(VisibleAnywhere, Category="Measurement", meta=(DisplayName="Read As Street Width", ToolTip="The measured distance classed as a street width."))
 	FString StreetReading;
-
-	// --- Calibration ---
 
 	UPROPERTY(EditAnywhere, Category="Calibration", meta=(DisplayName="Known Real Distance", UIMin="0", ClampMin="0", Units="cm", ToolTip="True length of the measured span, in cm, for calibration."))
 	double KnownRealDistanceCm = 0.0;
@@ -34,7 +31,6 @@ public:
 	UFUNCTION(CallInEditor, Category="Calibration", meta=(DisplayName="Apply Scale To Selected", ToolTip="Multiplies the selected actor's scale by the correction."))
 	void ApplyScaleToSelected();
 
-	// Pivot for ApplyScaleToSelected; set by the tool.
 	FVector AnchorWorld = FVector::ZeroVector;
 };
 
@@ -54,7 +50,6 @@ protected:
 	virtual FString GetPlacementDetail() const override;
 	virtual double GetPreviewHeight() const override { return 0.0; }
 
-	// A measurement is not a placement.
 	virtual void SpawnFinalActor() override {}
 	virtual bool OnRectCommitted(const FVector& HitWorld) override;
 	virtual void OnPlacementStarted(const FVector& HitWorld) override;

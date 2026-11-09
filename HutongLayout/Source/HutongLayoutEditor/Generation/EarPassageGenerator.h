@@ -57,29 +57,26 @@ struct FHutongEarPassageParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Passage", meta=(DisplayName="Closing Wall", EditCondition="bHasClosingWall", ToolTip="The wall closing the passage's front."))
 	FHutongWallParams ClosingWall;
 
-	// Set by the tool from the footprint.
 	double Width = 740.0;
 	double Depth = 340.0;
 	int32 BayCountOverride = 0;
 
-	// Narrowest room; the frontage is held at the strip plus this.
 	static constexpr double MinRoomWidthCm = 100.0;
-	// An ear room is one or two bays; a wider drag holds at two.
-	static constexpr int32 MaxRoomBays = 2;
+	// A drag derives one or two bays and holds at two; three only when asked (some large compounds).
+	static constexpr int32 MaxDerivedRoomBays = 2;
+	static constexpr int32 MaxRoomBays = 3;
 
 	bool HasPassage() const { return Passageway != EHutongEarPassage::None; }
 	bool HasRoom() const { return Passageway != EHutongEarPassage::Whole; }
 	double GetOuterWallThickness() const { return HasPassage() && bHasOuterWall ? OuterWall.GetThickness() : 0.0; }
 	double GetInnerWallThickness() const { return Passageway == EHutongEarPassage::Whole && bHasInnerWall ? OuterWall.GetThickness() : 0.0; }
 	double GetSideWallsThickness() const { return GetOuterWallThickness() + GetInnerWallThickness(); }
-	// Closing wall with its doorway, narrowed to what the clear way can carry with the wall generator's
-	// flanking masonry; not yet pinned or sized.
 	FHutongWallParams FittedClosingWall() const
 	{
 		FHutongWallParams C = ClosingWall;
 		C.bHasGate = false;
 		C.FootprintThickness = C.GetThickness();
-		// A 院牆 carries no garden doorway; the pin below would let one through.
+		// Only a 隔牆 keeps a garden doorway through the pin below.
 		if (C.bDeriveFromRole && C.Role != EHutongWallRole::Courtyard) C.Doorway = EHutongWallDoorway::None;
 		if (C.Doorway != EHutongWallDoorway::None && C.Doorway != EHutongWallDoorway::Moon)
 		{
@@ -89,17 +86,14 @@ struct FHutongEarPassageParams
 		return C;
 	}
 
-	// The passage roof bears on the closing wall, so the wall top is the eave, raised to clear the
-	// wall's doorway head (else the wall pierces the roof).
+	// The passage roof bears on the closing wall, so the wall top is the eave.
 	double GetPassageEaveHeight() const
 	{
-		// Under the room's roof carried on, walls stand to the ceiling under it.
 		if (bRoofOverPassage) return RoomParams().GetRoofBaseHeight() + RoomParams().GetUndersideRise();
 		const double Eave = Passage.GetEaveHeight();
 		return bHasClosingWall ? FMath::Max(Eave, FittedClosingWall().GetMinHeight()) : Eave;
 	}
 
-	// Closing wall as built: fitted, pinned to the eave, across the clear way.
 	FHutongWallParams ClosingWallParams() const
 	{
 		FHutongWallParams C = FittedClosingWall();
@@ -113,7 +107,6 @@ struct FHutongEarPassageParams
 		}
 		return C;
 	}
-	// Whether the fitted closing wall has its doorway on its actual run.
 	bool HasClosingDoorway() const
 	{
 		if (!HasPassage() || !bHasClosingWall) return false;
@@ -121,8 +114,6 @@ struct FHutongEarPassageParams
 		return C.HasDecorativeDoorway(C.Length);
 	}
 
-	// Narrowest clear way: wide enough for the closing wall's doorway (a passage narrower than its
-	// doorway is walled shut).
 	double GetMinClearWidth() const
 	{
 		double Clear = 60.0;
@@ -133,8 +124,6 @@ struct FHutongEarPassageParams
 		}
 		return Clear;
 	}
-	// Clear way, wall face to gable (or wall to wall over the whole frontage): as asked or dragged,
-	// never under the minimum.
 	double GetClearWidth() const
 	{
 		switch (Passageway)
@@ -144,9 +133,7 @@ struct FHutongEarPassageParams
 		default:                       return FMath::Max(PassageWidth, GetMinClearWidth());
 		}
 	}
-	// Strip taken off the frontage: clear way plus the walls it runs along.
 	double GetStripWidth() const { return HasPassage() ? GetClearWidth() + GetSideWallsThickness() : 0.0; }
-	// Frontage as built: at least the strip plus the narrowest room.
 	double GetWidth() const
 	{
 		switch (Passageway)
@@ -156,7 +143,6 @@ struct FHutongEarPassageParams
 		default:                       return FMath::Max(Width, GetStripWidth() + MinRoomWidthCm);
 		}
 	}
-	// Frontage a new placement starts from, before any drag.
 	double GetSuggestedWidth() const
 	{
 		if (!HasRoom()) return FMath::Max(PassageWidth, GetMinClearWidth()) + GetSideWallsThickness();
@@ -165,21 +151,18 @@ struct FHutongEarPassageParams
 	double GetRoomWidth() const { return HasRoom() ? GetWidth() - GetStripWidth() : 0.0; }
 	double GetRoomX0() const { return bPassageAtFarEnd || !HasPassage() ? 0.0 : GetStripWidth(); }
 	double GetStripX0() const { return bPassageAtFarEnd ? GetWidth() - GetStripWidth() : 0.0; }
-	// Clear way, wall face to gable, in the frontage frame; the inner wall (whole frontage) stands on
-	// the strip's room side, the outer one on its far side.
 	double GetClearX0() const { return bPassageAtFarEnd ? GetStripX0() + GetInnerWallThickness() : GetOuterWallThickness(); }
 	double GetOuterWallX0() const { return bPassageAtFarEnd ? GetWidth() - GetOuterWallThickness() : 0.0; }
 	double GetInnerWallX0() const { return bPassageAtFarEnd ? GetStripX0() : GetClearX0() + GetClearWidth(); }
 
-	// Room params with its share of the footprint; over the whole frontage, the one bay the passage
-	// takes, so the roof and eave are a one-bay ear room's.
+	// Over the whole frontage, the one bay the passage takes, so roof and eave are a one-bay ear room's.
 	FHutongSiheyuanParams RoomParams() const
 	{
 		FHutongSiheyuanParams R = Room;
 		R.Width = HasRoom() ? GetRoomWidth() : GetWidth();
 		R.Depth = FMath::Max(Depth, 1.0);
 		R.BayCountOverride = HasRoom() ? FMath::Min(BayCountOverride, MaxRoomBays) : 1;
-		if (R.BayCountOverride <= 0 && R.GetBayCount() > MaxRoomBays) R.BayCountOverride = MaxRoomBays;
+		if (R.BayCountOverride <= 0 && R.GetBayCount() > MaxDerivedRoomBays) R.BayCountOverride = MaxDerivedRoomBays;
 		const bool bRunsOn = bRoofOverPassage && Passageway == EHutongEarPassage::AtEnd;
 		R.bRoofRunsOnLow = bRunsOn && !bPassageAtFarEnd;
 		R.bRoofRunsOnHigh = bRunsOn && bPassageAtFarEnd;

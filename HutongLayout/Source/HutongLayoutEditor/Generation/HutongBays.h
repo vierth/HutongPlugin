@@ -18,14 +18,13 @@ namespace HutongGen
 		return FMath::Max(1, N);
 	}
 
-	// 明間面闊: 明間 + (N-1) 次間 fill the span. BayBoundary's basis; do not recompute elsewhere.
 	inline double CentralBayWidth(double Span, int32 BayCount, double SideRatio)
 	{
 		const int32 N = FMath::Max(BayCount, 1);
 		return FMath::Max(Span, 1.0) / (1.0 + (N - 1) * FMath::Clamp(SideRatio, 0.3, 1.0));
 	}
 
-	// X of bay boundary Index; single source for 明間/次間 spacing.
+	// Single source for 明間/次間 spacing.
 	inline double BayBoundary(int32 Index, int32 BayCount, double Span,
 		double EndInset, double SideRatio, int32 WideBayIndex)
 	{

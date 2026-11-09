@@ -11,13 +11,12 @@ namespace HutongGen
 			case EHutongStreetClass::Hutong:      return HutongCanon::Urban::HutongPaces * BuCm;
 			case EHutongStreetClass::MinorStreet: return HutongCanon::Urban::MinorStreetPaces * BuCm;
 			case EHutongStreetClass::MajorStreet: return HutongCanon::Urban::MajorStreetPaces * BuCm;
-			default:                              return 0.0;           // open-ended either end
+			default:                              return 0.0;
 			}
 		}
 
 		EHutongStreetClass Classify(double WidthCm)
 		{
-			// Boundaries sit between the nominals.
 			const double Hutong = NominalWidth(EHutongStreetClass::Hutong);
 			const double Minor = NominalWidth(EHutongStreetClass::MinorStreet);
 			const double Major = NominalWidth(EHutongStreetClass::MajorStreet);
@@ -32,7 +31,6 @@ namespace HutongGen
 		bool IsInBand(double WidthCm, double ToleranceCm)
 		{
 			const double Nominal = NominalWidth(Classify(WidthCm));
-			// The open-ended classes have no nominal to be in band with.
 			return Nominal > 0.0 && FMath::Abs(WidthCm - Nominal) <= ToleranceCm;
 		}
 

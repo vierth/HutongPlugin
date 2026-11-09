@@ -28,13 +28,11 @@ void UHutongCorridorTool::GetEffectiveRectBounds(
 {
 	const FVector2D Local = WorldXYToLocalRect(CurrentWorld);
 
-	// Unlike the wall and the paifang the short axis is dragged.
 	const FHutongCorridorParams& P = Settings ? Settings->Params : FHutongCorridorParams();
 	const double Extras = P.GetCrossExtras();
 	const double Lo = FMath::Max(P.WalkWidthMin, 10.0) + Extras;
 	const double Hi = FMath::Max(P.WalkWidthMax, FMath::Max(P.WalkWidthMin, 10.0) + 1.0) + Extras;
 
-	// The anchor is one end of each extent; the far end moves.
 	auto Band = [&](double& OutLo, double& OutHi, double Reach)
 	{
 		const double Want = FMath::Clamp(FMath::Abs(Reach), Lo, Hi);
@@ -59,7 +57,6 @@ void UHutongCorridorTool::GetEffectiveRectBounds(
 void UHutongCorridorTool::BuildMeshForRect(double SizeX, double SizeY, FDynamicMesh3& OutMesh,
 	EHutongDetail Level)
 {
-	// Long extent is the run; short sets the walk width.
 	FHutongCorridorParams P = Settings ? Settings->Params : FHutongCorridorParams();
 	P.Width = P.WalkWidthFromFootprint(FMath::Min(SizeX, SizeY));
 
@@ -111,7 +108,7 @@ FString UHutongCorridorTool::GetPlacementDetail() const
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
 	const double Cross = FMath::Min(MaxX - MinX, MaxY - MinY);
 	return FString::Printf(TEXT("%s · width (寬) %.0f cm · %s"),
-		P.bClosedSide ? TEXT("Ring corridor (抄手遊廊)") : TEXT("Covered corridor (遊廊)"),
+		P.bClosedSide ? TEXT("Encircling corridor (抄手遊廊)") : TEXT("Covered corridor (遊廊)"),
 		P.WalkWidthFromFootprint(Cross),
 		bFlipOpenSide ? TEXT("opens -Y") : TEXT("opens +Y"));
 }
@@ -133,7 +130,6 @@ TArray<FText> UHutongCorridorTool::GetToolHelpLines() const
 
 void UHutongCorridorTool::AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse)
 {
-	// Each key picks a side rather than both toggling.
 	if (Delta == 0) return;
 	bFlipOpenSide = (Delta > 0);
 }

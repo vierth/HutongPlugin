@@ -41,7 +41,6 @@ namespace
 		return P;
 	}
 
-	// Sutherland–Hodgman: Subject clipped to the inside of convex, counter-clockwise Clip.
 	TArray<FVector2D> Clip(const TArray<FVector2D>& Subject, const TArray<FVector2D>& ClipPoly)
 	{
 		TArray<FVector2D> Out = Subject;
@@ -122,7 +121,6 @@ namespace
 			UHutongBuildingComponent* Drop = (D->Keep == EKeep::First ? D->Pair.Second : D->Pair.First).Get();
 			AActor* DropActor = Drop ? Drop->GetOwner() : nullptr;
 			if (!Keep || !DropActor || !IsValid(DropActor)) continue;
-			// A locked building is never the one removed.
 			if (Drop->bLocked) continue;
 			if (D->bTransfer)
 			{
@@ -249,7 +247,6 @@ TArray<FPair> Find(const TArray<UHutongBuildingComponent*>& Candidates, const TA
 			Seen.Add(Key);
 			const double Share = OverlapShare(N.P, O.P);
 			if (Share <= OfferShare) continue;
-			// The one already there comes first.
 			FPair Pair;
 			Pair.First = bBothNew ? Key.Key : O.B;
 			Pair.Second = bBothNew ? Key.Value : N.B;
@@ -286,7 +283,6 @@ void OpenWindow(const TArray<FPair>& Pairs)
 	{
 		TSharedRef<FDecision> D = MakeShared<FDecision>();
 		D->Pair = Pair;
-		// Default: keep the better attested; on a tie the one already there.
 		const UHutongBuildingComponent* A = Pair.First.Get();
 		const UHutongBuildingComponent* B = Pair.Second.Get();
 		D->Keep = (A && B && (int32)B->Confidence > (int32)A->Confidence) ? EKeep::Second : EKeep::First;

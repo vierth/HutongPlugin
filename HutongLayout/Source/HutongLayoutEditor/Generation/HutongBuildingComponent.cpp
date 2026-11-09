@@ -1,4 +1,6 @@
 #include "Generation/HutongBuildingComponent.h"
+#include "Generation/HutongWallPieces.h"
+#include "Generation/HutongMeshTurn.h"
 #include "Generation/HutongPlanOutlineComponent.h"
 #include "Generation/ScreenWallGenerator.h"
 #include "Generation/PathGenerator.h"
@@ -16,11 +18,10 @@
 
 using UE::Geometry::FDynamicMesh3;
 
-int32 UHutongBuildingComponent::BuildLODs(TArray<FDynamicMesh3>& OutLODs) const
+int32 UHutongBuildingComponent::BuildLODs(TArray<FDynamicMesh3>& OutLODs, HutongGen::FMeshTurn* OutTurn) const
 {
 	const FVector2D Footprint = GetFootprintSize();
-	// The seam every rebuild shares: generator builds the rectangle, then the corner offsets warp
-	// the mesh, before normals and box UVs.
+	// Warp before normals and box UVs.
 	const bool bSkew = HasFootprintSkew();
 	const FHutongFootprintSkew Skew = GetFootprintSkew();
 	return HutongGen::Detail::BuildPlacementLODs(bPlanOnly, Footprint.X, Footprint.Y,
@@ -30,7 +31,7 @@ int32 UHutongBuildingComponent::BuildLODs(TArray<FDynamicMesh3>& OutLODs) const
 			BuildMesh(Mesh, Level);
 			if (bSkew) HutongMeshUtils::WarpFootprint(Mesh, Footprint.X, Footprint.Y, Skew);
 		},
-		OutLODs);
+		OutLODs, OutTurn);
 }
 
 FHutongFootprintSkew UHutongBuildingComponent::WithEndBays(FHutongFootprintSkew Skew) const
@@ -43,7 +44,6 @@ FHutongFootprintSkew UHutongBuildingComponent::WithEndBays(FHutongFootprintSkew 
 	if (Skew.Mode != EHutongSkewMode::Ends || !GetFacade(Side) || ArePlanBaysAlongX() != bRunX) return Skew;
 	FHutongPlanBays Bays;
 	GetPlanBays(Bays);
-	// One bay has no inner column to stop at.
 	if (Bays.Boundaries.Num() < 3) return Skew;
 	Bays.Boundaries.Sort();
 	const double L = bRunX ? Size.X : Size.Y;
@@ -56,7 +56,7 @@ FHutongFootprintSkew UHutongBuildingComponent::WithEndBays(FHutongFootprintSkew 
 void UHutongBuildingComponent::OnComponentCreated()
 {
 	Super::OnComponentCreated();
-	// Not in the constructor: it also runs for the CDO, giving every building the same id.
+	// Here: the constructor also runs for the CDO, which would give every building one id.
 	if (!BuildingId.IsValid()) { BuildingId = FGuid::NewGuid(); }
 }
 
@@ -71,35 +71,43 @@ void UHutongBuildingComponent::Rebuild()
 {
 	AStaticMeshActor* Actor = Cast<AStaticMeshActor>(GetOwner());
 	if (!Actor) return;
-	// Locked: its mesh, materials and anything fitted to it stay as they are.
 	if (bLocked) return;
 
 	if (!HasGeometry()) bPlanOnly = true;
 	if (bPlanOnly)
 	{
-		// Plan only: remove the built mesh, add the outline.
 		Actor->Modify();
-		if (UStaticMeshComponent* SMC = Actor->GetStaticMeshComponent())
+		if (UStaticMeshComponent* SMC = HutongGen::GetBuiltMeshComponent(Actor))
 		{
 			SMC->Modify();
 			SMC->SetStaticMesh(nullptr);
 		}
+		HutongGen::ClearMeshInstances(Actor);
+		ApplyPlanOutline();
+		return;
+	}
+
+	TArray<HutongGen::FMeshInstances> Groups;
+	if (BuildInstances(Groups))
+	{
+		Actor->Modify();
+		HutongGen::AssignMeshInstances(Actor, Groups, GetBuiltPalette());
 		ApplyPlanOutline();
 		return;
 	}
 
 	TArray<FDynamicMesh3> LODs;
-	const int32 CollisionLOD = BuildLODs(LODs);
+	HutongGen::FMeshTurn Turn;
+	const int32 CollisionLOD = BuildLODs(LODs, &Turn);
 	if (LODs.Num() == 0 || LODs[0].TriangleCount() == 0) return;
 
 	Actor->Modify();
-	HutongGen::BuildAndAssignStaticMesh(Actor, LODs, GetBuiltPalette(), CollisionLOD, bBespokeMesh);
+	HutongGen::BuildAndAssignStaticMesh(Actor, LODs, GetBuiltPalette(), CollisionLOD, bBespokeMesh, Turn);
 	ApplyPlanOutline();
 }
 
 void UHutongBuildingComponent::ApplyDragDerived(const UHutongBuildingComponent& Placed)
 {
-	// Another type takes its own line; within one, the line it was snapped to (or set by hand) stays.
 	if (Placed.GetClass() != GetClass()) return;
 	const double Top = Placed.GetBaseCourseTop();
 	if (Top > 0.0 && GetBaseCourseTop() > 0.0 && !FMath::IsNearlyEqual(Top, GetBaseCourseTop(), 0.5)) SetBaseCourseTop(Top);
@@ -117,7 +125,6 @@ bool UHutongBuildingComponent::ApplyPresetParams(const FString& Name)
 
 FName UHutongBuildingComponent::GetPresetKey() const
 {
-	// UHutongSiheyuanBuildingComponent -> "Siheyuan", the house tool's preset key.
 	FString Name = GetClass()->GetName();
 	Name.RemoveFromStart(TEXT("UHutong"));
 	Name.RemoveFromStart(TEXT("Hutong"));
@@ -141,7 +148,6 @@ TArray<FString> UHutongBuildingComponent::GetPresetOptions() const
 	{
 		Names = Library->GetPresetNames(GetPresetKey());
 	}
-	// Empty = parameters match no preset.
 	Names.Insert(FString(), 0);
 	return Names;
 }
@@ -158,8 +164,7 @@ void UHutongBuildingComponent::ApplyPlanOutline()
 	AActor* Owner = GetOwner();
 	if (!Owner) return;
 
-	// **One outline; extras destroyed here.** Undo can restore an old outline beside a new one;
-	// only the first is found again, so the second would draw a stale footprint forever.
+	// Undo can restore an old outline beside a new one; only the first is found again, so the rest go.
 	TArray<UHutongPlanOutlineComponent*> Outlines;
 	Owner->GetComponents(Outlines);
 	for (int32 i = bPlanOnly ? 1 : 0; i < Outlines.Num(); ++i)
@@ -179,7 +184,7 @@ void UHutongBuildingComponent::ApplyPlanOutline()
 		Owner->Modify();
 		Outline = NewObject<UHutongPlanOutlineComponent>(Owner, NAME_None, RF_Transactional);
 		Outline->SetupAttachment(Owner->GetRootComponent());
-		// AddInstanceComponent too, or it is neither saved nor listed on the actor.
+		// AddInstanceComponent so it is saved and listed on the actor.
 		Owner->AddInstanceComponent(Outline);
 		Outline->RegisterComponent();
 	}
@@ -219,26 +224,22 @@ void UHutongBuildingComponent::PostEditChangeProperty(FPropertyChangedEvent& Pro
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 
-	// Skip the stream of updates a slider drag produces.
+	// Rebuild on commit only: a rebuild bakes a whole UStaticMesh.
 	if (PropertyChangedEvent.ChangeType == EPropertyChangeType::Interactive) return;
-	// Locking or unlocking changes nothing built: unlocking must not rebuild over the finished work. Locking
-	// gives it a mesh of its own, so work on the mesh touches no other building.
+	// Unlocking leaves the build as it is, keeping the finished work.
 	if (PropertyChangedEvent.GetPropertyName() == GET_MEMBER_NAME_CHECKED(UHutongBuildingComponent, bLocked))
 	{
 		if (bLocked) MakeMeshUnique();
 		return;
 	}
 
-	// A picked preset replaces only the parameters; footprint, facing and transform stay. Its
-	// suggested frontage only affects a *new* drag.
 	const FName Changed = PropertyChangedEvent.GetPropertyName();
 	if (Changed == GET_MEMBER_NAME_CHECKED(UHutongBuildingComponent, Preset) && !Preset.IsEmpty())
 	{
 		ApplyPresetParams(Preset);
 	}
 
-	// A corner past the opposite edge folds the quad and would invert the warp; the panel shows the
-	// rectangle built instead.
+	// A corner past the opposite edge folds the quad and would invert the warp.
 	{
 		if (HasFootprintSkew() && !HutongFootprint::IsSkewValid(GetFootprintSize(), GetFootprintSkew()))
 		{
@@ -255,8 +256,8 @@ void UHutongBuildingComponent::PostEditUndo()
 {
 	Super::PostEditUndo();
 
-	// Undoing a conversion also lands here for the removed component, reset to defaults; building
-	// from it would bake a default building. Only a component the actor still carries may build.
+	// Undoing a conversion lands here for the removed component, reset to defaults; only a component the
+	// actor still carries may build.
 	const AActor* Owner = GetOwner();
 	if (!IsValid(this) || !Owner || !Owner->GetComponents().Contains(this)) return;
 
@@ -271,15 +272,12 @@ void UHutongWallBuildingComponent::BuildWallMesh(const FHutongWallParams& InPara
 {
 	FHutongWallParams P = InParams;
 	P.Length = FMath::Max(InLength, 1.0);
-	// The footprint caps the thickness.
 	P.FootprintThickness = FMath::Max(InThickness, 1.0);
 
 	HutongGen::Detail::Apply(Detail, P);
 
-	// 牆 has no block form: a run is already boxes.
 	HutongGen::BuildWall(OutMesh, P);
 
-	// BuildWall lays the length along X.
 	if (bAlongY)
 	{
 		for (int32 vid : OutMesh.VertexIndicesItr())
@@ -296,9 +294,79 @@ void UHutongWallBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDeta
 	FHutongWallParams P = Params;
 	P.StartExtend = StartExtend;
 	P.EndExtend = EndExtend;
-	// Same answer as GetBuiltThickness.
 	const double Cross = (FootprintThickness > 0.0) ? FootprintThickness : P.GetThickness();
 	BuildWallMesh(P, Length, Cross, bLengthAlongY, OutMesh, Level);
+}
+
+UHutongWallBuildingComponent::FPieceRun UHutongWallBuildingComponent::GetPieceRun() const
+{
+	FPieceRun Run;
+	Run.Params = Params;
+	Run.Length = Length;
+	Run.Thickness = GetBuiltThickness();
+	Run.StartExtend = StartExtend;
+	Run.EndExtend = EndExtend;
+	Run.Skew = FootprintSkew;
+	if (!bLengthAlongY) return Run;
+
+	// Run (X, Y) stands at actor (Y, Length - X).
+	Run.Frame = FTransform(FRotator(0.0, -90.0, 0.0), FVector(0.0, Length, 0.0));
+	Run.StartExtend = EndExtend;
+	Run.EndExtend = StartExtend;
+	Run.Params.GatePosition = 1.0 - Params.GatePosition;
+	Run.Params.DoorwayPosition = 1.0 - Params.DoorwayPosition;
+	for (double& Position : Run.Params.MoreGatePositions) Position = 1.0 - Position;
+	const auto ToRun = [](const FVector2D& Offset) { return FVector2D(-Offset.Y, Offset.X); };
+	Run.Skew.Corner10 = ToRun(FootprintSkew.Corner00);
+	Run.Skew.Corner11 = ToRun(FootprintSkew.Corner10);
+	Run.Skew.Corner01 = ToRun(FootprintSkew.Corner11);
+	Run.Skew.Corner00 = ToRun(FootprintSkew.Corner01);
+	return Run;
+}
+
+void UHutongWallBuildingComponent::ApplyPlacementAttachments()
+{
+	Super::ApplyPlacementAttachments();
+	if (bPlanOnly || bLocked || !BuildsInstanced()) return;
+	int32 Placed = 0, Meshes = 0;
+	HutongGen::CountMeshInstances(GetOwner(), Placed, Meshes);
+	if (Placed == 0) Rebuild();
+}
+
+bool UHutongWallBuildingComponent::BuildsInstanced() const
+{
+	return HutongGen::WallPieces::IsEnabled() && !bBespokeMesh;
+}
+
+bool UHutongWallBuildingComponent::BuildInstances(TArray<HutongGen::FMeshInstances>& OutGroups) const
+{
+	using namespace HutongGen::WallPieces;
+	if (!BuildsInstanced()) return false;
+	const FPieceRun Run = GetPieceRun();
+	TMap<FString, int32> GroupOfPiece;
+	TMap<FString, int32> GroupOfMesh;
+	for (const FPiece& Piece : Plan(Run.Params, Run.Length, Run.Thickness, Run.StartExtend, Run.EndExtend, Run.Skew))
+	{
+		const FString Identity = PieceIdentity(Run.Params, Piece, Run.Thickness);
+		int32* Group = GroupOfPiece.Find(Identity);
+		if (!Group)
+		{
+			TArray<FDynamicMesh3> LODs;
+			const int32 CollisionLOD = BuildPieceLODs(Run.Params, Piece, Run.Thickness, DetailLevel, bBuildLODChain, LODs);
+			const FString Key = HutongGen::LibraryKeyFor(LODs, CollisionLOD);
+			int32* SameMesh = GroupOfMesh.Find(Key);
+			if (!SameMesh)
+			{
+				HutongGen::FMeshInstances& Added = OutGroups.AddDefaulted_GetRef();
+				Added.LODs = MoveTemp(LODs);
+				Added.CollisionLOD = CollisionLOD;
+				SameMesh = &GroupOfMesh.Add(Key, OutGroups.Num() - 1);
+			}
+			Group = &GroupOfPiece.Add(Identity, *SameMesh);
+		}
+		OutGroups[*Group].Placed.Add(FTransform(FQuat::Identity, FVector(OriginX(Piece), 0.0, 0.0), FVector(Piece.ScaleX, 1.0, 1.0)) * Run.Frame);
+	}
+	return true;
 }
 
 void UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(const FHutongSiheyuanParams& InParams,
@@ -323,14 +391,9 @@ void UHutongSiheyuanBuildingComponent::BuildSiheyuanMesh(const FHutongSiheyuanPa
 		HutongGen::BuildSiheyuan(OutMesh, P);
 	}
 
-	// BuildSiheyuan always puts the facade on -Y; rotate the result onto the chosen side.
 	if (Side == EHutongBaySide::MinusY) return;
 
-	for (int32 vid : OutMesh.VertexIndicesItr())
-	{
-		OutMesh.SetVertex(vid,
-			HutongGen::BaySide::RotateVertex(Side, OutMesh.GetVertex(vid), SizeX, SizeY));
-	}
+	HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::OntoSide(Side, SizeX, SizeY));
 
 }
 
@@ -347,14 +410,10 @@ void UHutongEarPassageBuildingComponent::BuildEarPassageMesh(const FHutongEarPas
 	P.Width = bAlongX ? SizeX : SizeY;
 	P.Depth = bAlongX ? SizeY : SizeX;
 
-	// Detail level applied inside, per part.
 	HutongGen::BuildEarPassage(OutMesh, P, Detail);
 
 	if (Side == EHutongBaySide::MinusY) return;
-	for (int32 vid : OutMesh.VertexIndicesItr())
-	{
-		OutMesh.SetVertex(vid, HutongGen::BaySide::RotateVertex(Side, OutMesh.GetVertex(vid), SizeX, SizeY));
-	}
+	HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::OntoSide(Side, SizeX, SizeY));
 }
 
 void UHutongEarPassageBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDetail Level) const
@@ -368,7 +427,7 @@ void UHutongGateHouseBuildingComponent::BuildGateHouseMesh(
 	const FHutongGateHouseParams& InParams, EHutongBaySide Side,
 	double SizeX, double SizeY, FDynamicMesh3& OutMesh, EHutongDetail Detail)
 {
-	// BuildGateHouse always faces -Y, so the facade span is X and the depth is Y.
+	// BuildGateHouse faces -Y, so the facade span is X and the depth is Y.
 	FHutongGateHouseParams P = InParams;
 	const bool bAlongX = HutongGen::BaySide::IsAlongX(Side);
 	P.Width = bAlongX ? SizeX : SizeY;
@@ -387,11 +446,7 @@ void UHutongGateHouseBuildingComponent::BuildGateHouseMesh(
 
 	if (Side != EHutongBaySide::MinusY)
 	{
-		for (int32 vid : OutMesh.VertexIndicesItr())
-		{
-			OutMesh.SetVertex(vid,
-				HutongGen::BaySide::RotateVertex(Side, OutMesh.GetVertex(vid), SizeX, SizeY));
-		}
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::OntoSide(Side, SizeX, SizeY));
 	}
 }
 
@@ -419,11 +474,9 @@ void UHutongPaifangBuildingComponent::BuildPaifangMesh(
 		HutongGen::BuildPaifang(OutMesh, P);
 	}
 
-	// BuildPaifang lays the span along X.
 	if (bAlongY)
 	{
-		HutongMeshUtils::YawVerticesFrom(OutMesh, 0,
-			FVector2d(0.5 * InDepth, 0.5 * InDepth), 90.0);
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::About(FVector2d(0.5 * InDepth, 0.5 * InDepth), 1));
 	}
 }
 
@@ -431,8 +484,6 @@ void UHutongPaifangBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongD
 {
 	BuildPaifangMesh(Params, Length, Depth, bLengthAlongY, OutMesh, Level);
 }
-
-// --- 影壁 ---
 
 void UHutongScreenWallBuildingComponent::BuildScreenWallMesh(
 	const FHutongScreenWallParams& InParams, double InLength, bool bAlongY, FDynamicMesh3& OutMesh,
@@ -452,11 +503,10 @@ void UHutongScreenWallBuildingComponent::BuildScreenWallMesh(
 		HutongGen::BuildScreenWall(OutMesh, P);
 	}
 
-	// Built along X.
 	if (bAlongY)
 	{
 		const double Dep = P.GetFootprintDepth();
-		HutongMeshUtils::YawVerticesFrom(OutMesh, 0, FVector2d(0.5 * Dep, 0.5 * Dep), 90.0);
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::About(FVector2d(0.5 * Dep, 0.5 * Dep), 1));
 	}
 }
 
@@ -464,8 +514,6 @@ void UHutongScreenWallBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHuto
 {
 	BuildScreenWallMesh(Params, Length, bLengthAlongY, OutMesh, Level);
 }
-
-// --- 遊廊 ---
 
 void UHutongCorridorBuildingComponent::BuildCorridorMesh(
 	const FHutongCorridorParams& InParams, double InLength, bool bAlongY, bool bFlip,
@@ -498,16 +546,15 @@ void UHutongCorridorBuildingComponent::BuildCorridorMesh(
 
 	const double Dep = P.GetFootprintDepth();
 
-	// Open side flips by a 180° yaw about the centre, not a mirror.
+	// Open side flips by a 180° yaw about the centre, keeping the winding.
 	if (bFlip)
 	{
-		HutongMeshUtils::YawVerticesFrom(OutMesh, 0,
-			FVector2d(0.5 * InLength, 0.5 * Dep), 180.0);
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::About(FVector2d(0.5 * InLength, 0.5 * Dep), 2));
 	}
 
 	if (bAlongY)
 	{
-		HutongMeshUtils::YawVerticesFrom(OutMesh, 0, FVector2d(0.5 * Dep, 0.5 * Dep), 90.0);
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::About(FVector2d(0.5 * Dep, 0.5 * Dep), 1));
 	}
 }
 
@@ -523,13 +570,10 @@ void UHutongCorridorBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutong
 	BuildCorridorMesh(P, Length, bLengthAlongY, bFlipOpenSide, OutMesh, Level);
 }
 
-// --- 垂花門 ---
-
 void UHutongInnerGateBuildingComponent::BuildInnerGateMesh(
 	const FHutongInnerGateParams& InParams, EHutongBaySide Side,
 	double SizeX, double SizeY, FDynamicMesh3& OutMesh, EHutongDetail Detail)
 {
-	// Built facing -Y and rotated into the chosen side in place.
 	FHutongInnerGateParams P = InParams;
 	const bool bAlongX = HutongGen::BaySide::IsAlongX(Side);
 	P.Width = bAlongX ? SizeX : SizeY;
@@ -548,11 +592,7 @@ void UHutongInnerGateBuildingComponent::BuildInnerGateMesh(
 
 	if (Side != EHutongBaySide::MinusY)
 	{
-		for (int32 vid : OutMesh.VertexIndicesItr())
-		{
-			OutMesh.SetVertex(vid,
-				HutongGen::BaySide::RotateVertex(Side, OutMesh.GetVertex(vid), SizeX, SizeY));
-		}
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::OntoSide(Side, SizeX, SizeY));
 	}
 }
 
@@ -562,8 +602,6 @@ void UHutongInnerGateBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHuton
 	BuildInnerGateMesh(Params, BaySide,
 		bAlongX ? Width : Depth, bAlongX ? Depth : Width, OutMesh, Level);
 }
-
-// --- 鋪面房 ---
 
 namespace
 {
@@ -631,11 +669,7 @@ void UHutongShopfrontBuildingComponent::BuildShopfrontMesh(
 
 	if (Side != EHutongBaySide::MinusY)
 	{
-		for (int32 vid : OutMesh.VertexIndicesItr())
-		{
-			OutMesh.SetVertex(vid,
-				HutongGen::BaySide::RotateVertex(Side, OutMesh.GetVertex(vid), SizeX, SizeY));
-		}
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::OntoSide(Side, SizeX, SizeY));
 	}
 }
 
@@ -643,8 +677,6 @@ void UHutongShopfrontBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHuton
 {
 	BuildShopfrontMesh(Params, BaySide, BayCountOverride, FootprintX, FootprintY, OutMesh, Level);
 }
-
-// --- 樓 ---
 
 void UHutongStoreyBuildingComponent::BuildStoreyMesh(
 	const FHutongStoreyParams& InParams, EHutongBaySide Side, int32 InBayCountOverride,
@@ -669,11 +701,7 @@ void UHutongStoreyBuildingComponent::BuildStoreyMesh(
 
 	if (Side != EHutongBaySide::MinusY)
 	{
-		for (int32 vid : OutMesh.VertexIndicesItr())
-		{
-			OutMesh.SetVertex(vid,
-				HutongGen::BaySide::RotateVertex(Side, OutMesh.GetVertex(vid), SizeX, SizeY));
-		}
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::OntoSide(Side, SizeX, SizeY));
 	}
 }
 
@@ -682,13 +710,10 @@ void UHutongStoreyBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDe
 	BuildStoreyMesh(Params, BaySide, BayCountOverride, FootprintX, FootprintY, OutMesh, Level);
 }
 
-// --- 亭 ---
-
 void UHutongPavilionBuildingComponent::BuildPavilionMesh(
 	const FHutongPavilionParams& InParams, double SizeX, double SizeY, FDynamicMesh3& OutMesh,
 	EHutongDetail Detail)
 {
-	// No facing side and no rotation.
 	FHutongPavilionParams P = InParams;
 	P.Width = SizeX;
 	P.Depth = SizeY;
@@ -709,8 +734,6 @@ void UHutongPavilionBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutong
 	BuildPavilionMesh(Params, Width, Depth, OutMesh, Level);
 }
 
-// --- 甬路 ---
-
 void UHutongPathBuildingComponent::BuildPathMesh(
 	const FHutongPathParams& InParams, double InLength, double InWidth, bool bAlongY,
 	FDynamicMesh3& OutMesh, EHutongDetail Detail)
@@ -721,14 +744,12 @@ void UHutongPathBuildingComponent::BuildPathMesh(
 
 	HutongGen::Detail::Apply(Detail, P);
 
-	// 甬路 has no block form: detail level only thins its courses.
 	HutongGen::BuildPath(OutMesh, P);
 
-	// Built along X and swung onto Y by a real rotation, not an X/Y swap.
 	if (bAlongY)
 	{
 		const double Dep = P.GetFootprintDepth();
-		HutongMeshUtils::YawVerticesFrom(OutMesh, 0, FVector2d(0.5 * Dep, 0.5 * Dep), 90.0);
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::About(FVector2d(0.5 * Dep, 0.5 * Dep), 1));
 	}
 }
 
@@ -736,8 +757,6 @@ void UHutongPathBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDeta
 {
 	BuildPathMesh(Params, Length, Width, bLengthAlongY, OutMesh, Level);
 }
-
-// --- 殿 ---
 
 void UHutongHallBuildingComponent::BuildHallMesh(
 	const FHutongHallParams& InParams, EHutongBaySide Side,
@@ -761,14 +780,9 @@ void UHutongHallBuildingComponent::BuildHallMesh(
 		HutongGen::BuildHall(OutMesh, P);
 	}
 
-	// Built facade on -Y, rotated into place.
 	if (Side != EHutongBaySide::MinusY)
 	{
-		for (int32 vid : OutMesh.VertexIndicesItr())
-		{
-			OutMesh.SetVertex(vid,
-				HutongGen::BaySide::RotateVertex(Side, OutMesh.GetVertex(vid), SizeX, SizeY));
-		}
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::OntoSide(Side, SizeX, SizeY));
 	}
 }
 
@@ -777,8 +791,6 @@ void UHutongHallBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDeta
 	BuildHallMesh(Params, BaySide, BayCountOverride, FootprintX, FootprintY, OutMesh,
 		Level);
 }
-
-// --- 過道 ---
 
 void UHutongPassageBuildingComponent::BuildPassageMesh(
 	const FHutongPassageParams& InParams, double InLength, double InWidth, bool bAlongY,
@@ -798,11 +810,10 @@ void UHutongPassageBuildingComponent::BuildPassageMesh(
 		HutongGen::BuildPassage(OutMesh, P);
 	}
 
-	// Built with the run along X, then swung onto Y.
 	if (bAlongY)
 	{
 		const double Dep = P.GetRoofSpan();
-		HutongMeshUtils::YawVerticesFrom(OutMesh, 0, FVector2d(0.5 * Dep, 0.5 * Dep), 90.0);
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::About(FVector2d(0.5 * Dep, 0.5 * Dep), 1));
 	}
 }
 
@@ -810,8 +821,6 @@ void UHutongPassageBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongD
 {
 	BuildPassageMesh(Params, Length, Width, bLengthAlongY, OutMesh, Level);
 }
-
-// --- 花池 ---
 
 void UHutongFlowerBedBuildingComponent::BuildFlowerBedMesh(
 	const FHutongFlowerBedParams& InParams, double SizeX, double SizeY, FDynamicMesh3& OutMesh,
@@ -829,22 +838,15 @@ void UHutongFlowerBedBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHuton
 	BuildFlowerBedMesh(Params, FootprintX, FootprintY, OutMesh, Level);
 }
 
-// --- 小房 ---
-
 void UHutongSmallBuildingComponent::BuildSmallBuildingMesh(const FHutongSmallBuildingParams& InParams, EHutongBaySide Side,
 	int32 InBayCountOverride, double SizeX, double SizeY, FDynamicMesh3& OutMesh, EHutongDetail Detail)
 {
 	FHutongSmallBuildingParams P = Sized(InParams, Side, InBayCountOverride, SizeX, SizeY);
-	// Tile courses only close up, as on every roof.
 	if (Detail != EHutongDetail::Near && Detail != EHutongDetail::Hero) P.bHasTileRuns = false;
 	HutongGen::BuildSmallBuilding(OutMesh, P, Detail != EHutongDetail::Massing);
 
-	// Built front on -Y, turned onto the chosen side.
 	if (Side == EHutongBaySide::MinusY) return;
-	for (int32 vid : OutMesh.VertexIndicesItr())
-	{
-		OutMesh.SetVertex(vid, HutongGen::BaySide::RotateVertex(Side, OutMesh.GetVertex(vid), SizeX, SizeY));
-	}
+	HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::OntoSide(Side, SizeX, SizeY));
 }
 
 void UHutongSmallBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDetail Level) const
@@ -852,13 +854,9 @@ void UHutongSmallBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDet
 	BuildSmallBuildingMesh(Params, BaySide, BayCountOverride, FootprintX, FootprintY, OutMesh, Level);
 }
 
-// --- 城牆 ---
-
 namespace
 {
-	// The params the generator builds with: it builds the outer face on -Y and the half turn puts it on +Y,
-	// which also reverses the run — so the ramp's position and direction are flipped first and stay the
-	// leg's own whichever side the battlements are on.
+	// The half turn to +Y reverses the run, so the ramp's position and direction are flipped first.
 	FHutongCityWallParams CityWallBuiltParams(const FHutongCityWallParams& InParams, double InLength, EHutongBaySide Outer)
 	{
 		FHutongCityWallParams P = InParams;
@@ -903,7 +901,6 @@ bool UHutongCityWallBuildingComponent::GetRampOutline(const FHutongCityWallParam
 	const double B = P.GetBaseWidth();
 	const double RW = FMath::Max(P.RampWidth, 150.0);
 	const double YGap = B - P.GetBatter() - 0.5 * P.GetInnerParapetThickness();
-	// Built frame, then the same half turn as the mesh.
 	auto Leg = [&](double X, double Y)
 	{
 		return Outer == EHutongBaySide::PlusY ? FVector2D(P.Length - X, B - Y) : FVector2D(X, Y);
@@ -925,10 +922,9 @@ void UHutongCityWallBuildingComponent::BuildCityWallMesh(const FHutongCityWallPa
 	FHutongCityWallParams P = CityWallBuiltParams(InParams, InLength, Outer);
 	HutongGen::BuildCityWall(OutMesh, P, Detail != EHutongDetail::Massing,
 		P.bLoopholes && (Detail == EHutongDetail::Near || Detail == EHutongDetail::Hero));
-	// Built outer face on -Y; a half turn about the centre, never a mirror, puts it on +Y.
 	if (Outer == EHutongBaySide::PlusY)
 	{
-		HutongMeshUtils::YawVerticesFrom(OutMesh, 0, FVector2d(0.5 * P.Length, 0.5 * P.GetBaseWidth()), 180.0);
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::About(FVector2d(0.5 * P.Length, 0.5 * P.GetBaseWidth()), 2));
 	}
 }
 
@@ -937,7 +933,153 @@ void UHutongCityWallBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutong
 	BuildCityWallMesh(Params, Length, OuterSide, OutMesh, Level);
 }
 
-// --- 魚缸 ---
+#if WITH_EDITOR
+void UHutongWallCornerBuildingComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	if (PropertyChangedEvent.GetPropertyName() == GET_MEMBER_NAME_CHECKED(FHutongCityWallParams, Rank))
+	{
+		Params.ChooseRank(Params.Rank);
+	}
+	OuterCorner = FMath::Clamp(OuterCorner, 0, 3);
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+}
+#endif
+
+void UHutongWallCornerBuildingComponent::BuildCornerMesh(const FHutongCityWallParams& InParams, EHutongWallCornerShape InShape,
+	double InPlatform, int32 InOuterCorner, FDynamicMesh3& OutMesh, EHutongDetail Detail, EHutongCornerTower InTower)
+{
+	const bool bBattlements = Detail != EHutongDetail::Massing;
+	const bool bLoopholes = InParams.bLoopholes && (Detail == EHutongDetail::Near || Detail == EHutongDetail::Hero);
+	if (InShape == EHutongWallCornerShape::Rounded) HutongGen::BuildRoundedCorner(OutMesh, InParams, InPlatform, bBattlements, bLoopholes);
+	else
+	{
+		HutongGen::BuildWallCorner(OutMesh, InParams, InPlatform, bBattlements, bLoopholes, InTower != EHutongCornerTower::ArrowTower);
+		if (InTower == EHutongCornerTower::PalaceTower)
+		{
+			// Centred on the platform's walk, clear of the battlements and the inner parapet.
+			const double C = InParams.GetBatter() + HutongCanon::PalaceCornerTower::MarginCm + 0.5 * HutongGen::PalaceCornerTowerSpan()
+				+ InParams.GetParapetThickness();
+			HutongGen::AppendPalaceCornerTower(OutMesh, C, C, InParams.GetHeight(), bBattlements);
+		}
+		if (InTower == EHutongCornerTower::ArrowTower)
+		{
+			HutongGen::AppendCornerArrowTower(OutMesh, InPlatform, InParams.GetBatter() + HutongCanon::CornerTower::MarginCm,
+				InParams.GetHeight(), bBattlements);
+		}
+	}
+	const int32 Quarters = ((InOuterCorner % 4) + 4) % 4;
+	if (Quarters != 0)
+	{
+		HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::About(FVector2d(0.5 * InPlatform, 0.5 * InPlatform), Quarters));
+	}
+}
+
+void UHutongWallCornerBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDetail Level) const
+{
+	BuildCornerMesh(Params, Shape, GetPlatformSize(), OuterCorner, OutMesh, Level, Tower);
+}
+
+FVector UHutongWallCornerBuildingComponent::GetOuterCornerWorld() const
+{
+	const double S = GetPlatformSize();
+	const HutongGen::FMeshTurn Turn = HutongGen::FMeshTurn::About(FVector2d(0.5 * S, 0.5 * S), ((OuterCorner % 4) + 4) % 4);
+	const FTransform Xf = GetOwner() ? GetOwner()->GetActorTransform() : FTransform::Identity;
+	return Xf.TransformPosition(FVector(Turn.Apply(FVector3d::ZeroVector)));
+}
+
+void UHutongWallCornerBuildingComponent::GetWallPorts(TArray<FWallPort>& Out) const
+{
+	const double S = GetPlatformSize(), B = Params.GetBaseWidth();
+	const HutongGen::FMeshTurn Turn = HutongGen::FMeshTurn::About(FVector2d(0.5 * S, 0.5 * S), ((OuterCorner % 4) + 4) % 4);
+	const FTransform Xf = GetOwner() ? GetOwner()->GetActorTransform() : FTransform::Identity;
+	const FVector3d Local[2] = { { S, 0.5 * B, 0.0 }, { 0.5 * B, S, 0.0 } };
+	const FVector3d Dir[2] = { { 1.0, 0.0, 0.0 }, { 0.0, 1.0, 0.0 } };
+	const FVector Outside = GetOuterCornerWorld();
+	for (int32 k = 0; k < 2; ++k)
+	{
+		const FVector3d P = Turn.Apply(Local[k]);
+		const FVector3d D = Turn.Apply(Local[k] + Dir[k]) - P;
+		const FVector WD = Xf.TransformVectorNoScale(FVector(D));
+		Out.Add({ Xf.TransformPosition(FVector(P)), FVector2D(WD.X, WD.Y).GetSafeNormal(), Outside, B });
+	}
+}
+
+FVector2D UHutongArrowTowerBuildingComponent::FootprintFor(const FHutongArrowTowerParams& InParams, EHutongBaySide Side)
+{
+	const FVector2D Built(InParams.GetPlatformWidth(), InParams.GetPlatformDepth());
+	return HutongGen::BaySide::IsAlongX((HutongGen::EBaySide)Side) ? Built : FVector2D(Built.Y, Built.X);
+}
+
+void UHutongArrowTowerBuildingComponent::BuildArrowTowerMesh(const FHutongArrowTowerParams& InParams, EHutongBaySide Side,
+	FDynamicMesh3& OutMesh, EHutongDetail Detail)
+{
+	const bool bNear = Detail == EHutongDetail::Near || Detail == EHutongDetail::Hero;
+	HutongGen::BuildArrowTower(OutMesh, InParams, Detail != EHutongDetail::Massing, bNear);
+	if (Side == EHutongBaySide::MinusY) return;
+	const FVector2D S = FootprintFor(InParams, Side);
+	HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::OntoSide(Side, S.X, S.Y));
+}
+
+void UHutongArrowTowerBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDetail Level) const
+{
+	BuildArrowTowerMesh(Params, Facade, OutMesh, Level);
+}
+
+FVector2D UHutongCityGateBuildingComponent::FootprintFor(const FHutongCityGateParams& InParams, EHutongBaySide Side)
+{
+	const FVector2D Built(InParams.GetLength(), InParams.GetDepth());
+	return HutongGen::BaySide::IsAlongX((HutongGen::EBaySide)Side) ? Built : FVector2D(Built.Y, Built.X);
+}
+
+void UHutongCityGateBuildingComponent::BuildCityGateMesh(const FHutongCityGateParams& InParams, EHutongBaySide Side,
+	FDynamicMesh3& OutMesh, EHutongDetail Detail)
+{
+	HutongGen::BuildCityGate(OutMesh, InParams, Detail != EHutongDetail::Massing);
+	if (Side == EHutongBaySide::MinusY) return;
+	const FVector2D S = FootprintFor(InParams, Side);
+	HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::OntoSide(Side, S.X, S.Y));
+}
+
+void UHutongCityGateBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDetail Level) const
+{
+	BuildCityGateMesh(Params, Facade, OutMesh, Level);
+}
+
+void UHutongCityGateBuildingComponent::GetWallPorts(TArray<FWallPort>& Out) const
+{
+	const double L = Params.GetLength(), B = Params.GetWall().GetBaseWidth();
+	const FVector2D S = FootprintFor(Params, Facade);
+	const HutongGen::FMeshTurn Turn = HutongGen::FMeshTurn::OntoSide(Facade, S.X, S.Y);
+	const FTransform Xf = GetOwner() ? GetOwner()->GetActorTransform() : FTransform::Identity;
+	const FVector Outside = Xf.TransformPosition(FVector(Turn.Apply(FVector3d(0.5 * L, -10.0 * B, 0.0))));
+	const FVector3d Local[2] = { { 0.0, 0.5 * B, 0.0 }, { L, 0.5 * B, 0.0 } };
+	const FVector3d Dir[2] = { { -1.0, 0.0, 0.0 }, { 1.0, 0.0, 0.0 } };
+	for (int32 k = 0; k < 2; ++k)
+	{
+		const FVector3d P = Turn.Apply(Local[k]);
+		const FVector3d D = Turn.Apply(Local[k] + Dir[k]) - P;
+		const FVector WD = Xf.TransformVectorNoScale(FVector(D));
+		Out.Add({ Xf.TransformPosition(FVector(P)), FVector2D(WD.X, WD.Y).GetSafeNormal(), Outside, B });
+	}
+}
+
+void UHutongArrowTowerBuildingComponent::GetWallPorts(TArray<FWallPort>& Out) const
+{
+	const double Wp = Params.GetPlatformWidth(), B = Params.GetLegBaseWidth(), Yc = Params.GetLegOuterY() + 0.5 * B;
+	const FVector2D S = FootprintFor(Params, Facade);
+	const HutongGen::FMeshTurn Turn = HutongGen::FMeshTurn::OntoSide(Facade, S.X, S.Y);
+	const FTransform Xf = GetOwner() ? GetOwner()->GetActorTransform() : FTransform::Identity;
+	const FVector Outside = Xf.TransformPosition(FVector(Turn.Apply(FVector3d(0.5 * Wp, -10.0 * B, 0.0))));
+	const FVector3d Local[2] = { { 0.0, Yc, 0.0 }, { Wp, Yc, 0.0 } };
+	const FVector3d Dir[2] = { { -1.0, 0.0, 0.0 }, { 1.0, 0.0, 0.0 } };
+	for (int32 k = 0; k < 2; ++k)
+	{
+		const FVector3d P = Turn.Apply(Local[k]);
+		const FVector3d D = Turn.Apply(Local[k] + Dir[k]) - P;
+		const FVector WD = Xf.TransformVectorNoScale(FVector(D));
+		Out.Add({ Xf.TransformPosition(FVector(P)), FVector2D(WD.X, WD.Y).GetSafeNormal(), Outside, B });
+	}
+}
 
 void UHutongWaterJarBuildingComponent::BuildWaterJarMesh(
 	const FHutongWaterJarParams& InParams, FDynamicMesh3& OutMesh, EHutongDetail Detail)
@@ -952,8 +1094,6 @@ void UHutongWaterJarBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutong
 	BuildWaterJarMesh(Params, OutMesh, Level);
 }
 
-// --- 構架 ---
-
 void UHutongFrameBuildingComponent::BuildFrameMesh(const FHutongFrameParams& InParams,
 	EHutongBaySide Side, int32 InBayCountOverride, double SizeX, double SizeY, FDynamicMesh3& OutMesh,
 	EHutongDetail Detail)
@@ -966,12 +1106,8 @@ void UHutongFrameBuildingComponent::BuildFrameMesh(const FHutongFrameParams& InP
 	HutongGen::Detail::Apply(Detail, P);
 	HutongGen::BuildFrame(OutMesh, P);
 
-	// Built front on -Y, rotated onto the chosen side.
 	if (Side == EHutongBaySide::MinusY) return;
-	for (int32 vid : OutMesh.VertexIndicesItr())
-	{
-		OutMesh.SetVertex(vid, HutongGen::BaySide::RotateVertex(Side, OutMesh.GetVertex(vid), SizeX, SizeY));
-	}
+	HutongGen::ApplyMeshTurn(OutMesh, HutongGen::FMeshTurn::OntoSide(Side, SizeX, SizeY));
 }
 
 void UHutongFrameBuildingComponent::BuildMesh(FDynamicMesh3& OutMesh, EHutongDetail Level) const

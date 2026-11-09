@@ -15,9 +15,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// Where a placement's time goes, stage by stage, for a few types: generation, bake (logged per stage with
-// hutong.LogBakeTiming), dressing, a second identical placement (the library hit), and the library save the
-// editor does after a new bake. Asserts nothing; read the log.
+// Asserts nothing; read the log (hutong.LogBakeTiming).
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongBakeTimingTest,
 	"HutongDev.BakeTiming",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -50,19 +48,18 @@ bool FHutongBakeTimingTest::RunTest(const FString& Parameters)
 			T0 = FPlatformTime::Seconds();
 			AStaticMeshActor* Actor = HutongGen::SpawnStaticMeshActor(World, LODs, FTransform::Identity, C.Name, Template->GetBuiltPalette(), CollisionLOD);
 			const double Bake = Ms(T0);
-			// Dressed straight after the bake, as a shop's placement does: must not wait for the build.
 			T0 = FPlatformTime::Seconds();
 			if (Actor) HutongGen::AssignPaletteMaterials(Actor, Template->GetBuiltPalette());
 			const double Dress = Ms(T0);
 			// The build itself runs in the background: whatever touches the mesh next waits for it.
 			T0 = FPlatformTime::Seconds();
-			if (Actor && Actor->GetStaticMeshComponent()->GetStaticMesh())
+			if (Actor && HutongGen::GetBuiltMeshComponent(Actor)->GetStaticMesh())
 			{
-				FStaticMeshCompilingManager::Get().FinishCompilation({ Actor->GetStaticMeshComponent()->GetStaticMesh() });
+				FStaticMeshCompilingManager::Get().FinishCompilation({ HutongGen::GetBuiltMeshComponent(Actor)->GetStaticMesh() });
 			}
 			const double Async = Ms(T0);
 			double Save = 0.0;
-			UStaticMesh* Mesh = Actor ? Actor->GetStaticMeshComponent()->GetStaticMesh() : nullptr;
+			UStaticMesh* Mesh = Actor ? HutongGen::GetBuiltMeshComponent(Actor)->GetStaticMesh() : nullptr;
 			if (Mesh && Pass == 0)
 			{
 				const FString File = FPaths::ProjectSavedDir() / TEXT("HutongBakeTiming") / (FString(C.Name) + TEXT(".uasset"));
@@ -77,8 +74,6 @@ bool FHutongBakeTimingTest::RunTest(const FString& Parameters)
 				C.Name, Pass, Tris, LODs.Num(), Gen, Bake, Async, Dress, Save);
 		}
 	}
-	// Eight distinct shops baked one after another with nothing waiting, then all finished: the builds run
-	// side by side, as a bulk Generate's now do.
 	{
 		const double T0 = FPlatformTime::Seconds();
 		TArray<UStaticMesh*> Meshes;
@@ -90,7 +85,7 @@ bool FHutongBakeTimingTest::RunTest(const FString& Parameters)
 			const int32 CollisionLOD = Template->BuildLODs(LODs);
 			if (AStaticMeshActor* Actor = HutongGen::SpawnStaticMeshActor(World, LODs, FTransform::Identity, TEXT("Batch"), Template->GetBuiltPalette(), CollisionLOD))
 			{
-				Meshes.Add(Actor->GetStaticMeshComponent()->GetStaticMesh());
+				Meshes.Add(HutongGen::GetBuiltMeshComponent(Actor)->GetStaticMesh());
 			}
 		}
 		const double Queued = Ms(T0);

@@ -14,8 +14,7 @@ namespace
 	using UE::Geometry::FDynamicMesh3;
 	using UE::Geometry::FDynamicMeshAABBTree3;
 
-	// Widest run of X (cm) along which a walker can come in off the street onto the customers' floor:
-	// level rays from well out in the street, knee to the top of a walker's head, all reach past the setback.
+	// Level rays from well out in the street, knee to head height, must all reach past the setback.
 	double WidestWayIn(const FDynamicMesh3& Mesh, const FHutongShopfrontParams& P)
 	{
 		FDynamicMeshAABBTree3 Tree(&Mesh);
@@ -49,7 +48,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongShopfrontWayInTest,
 
 bool FHutongShopfrontWayInTest::RunTest(const FString& Parameters)
 {
-	// An open shop can be walked into, whatever its front and wherever its counter; boarded up, it cannot.
 	const double Need = 2.0 * HutongCanon::Openings::WalkerRadiusCm;
 	for (const EHutongShopFront Front : { EHutongShopFront::Plain, EHutongShopFront::Carved, EHutongShopFront::Platform, EHutongShopFront::Shed })
 	{
@@ -95,7 +93,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongShopfrontCounterTest,
 
 bool FHutongShopfrontCounterTest::RunTest(const FString& Parameters)
 {
-	// The inside counter stands behind the customers' floor; the street one on the front line; none, nothing.
 	// Each ray's first hit at waist height across the middle of the front, past any column.
 	auto Hits = [](EHutongShopCounter Counter)
 	{
@@ -138,7 +135,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongShopfrontOpenRangeTest,
 
 bool FHutongShopfrontOpenRangeTest::RunTest(const FString& Parameters)
 {
-	// However many bays and however many open, the open run lies inside the frontage and is that long.
 	for (int32 N = 1; N <= 9; ++N)
 	{
 		for (int32 Open = 0; Open <= N; ++Open)
@@ -161,8 +157,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongShopfrontSignsInsideTest,
 
 bool FHutongShopfrontSignsInsideTest::RunTest(const FString& Parameters)
 {
-	// Signboards on the posts stay within the shop's ends, every bay open, every front: half out past the
-	// footprint they met a neighbour's face to face in a street row.
 	for (const EHutongShopFront Front : { EHutongShopFront::Plain, EHutongShopFront::Carved, EHutongShopFront::Platform, EHutongShopFront::Shed })
 	{
 		FHutongShopfrontParams P;

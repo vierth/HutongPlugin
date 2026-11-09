@@ -11,7 +11,6 @@ namespace HutongGen
 {
 	namespace
 	{
-		// A box of section Width x Height whose top edge runs From -> To, hung below that line.
 		void AppendMemberUnder(FDynamicMesh3& Mesh, const FVector3d& From, const FVector3d& To, double Width, double Height)
 		{
 			const FVector3d Delta = To - From;
@@ -25,7 +24,6 @@ namespace HutongGen
 			HutongMeshUtils::TransformVerticesFrom(Mesh, Mark, FTransform(FRotator(Pitch, Yaw, 0.0), FVector(From)));
 		}
 
-		// A level box centred on (X, Y), long along Yaw.
 		void AppendYawedBox(FDynamicMesh3& Mesh, double X, double Y, double Yaw, double Length, double Width, double Z0, double Z1)
 		{
 			const int32 Mark = Mesh.MaxVertexID();
@@ -33,7 +31,6 @@ namespace HutongGen
 			HutongMeshUtils::TransformVerticesFrom(Mesh, Mark, FTransform(FRotator(0.0, Yaw, 0.0), FVector(X, Y, 0.0)));
 		}
 
-		// A level purlin along X from X0 to X1 on (Y, Z).
 		void AppendPurlinX(FDynamicMesh3& Mesh, double X0, double X1, double Y, double Z, double Radius)
 		{
 			const int32 Mark = Mesh.MaxVertexID();
@@ -42,8 +39,7 @@ namespace HutongGen
 		}
 	}
 
-	// 陸柱圓亭 (則例 卷二十三): six columns on a circle under a roof of revolution. The square's section,
-	// eave and members; the 檐枋, 墊板 and 檐桁 run round as arcs, the frame is 扒梁 and 井口扒梁.
+	// 陸柱圓亭, 則例 卷二十三.
 	void BuildRoundPavilion(FDynamicMesh3& Mesh, const FHutongPavilionParams& P)
 	{
 		using namespace HutongMeshUtils;
@@ -55,7 +51,6 @@ namespace HutongGen
 		const double Col = P.GetColumnDiameter();
 		const double ColR = P.GetPlanColumnRadius();
 		const double Bay = P.GetBay();
-		// Column circle: the footprint is the columns' outer faces.
 		const double R = FMath::Max(0.5 * Side - ColR, 10.0);
 		const double Floor = P.GetFloorHeight();
 		const double Foot = P.GetColumnFoot();
@@ -68,14 +63,12 @@ namespace HutongGen
 		auto ColumnAt = [&](int32 i) { const double A = 2.0 * PI * i / NCol; return Ctr + R * FVector2d(FMath::Cos(A), FMath::Sin(A)); };
 		const int32 EntryBay = 4;
 
-		// 1) 圓台基: brick drum, 圓階條石 ring, 柱頂石 with 古鏡, 垂帶踏跺 before the entry bay.
 		if (Floor > 0.0)
 		{
 			const double Edge = FMath::Min(C::EdgeStoneWidth * Col, 0.4 * Rp);
 			const double CapZ = Floor - FMath::Min(C::EdgeStoneThickness * Col, 0.5 * Floor);
 			{
-				// The drum's top: a round centre stone, then 尺二方磚車輞砍墁 — rings one brick wide, each ring's
-				// bricks cut to close it, so the Pavers pattern lays wedges round the centre.
+				// 尺二方磚車輞砍墁: rings one brick wide, each ring's bricks cut to close it.
 				const double Rin = Rp - Edge;
 				const double CentreR = FMath::Min(C::RoundCentreStonePerBay * Bay, 0.3 * Rin);
 				const int32 Rings = FMath::Max(FMath::RoundToInt32((Rin - CentreR) / (C::RoundPaverPerBay * Bay)), 1);
@@ -92,8 +85,7 @@ namespace HutongGen
 				{
 					SetMaterialIDForTriangleRange(Mesh, Edges[0], Edges[1], MatSlot_Stone);
 					SetMaterialIDForTriangleRange(Mesh, Edges[1], Edges[Rings + 1], MatSlot_Floor);
-					// UVs in metres, as the pattern reads them: v across the rings, u along each, scaled per ring
-					// so a whole number of bricks closes it.
+					// UVs in metres, scaled per ring so a whole number of bricks closes it.
 					EnsureUVLayer(Mesh);
 					UE::Geometry::FDynamicMeshUVOverlay* UV = Mesh.Attributes()->PrimaryUV();
 					const double Brick = HutongGen::FloorPaverCm / 100.0;
@@ -141,7 +133,6 @@ namespace HutongGen
 
 			if (P.bHasSteps)
 			{
-				// Two 踏跺石 and the 硯窩石 at the ground, three risers; backs buried in the drum, 垂帶 either side.
 				const double Half = 0.5 * C::RoundStepWidthPerBay * Bay;
 				const double Str = C::StringerWidth * Col;
 				const double Tread = C::RoundStepTreadPerBay * Bay;
@@ -166,7 +157,6 @@ namespace HutongGen
 		const double ColTopR = Frame::TaperedTopRadius(ColR, P.GetColumnHeight(), P.ColumnTaperRatio);
 		const double PostHalf = P.bSquarePosts ? Frame::SquareHalfWidth(ColR) : ColR;
 
-		// 2) Six columns.
 		for (int32 i = 0; i < NCol; ++i)
 		{
 			const FVector2d At = ColumnAt(i);
@@ -174,7 +164,6 @@ namespace HutongGen
 			else Frame::AppendColumn(Mesh, At.X, At.Y, ColR, ColTopR, Foot, Eave, 1.0, 24);
 		}
 
-		// 3) 圓檐枋 round the column heads, 花梁頭 on each, the 墊板 and 圓桁 over them.
 		auto Rect = [](double Z0, double Z1, double Y0, double Y1) { return TArray<FVector2d>{ { Z0, Y0 }, { Z0, Y1 }, { Z1, Y1 }, { Z1, Y0 } }; };
 		const double LintelT = C::LintelThickness * Col;
 		const double LintelBottom = Eave - C::LintelHeight * Col;
@@ -196,7 +185,6 @@ namespace HutongGen
 			AppendArcSweep(Mesh, Ctr, R, Eave + BoardH + PurlinR, 0.0, 360.0, MakeCircleProfile(PurlinR, 12), Around);
 		}
 
-		// 4) Per bay, on its chord: 倒掛楣子 with a 花牙子 at each post, 坐凳欄杆 (the entry bay's open between stubs).
 		const double BarT = FMath::Max(P.FriezeBarSection, 1.0);
 		const double Drop = FMath::Min(P.bDeriveProportions ? C::RoundFriezeDropPerBay * Bay : P.FriezeDrop, LintelBottom - Floor - 30.0);
 		for (int32 i = 0; i < NCol; ++i)
@@ -211,7 +199,6 @@ namespace HutongGen
 				const double Z = LintelBottom - Drop;
 				for (const double Dir : { -1.0, 1.0 })
 				{
-					// Profile (x along the bay, z) swept across the bay's line.
 					const double X = Dir * (L - PostHalf + 0.5);
 					const TArray<FVector2d> Tri = { { X, Z + 0.5 }, { X - Dir * Reach, Z + 0.5 }, { X, Z - BDrop } };
 					const FMatrix M0(FVector::XAxisVector, FVector::UpVector, FVector(0.0, -1.0, 0.0), FVector(0.0, 0.5 * BarT, 0.0));
@@ -224,8 +211,6 @@ namespace HutongGen
 			TransformVerticesFrom(Mesh, Mark, FTransform(FRotator(0.0, Yaw, 0.0), FVector(Mid.X, Mid.Y, 0.0)));
 		}
 
-		// 坐凳欄杆 round the column circle, post face to post face; the entry bay's only from each column
-		// to a stile, open between. Seat, foot and middle rails turned as arcs, the uprights on radii.
 		if (P.bHasBench)
 		{
 			const double SeatTop = Floor + P.GetBenchHeight();
@@ -271,7 +256,6 @@ namespace HutongGen
 		}
 		WoodTag.Close();
 
-		// 5) Roof of revolution: courses round the eave a multiple of four per panel, near the tile pitch.
 		const double O = P.GetRoofOverhang();
 		const double Cover = HutongCanon::Frame::RoofCover * Col;
 		const bool bFrame = P.bExposedFrame;
@@ -283,7 +267,6 @@ namespace HutongGen
 		Spec.EaveOverhang = O;
 		Spec.UndersideRise = P.GetUndersideRise();
 		Spec.ShellCover = bFrame ? Cover : 0.0;
-		// One slope line per course round the eave, near the tile pitch there.
 		Spec.CoursesPerPanel = 1;
 		Spec.Panels = FMath::Max(FMath::RoundToInt32(2.0 * PI * Spec.Radius / FMath::Max(P.TileRowSpacing, 6.0)), 24);
 		Spec.Segments = FMath::Max(Around, 2 * Spec.Panels);
@@ -301,12 +284,9 @@ namespace HutongGen
 		const bool bFinial = P.bHasFinial;
 		const double FinialUnitH = P.GetFinialHeight() / C::FinialHeightPerBay;
 		const double FinialUnitW = P.GetFinialWidth() / C::FinialWidthPerBay;
-		// The 平甎 sits where the slope is as wide as it; the apex above is inside the courses over it.
 		const double CapR = C::RoundFinialCourses[0].FootRadius * FinialUnitW;
 		const double CapZ = Surface(CapR) - 1.0;
 
-		// 6) 徹上明造: 扒梁 on the columns either side, 井口扒梁 across them, 交金墩 under the 圓金桁 one 步架
-		// in, 由戧 to the 雷公柱, and rafters radiating, narrowing inward as the ring closes.
 		if (bFrame)
 		{
 			FSlotScope FrameTag(Mesh, MatSlot_Wood);
@@ -328,7 +308,6 @@ namespace HutongGen
 			const double Sin60 = FMath::Sin(PI / 3.0);
 			for (const double Dir : { -1.0, 1.0 })
 			{
-				// 扒梁 from column to column (60° to -60°, 120° to 240°); 井口扒梁 between them, a hair inside.
 				AppendBox(Mesh, FVector3d(CX + Dir * 0.5 * R - 0.5 * BeamW, CY - R * Sin60 - Col, BeamBottom),
 					FVector3d(CX + Dir * 0.5 * R + 0.5 * BeamW, CY + R * Sin60 + Col, BeamTop));
 				AppendBox(Mesh, FVector3d(CX - 0.5 * R, CY + Dir * Rg * Sin60 - 0.5 * BeamW, BeamBottom + 0.5),
@@ -343,11 +322,9 @@ namespace HutongGen
 			}
 
 			const double PostR = 0.5 * C::KingPostDiameter * Col;
-			// Its head in the 寶頂's skirt, or stopped under the slope without one.
 			const double PostTop = bFinial ? CapZ + 0.5 * C::RoundFinialCourses[0].Height * FinialUnitH : Surface(1.5 * PostR) - 0.5 * Cover - 2.0;
 			Frame::AppendHangingPost(Mesh, CX, CY, PostTop, PostTop - GoldZ, PostR, 0.25);
 
-			// Tapered with the circle: never wider than 0.8 of the gap to the next at that radius.
 			const TArray<FVector2d> Unit = { { -0.5, 0.0 }, { 0.5, 0.0 }, { 0.5, 1.0 }, { -0.5, 1.0 } };
 			auto AppendRafter = [&](double Th, double R0, double R1, int32 Count)
 			{
@@ -367,8 +344,6 @@ namespace HutongGen
 			for (int32 k = 0; k < Heads; ++k) AppendRafter(2.0 * PI * (k + 0.25) / Heads, Rg, PostR + 1.0, Heads);
 		}
 
-		// 7) 圓式花甎寶頂, one turned solid capping the roof: 寶珠 down through the 水盤沿, 須彌座, step and
-		// 翻荷葉 to the 平甎, whose underside lies where the courses end.
 		if (bFinial)
 		{
 			FSlotScope FinialTag(Mesh, MatSlot_Finial);
@@ -392,8 +367,7 @@ namespace HutongGen
 			AppendRevolvedProfile(Mesh, Ctr, Chain, 32);
 		}
 
-		// 壟: every course from the eave to under the 寶頂's skirt, tapering with the circle (AppendRoundRoofCourses);
-		// 椽頭 under the eave from the dressing, 每面椽數 18.
+		// 每面椽數 18.
 		if (P.bHasTileRuns)
 		{
 			Shell::AppendRoundRoofCourses(Mesh, RoofCentre, Spec, P.RoofTile, FMath::Max(P.EaveFasciaDepth, 0.0), bFinial ? 0.9 * CapR : 0.05 * Re);
@@ -431,27 +405,21 @@ namespace HutongGen
 		const double Floor = P.GetFloorHeight();
 		const double Foot = P.GetColumnFoot();
 		const double Eave = P.GetEaveHeight();
-		// Roof on the frame's line; posts and 檐枋 at the column top, 墊板 and 檐桁 round the ring between.
 		const double RoofZ = P.GetRoofBaseHeight();
 		const double PlatO = P.GetPlatformOverhang();
 
-		// Four columns inset by a radius so the footprint is their outer faces.
 		const double X0 = ColR, X1 = W - ColR;
 		const double Y0 = ColR, Y1 = D - ColR;
 		const double CX = 0.5 * W, CY = 0.5 * D;
-		// Half the column spans, and each side's: along it (L) and centre to its column line (E).
 		const double HalfX = CX - X0, HalfY = CY - Y0;
 		auto SideAlong = [&](int32 Side) { return (Side % 2 == 0) ? HalfX : HalfY; };
 		auto SideOut = [&](int32 Side) { return (Side % 2 == 0) ? HalfY : HalfX; };
-		// Built in a frame centred on the plan with the side on -Y, then turned onto it: 0 front, 1 right,
-		// 2 back, 3 left. A rotation, never a mirror.
+		// Built centred with the side on -Y, then turned: 0 front, 1 right, 2 back, 3 left.
 		auto PlaceSide = [&](int32 Side, int32 Mark)
 		{
 			TransformVerticesFrom(Mesh, Mark, FTransform(FRotator(0.0, 90.0 * Side, 0.0), FVector(CX, CY, 0.0)));
 		};
 
-		// 1) 臺基: brick body, 階條石 round the edge, 柱頂石 with a 古鏡 under each column, 如意踏跺 at the
-		// middle of each side.
 		if (Floor > 0.0)
 		{
 			const double PX0 = -PlatO, PX1 = W + PlatO, PY0 = -PlatO, PY1 = D + PlatO;
@@ -461,7 +429,6 @@ namespace HutongGen
 			FSlotScope BrickTag(Mesh, MatSlot_Body);
 			AppendBox(Mesh, FVector3d(PX0, PY0, 0.0), FVector3d(PX1, PY1, CapZ));
 			BrickTag.Close();
-			// Inside the 階條石, the 方磚 floor.
 			FSlotScope FloorTag(Mesh, MatSlot_Floor);
 			AppendBox(Mesh, FVector3d(PX0 + Edge, PY0 + Edge, CapZ), FVector3d(PX1 - Edge, PY1 - Edge, Floor));
 			FloorTag.Close();
@@ -472,7 +439,6 @@ namespace HutongGen
 			AppendBox(Mesh, FVector3d(PX0, PY0 + Edge, CapZ), FVector3d(PX0 + Edge, PY1 - Edge, Floor));
 			AppendBox(Mesh, FVector3d(PX1 - Edge, PY0 + Edge, CapZ), FVector3d(PX1, PY1 - Edge, Floor));
 
-			// Stone just proud of the floor, 古鏡 standing on it.
 			const double Half = 0.5 * C::BaseStoneSide * Col;
 			for (int32 i = 0; i < 4; ++i)
 			{
@@ -482,7 +448,6 @@ namespace HutongGen
 				if (Foot > Floor + 0.5) AppendCylinder(Mesh, FVector3d(X, Y, Floor), C::MirrorRadius * Col, Foot - Floor, 16);
 			}
 
-			// The step on the 如意石, each a third of the 台高, receding on three sides.
 			if (P.bHasSteps)
 			{
 				for (int32 Side = 0; Side < 4; ++Side)
@@ -503,7 +468,6 @@ namespace HutongGen
 		const double ColTopR = Frame::TaperedTopRadius(ColR, P.GetColumnHeight(), P.ColumnTaperRatio);
 		const double PostHalf = P.bSquarePosts ? Frame::SquareHalfWidth(ColR) : ColR;
 
-		// 2) Four columns.
 		for (int32 i = 0; i < 4; ++i)
 		{
 			const double X = (i == 0 || i == 3) ? X0 : X1;
@@ -512,8 +476,7 @@ namespace HutongGen
 			else Frame::AppendColumn(Mesh, X, Y, ColR, ColTopR, Foot, Eave, 1.0, 24);
 		}
 
-		// 3) 箍頭檐枋 round the four sides, crossing past each corner column. The Y pair a hair inside the X
-		// pair's top and bottom, so the crossings bury their faces.
+		// The Y pair a hair inside the X pair's top and bottom, so the crossings bury their faces.
 		const double LintelT = C::LintelThickness * Col;
 		const double LintelBottom = Eave - C::LintelHeight * Col;
 		const double Head = C::LintelHeadReach * Col;
@@ -522,7 +485,6 @@ namespace HutongGen
 		AppendBox(Mesh, FVector3d(X0 - 0.5 * LintelT, Y0 - Head, LintelBottom + 0.5), FVector3d(X0 + 0.5 * LintelT, Y1 + Head, Eave - 0.5));
 		AppendBox(Mesh, FVector3d(X1 - 0.5 * LintelT, Y0 - Head, LintelBottom + 0.5), FVector3d(X1 + 0.5 * LintelT, Y1 + Head, Eave - 0.5));
 
-		// 肆角花梁頭 on each corner column, along the diagonal under the crossing 檐桁.
 		for (int32 i = 0; i < 4; ++i)
 		{
 			const double X = (i == 0 || i == 3) ? X0 : X1;
@@ -531,7 +493,6 @@ namespace HutongGen
 			AppendYawedBox(Mesh, X, Y, Yaw, C::BeamHeadLength * Col, C::BeamHeadSection * Col, Eave - 0.5, Eave + C::BeamHeadSection * Col);
 		}
 
-		// 坐凳欄杆 from each column, open at the middle; 倒掛楣子 under the 檐枋 if asked for.
 		const double BarT = FMath::Max(P.FriezeBarSection, 1.0);
 		const double Drop = FMath::Min(P.FriezeDrop, LintelBottom - Floor - 30.0);
 		for (int32 Side = 0; Side < 4; ++Side)
@@ -552,7 +513,6 @@ namespace HutongGen
 				{
 					for (const double Dir : { -1.0, 1.0 })
 					{
-						// Column end at the post, the free end on a stile.
 						const double A = Dir * L, B = Dir * (L - Run);
 						Frame::AppendBenchRail(Mesh, FMath::Min(A, B), FMath::Max(A, B), Line, Floor, SeatTop, SeatD, PostHalf, true, true);
 						const double S0 = FMath::Min(B, B + Dir * PostHalf), S1 = FMath::Max(B, B + Dir * PostHalf);
@@ -565,7 +525,6 @@ namespace HutongGen
 
 		WoodTag.Close();
 
-		// 4) Roof.
 		const double O = P.GetRoofOverhang();
 		const double RoofW = (X1 - X0) + 2.0 * O;
 		const double RoofD = (Y1 - Y0) + 2.0 * O;
@@ -576,7 +535,6 @@ namespace HutongGen
 		const bool bFrame = P.bExposedFrame && bCuanjian;
 		const double Cover = HutongCanon::Frame::RoofCover * Col;
 
-		// The roof's surface at a normalized distance from the apex (1 at the eave).
 		auto Surface = [&](double U) { return RoofZ + RoofRise * Section.HeightFraction(U); };
 		auto UAt = [&](double Half, double FromCentre) { return FMath::Clamp(FromCentre / FMath::Max(Half + O, 1.0), 0.0, 1.0); };
 
@@ -651,14 +609,11 @@ namespace HutongGen
 
 		const double ApexZ = Surface(0.0);
 		const bool bFinial = P.bHasFinial && bCuanjian;
-		// Height and width units of the 寶頂's courses: the figure's 面闊, or the hand-set sizes.
 		const double FinialUnitH = P.GetFinialHeight() / C::FinialHeightPerBay;
 		const double FinialUnitW = P.GetFinialWidth() / C::FinialWidthPerBay;
 		const double FinialBaseTop = ApexZ + C::FinialCourses[0].Height * FinialUnitH;
 
-		// 5) 徹上明造 under the shell: 金桁 ring one 步架 in on 交金墩 and 抹角梁, 由戧 up the hips to the
-		// 雷公柱, and the rafters from the 檐桁 to the hips. Heights from the roof: the members' tops under the
-		// underside by a rafter, so nothing stands through it.
+		// Members' tops a rafter under the underside, so all stay inside the shell.
 		if (bFrame)
 		{
 			FSlotScope FrameTag(Mesh, MatSlot_Wood);
@@ -669,7 +624,6 @@ namespace HutongGen
 			const double PurlinR = 0.5 * C::PurlinDiameter * Col;
 			const double GoldZ = Underside(UGold) - Rafter - PurlinR;
 
-			// 金桁 ring, crossing at the corners with 出頭, 金枋 under each.
 			const double GoldReach = C::GoldPurlinHeadReach * Col;
 			const double TieTop = GoldZ - PurlinR + 0.1 * Col;
 			const double TieBottom = TieTop - C::GoldTieHeight * Col;
@@ -684,7 +638,6 @@ namespace HutongGen
 				AppendBox(Mesh, FVector3d(CX + Dir * GX - 0.5 * TieT, CY - GY, TieBottom + 0.5), FVector3d(CX + Dir * GX + 0.5 * TieT, CY + GY, TieTop - 0.5));
 			}
 
-			// 抹角梁 from side midpoint to side midpoint, a 交金墩 on each under the 金桁 corner.
 			const double BlockTop = TieBottom + 0.5;
 			const double BlockBottom = BlockTop - C::BlockHeight * Col;
 			const double BeamTop = BlockBottom + 0.5;
@@ -699,20 +652,16 @@ namespace HutongGen
 				AppendYawedBox(Mesh, Mid.X, Mid.Y, Yaw, (B - A).Length() + Col, C::CornerBeamWidth * Col, BeamBottom, BeamTop);
 				AppendYawedBox(Mesh, CX + SX * GX, CY + SY * GY, Yaw, C::BlockLength * Col, C::BlockWidth * Col, BlockBottom, BlockTop);
 
-				// 由戧 from the 金桁 crossing up the hip into the 雷公柱.
 				const FVector3d From(CX + SX * GX, CY + SY * GY, Underside(UGold));
 				const FVector3d To(CX, CY, Underside(0.0));
 				AppendMemberUnder(Mesh, From, To, C::HipBraceWidth * Col, C::HipBraceHeight * Col);
 			}
 
-			// 雷公柱 hung from the apex to the 金桁's height, its foot carved; its head in the 寶頂 when
-			// there is one, else stopped inside the shell.
 			const double PostR = 0.5 * C::KingPostDiameter * Col;
 			// The profile starts 2 cm over its top; bare, the rim stays under the slope it meets.
 			const double PostTop = bFinial ? FinialBaseTop - 3.0 : Surface(UAt(HalfY, 1.5 * PostR)) - 0.5 * Cover - 2.0;
 			Frame::AppendHangingPost(Mesh, CX, CY, PostTop, PostTop - GoldZ, PostR, 0.25);
 
-			// Rafters on each side from the 檐桁 up to the hips, following the 舉 and cut where they meet.
 			const double Spacing = FMath::Max(P.GetRafterSpacing(), 2.0 * Rafter);
 			for (int32 Side = 0; Side < 4; ++Side)
 			{
@@ -722,7 +671,6 @@ namespace HutongGen
 				for (int32 k = 0; k <= N; ++k)
 				{
 					const double X = -L + 2.0 * L * k / N;
-					// Along the rafter, distance from the centre falls from E to where the hip crosses it.
 					const double Stop = FMath::Abs(X) * E / FMath::Max(L, 1.0);
 					if (E - Stop < Rafter) continue;
 					TArray<double> Knots = { E };
@@ -740,8 +688,6 @@ namespace HutongGen
 			}
 		}
 
-		// 6) 方式花甎寶頂 on the apex: 寶頂博脊 sunk to meet the slopes, then 番荷葉, the 須彌座's five courses,
-		// 水盤沿 and 塔子.
 		if (bFinial)
 		{
 			FSlotScope FinialTag(Mesh, MatSlot_Finial);
@@ -760,7 +706,6 @@ namespace HutongGen
 			}
 		}
 
-		// 壟, 椽頭 and 飛椽, and on a hipped or 攢尖 roof the 垂脊 up each hip.
 		Shell::FRoofDressing Dress;
 		Dress.Tile = P.RoofTile;
 		Dress.TileRowSpacing = P.TileRowSpacing;

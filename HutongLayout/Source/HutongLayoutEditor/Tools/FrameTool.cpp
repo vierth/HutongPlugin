@@ -38,7 +38,6 @@ FVector2D UHutongFrameTool::StampSize(EHutongBaySide Side) const
 void UHutongFrameTool::GetEffectiveRectBounds(
 	double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const
 {
-	// Not dragged: the preset's footprint, centred on the first click.
 	const FVector2D Size = StampSize(BaySide);
 	OutMinX = -0.5 * Size.X; OutMaxX = 0.5 * Size.X;
 	OutMinY = -0.5 * Size.Y; OutMaxY = 0.5 * Size.Y;
@@ -57,7 +56,6 @@ bool UHutongFrameTool::OnRectCommitted(const FVector& HitWorld)
 void UHutongFrameTool::OnPlacementHover(const FVector& HitWorld)
 {
 	if (bRotateModeActive) return;
-	// Front is the side the cursor moved toward; undecided near the centre.
 	const FVector2D Local = WorldXYToLocalRect(HitWorld);
 	if (Local.Size() < 50.0) return;
 	BaySide = (FMath::Abs(Local.X) > FMath::Abs(Local.Y))
@@ -67,7 +65,6 @@ void UHutongFrameTool::OnPlacementHover(const FVector& HitWorld)
 
 void UHutongFrameTool::RenderIdlePreview(FPrimitiveDrawInterface* PDI, const FVector& CursorGround)
 {
-	// Before the first click the footprint follows the cursor, front toward the camera.
 	const EHutongBaySide Side = ComputeDefaultBaySide();
 	const FVector2D Size = StampSize(Side);
 	auto At = [&](double X, double Y) { return LocalRectToWorldFrom(CursorGround, X, Y); };
@@ -127,7 +124,7 @@ void UHutongFrameTool::AttachBuildingComponent(AStaticMeshActor* Actor, double S
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: the plan outline attaches to the actor's root, which needs the component live.
+	// After registration: attachments need the component live.
 	Building->ApplyPlacementAttachments();
 }
 

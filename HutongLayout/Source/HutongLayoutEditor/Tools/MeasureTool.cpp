@@ -16,7 +16,7 @@ void UHutongMeasureToolProperties::ApplyScaleToSelected()
 	USelection* Selected = GEditor->GetSelectedActors();
 	if (!Selected) return;
 
-	// Scaled about the measurement's first point, not the actor pivot.
+	// Scaled about the measurement's first point.
 	const FScopedTransaction Transaction(
 		LOCTEXT("CalibrateMap", "Calibrate Hutong Map Scale"));
 
@@ -43,7 +43,7 @@ UInteractiveTool* UHutongMeasureToolBuilder::BuildTool(const FToolBuilderState& 
 void UHutongMeasureTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongMeasureToolProperties>(this);
-	// Not persisted: a reading restored next session would have nothing behind it.
+	// Session-only: a restored reading would have nothing behind it.
 	RegisterSettings(Settings, /*bPersist*/ false);
 }
 
@@ -118,7 +118,6 @@ FText UHutongMeasureTool::GetStagePromptText() const
 
 void UHutongMeasureTool::Render(IToolsContextRenderAPI* RenderAPI)
 {
-	// Not Super: the base draws a drag rectangle; this tool measures a line.
 	if (!bIsDragging || RenderAPI == nullptr) return;
 	FPrimitiveDrawInterface* PDI = RenderAPI->GetPrimitiveDrawInterface();
 	if (!PDI) return;
@@ -126,14 +125,12 @@ void UHutongMeasureTool::Render(IToolsContextRenderAPI* RenderAPI)
 	const FLinearColor Line(1.0f, 0.85f, 0.2f);
 	DrawPreviewLine(PDI, StartWorld, CurrentWorld, Line, 3.0f);
 
-	// End ticks across the span, visible against a busy map texture.
 	const FVector Along = (CurrentWorld - StartWorld).GetSafeNormal();
 	const FVector Across = FVector::CrossProduct(Along, FVector::UpVector).GetSafeNormal();
 	const double Tick = FMath::Max(0.03 * FVector::Dist2D(StartWorld, CurrentWorld), 25.0);
 	DrawPreviewLine(PDI, StartWorld - Across * Tick, StartWorld + Across * Tick, Line, 3.0f);
 	DrawPreviewLine(PDI, CurrentWorld - Across * Tick, CurrentWorld + Across * Tick, Line, 3.0f);
 
-	// Module ticks along the span.
 	const double Dist = FVector::Dist2D(StartWorld, CurrentWorld);
 	const int32 Paces = FMath::Clamp(FMath::FloorToInt32(Dist / HutongGen::Urban::BuCm), 0, 120);
 	const FLinearColor Pace(0.4f, 0.8f, 1.0f, 0.9f);

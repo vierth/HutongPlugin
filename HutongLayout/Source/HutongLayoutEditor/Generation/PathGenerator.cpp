@@ -15,13 +15,11 @@ namespace HutongGen
 		const double Rise = FMath::Max(P.Rise, 0.5);
 		const double Kerb = P.GetKerbWidth();
 
-		// Across the rect: kerb, paving, kerb.
 		const double PaveY0 = Kerb;
 		const double PaveY1 = Kerb + W;
 
 		FSlotScope StoneTag(Mesh, MatSlot_Stone);
 
-		// 牙子石 each side, a lip proud of the paving.
 		if (Kerb > 0.0)
 		{
 			const double Lip = FMath::Max(P.KerbLip, 0.0);
@@ -29,7 +27,6 @@ namespace HutongGen
 			AppendBox(Mesh, FVector3d(0.0, PaveY1, 0.0), FVector3d(L, PaveY1 + Kerb, Rise + Lip));
 		}
 
-		// Paving.
 		const double Spacing = FMath::Max(P.CourseSpacing, 0.0);
 		const double Joint = FMath::Clamp(P.JointWidth, 0.0, FMath::Max(Spacing * 0.4, 0.0));
 
@@ -39,7 +36,6 @@ namespace HutongGen
 		}
 		else
 		{
-			// Course count falls out of the length.
 			const int32 Count = FMath::Max(FMath::RoundToInt32(L / Spacing), 1);
 			for (int32 i = 0; i < Count; ++i)
 			{

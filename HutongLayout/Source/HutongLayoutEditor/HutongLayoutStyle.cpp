@@ -22,7 +22,7 @@ void FHutongLayoutStyle::Register()
 	StyleSet = MakeShared<FSlateStyleSet>(GetStyleSetName());
 	StyleSet->SetContentRoot(Plugin->GetBaseDir() / TEXT("Resources") / TEXT("Icons"));
 
-	// 20/16, not 40/20: matches the editor's mode palettes; at 40 the buttons dominated and truncated their labels.
+	// 20/16 matches the editor's mode palettes.
 	const FVector2D Icon16(16.0f, 16.0f);
 	const FVector2D Icon20(20.0f, 20.0f);
 
@@ -62,6 +62,12 @@ void FHutongLayoutStyle::Register()
 	AddToolIcon("HutongLayout.BeginWaterJarTool", TEXT("WaterJarTool"));
 	AddToolIcon("HutongLayout.BeginUnknownTool", TEXT("UnknownTool"));
 	AddToolIcon("HutongLayout.BeginCityWallTool", TEXT("CityWallTool"));
+	AddToolIcon("HutongLayout.BeginPalaceWallTool", TEXT("PalaceWallTool"));
+	AddToolIcon("HutongLayout.BeginImperialWallTool", TEXT("ImperialWallTool"));
+	AddToolIcon("HutongLayout.BeginWallCornerTool", TEXT("WallCornerTool"));
+	AddToolIcon("HutongLayout.BeginArrowTowerTool", TEXT("ArrowTowerTool"));
+	AddToolIcon("HutongLayout.BeginCityGateTool", TEXT("CityGateTool"));
+	AddToolIcon("HutongLayout.BeginGateComplexTool", TEXT("GateComplexTool"));
 	AddToolIcon("HutongLayout.BeginSmallBuildingTool", TEXT("SmallBuildingTool"));
 	AddToolIcon("HutongLayout.BeginMeasureTool", TEXT("MeasureTool"));
 	AddToolIcon("HutongLayout.BeginHeightsTool", TEXT("HeightsTool"));

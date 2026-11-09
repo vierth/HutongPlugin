@@ -25,7 +25,6 @@ namespace HutongGen
 				return;
 			}
 
-			// Unit-radius profile, scaled per station.
 			const TArray<FVector2d> Shaft = MakeCircleProfile(1.0, FMath::Max(Sides, 6));
 			const TArray<FTransform> Stations = {
 				FTransform(FQuat::Identity, FVector(CenterX, CenterY, Z0), FVector(R,  R,  1.0)),
@@ -48,7 +47,6 @@ namespace HutongGen
 				return;
 			}
 
-			// Unit square, CCW, each arris cut back by a chamfer.
 			constexpr double C = 0.85;
 			const TArray<FVector2d> Shaft = {
 				{ 1.0, -C}, { 1.0,  C}, { C,  1.0}, {-C,  1.0},
@@ -81,7 +79,7 @@ namespace HutongGen
 			const double B = FMath::Max(Bar, 1.0);
 			if (X1 - X0 < 4.0 * B || Drop <= B) return;
 			AppendBox(Mesh, FVector3d(X0, CY - 0.5 * B, RailTop - B), FVector3d(X1, CY + 0.5 * B, RailTop));
-			// Drops wider than the rails in Y: proud of both faces, no coplanar overlap.
+			// Drops wider than the rails in Y: proud of both faces.
 			const int32 Count = FMath::Clamp(Drops, 1, 24);
 			for (int32 j = 1; j <= Count; ++j)
 			{
@@ -164,7 +162,6 @@ namespace HutongGen
 			const double Reach = FMath::Max(PurlinReach, 0.0);
 			const int32 Mark = Mesh.MaxVertexID();
 			AppendCylinder(Mesh, FVector3d::ZeroVector, R, X1 - X0 + 2.0 * Reach, 12);
-			// Quarter turn about Y takes +Z onto +X.
 			TransformVerticesFrom(Mesh, Mark, FTransform(FQuat(FVector::YAxisVector, HALF_PI), FVector(X0 - Reach, CenterY, BoardTop + R)));
 			if (bSwallowTails && Reach > 0.0)
 			{
@@ -186,7 +183,6 @@ namespace HutongGen
 			const double H = C::SwallowTailHeight * D;
 			const double Top = TopZ + 1.0;
 			const double Taper = C::SwallowTailRun * Run;
-			// Along the run (profile X) and up.
 			const TArray<FVector2d> Profile = {
 				{ 0.0, TopZ - H }, { Run - Taper, TopZ - H }, { Run, TopZ - C::SwallowTailEnd * H },
 				{ Run, Top }, { 0.0, Top } };
@@ -204,7 +200,7 @@ namespace HutongGen
 			double Y0, double Y1, double CenterX, double ColumnDiameter, double ColumnTop,
 			double BoardHeight, double PurlinDiameter, double PurlinReach)
 		{
-			// Built along X, then a quarter turn about Z: (x, y) → (−y, x), a rotation, never a mirror.
+			// Built along X, then a quarter turn about Z: (x, y) → (−y, x).
 			const int32 Mark = Mesh.MaxVertexID();
 			AppendEaveStack(Mesh, Y0, Y1, -CenterX, ColumnDiameter, ColumnTop, BoardHeight, PurlinDiameter, PurlinReach);
 			TransformVerticesFrom(Mesh, Mark, FTransform(FRotator(0.0, 90.0, 0.0)));
@@ -230,7 +226,7 @@ namespace HutongGen
 				const double CX = BoundaryX(i);
 				AppendBox(Mesh,
 					FVector3d(CX - H, Y0 - H, BottomZ),
-					// Overshoots bury the ends in the columns and the top past the 額枋: no coplanar faces.
+					// Overshoots bury the ends in the columns and the top past the 額枋.
 					FVector3d(CX + H, Y1 + H, TopZ + Overshoot));
 			}
 		}
@@ -245,7 +241,6 @@ namespace HutongGen
 			const double Bud = FMath::Clamp(BudFraction, 0.1, 0.85) * D;
 			const double ShaftBottom = TopZ - (D - Bud);
 
-			// Bud radius down its length, as a fraction of the shaft's.
 			static const double BudR[] = { 1.0, 1.28, 1.34, 1.18, 0.82, 0.40, 0.16 };
 			const int32 Steps = UE_ARRAY_COUNT(BudR);
 

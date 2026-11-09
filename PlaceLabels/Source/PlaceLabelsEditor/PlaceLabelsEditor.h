@@ -8,10 +8,8 @@ class FSpawnTabArgs;
 
 namespace PlaceLabelsEditor
 {
-	// The dockable Place Labels tab.
 	extern const FName PanelTabId;
 
-	// Opens the tab, or brings it forward if it is already open.
 	void OpenPanelTab();
 }
 

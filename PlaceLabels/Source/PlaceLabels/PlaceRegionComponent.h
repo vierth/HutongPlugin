@@ -55,10 +55,8 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Place Label", AdvancedDisplay)
 	FGuid RegionId;
 
-	// Assigns an id if this region predates the field.
 	bool EnsureRegionId();
 
-	// Placed but not yet fully described: no type, or no name in any of the three forms.
 	bool HasAuthoringWarning() const { return !Type || Name.IsEmpty(); }
 
 	// Set this to override the derived parent when the geometry lies.
@@ -77,25 +75,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Hierarchy")
 	UPlaceRegionComponent* GetEffectiveParent() const;
 
-	// World-space polygon with the component transform already applied. Rebuilt by RebuildCache.
 	const TArray<FVector2D>& GetWorldPoints2D() const { return CachedWorldPoints; }
 	const FBox2D& GetWorldBounds2D() const { return CachedWorldBounds; }
 
 	// Unsigned. Used to break ties between overlapping regions of equal display priority.
 	double GetWorldArea() const { return CachedArea; }
 
-	// Point count, height bounds, cheap bounds reject, then the full point-in-polygon test.
 	bool ContainsWorldPoint(const FVector& WorldPos) const;
 
 	bool ContainsWorldPoint2D(const FVector2D& WorldXY) const;
 
-	// Rebuilds world points, bounds and area from LocalPoints and transform; refreshes the proxy.
 	void RebuildCache();
 
-	// Re-runs the type-driven parenting rule and writes Derived Parent, returning true if the result differed.
 	bool RecomputeDerivedParent();
 
-	// Outline colour: the type's editor colour, or white for an untyped region.
 	FLinearColor GetOutlineColor() const;
 
 	// Drawn as a solid line rather than the usual dim one. Only the editor sets this.
@@ -103,8 +96,7 @@ public:
 		meta = (DisplayName = "Draw Outline In Viewport"))
 	bool bDrawOutline = true;
 
-	// Whether regions draw at all: on only while the Place Labels mode is up. A selected region
-	// still shows through its component visualizer.
+	// Regions draw only while the Place Labels mode is up; a selected one still shows through its component visualizer.
 	static void SetEditorDrawingVisible(bool bVisible);
 	static bool IsEditorDrawingVisible();
 
@@ -120,7 +112,6 @@ public:
 		ETeleportType Teleport = ETeleportType::None) override;
 	virtual void PostLoad() override;
 
-	// Self-registration with UPlaceLabelSubsystem.
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
@@ -132,7 +123,6 @@ public:
 #endif
 
 private:
-	// Transient by design: derived from LocalPoints plus the transform.
 	TArray<FVector2D> CachedWorldPoints;
 	FBox2D CachedWorldBounds = FBox2D(ForceInit);
 	double CachedArea = 0.0;

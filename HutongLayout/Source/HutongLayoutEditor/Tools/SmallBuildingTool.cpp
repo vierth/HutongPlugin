@@ -61,12 +61,6 @@ double UHutongSmallBuildingTool::GetPreviewHeight() const
 	return Settings ? Settings->Params.GetEaveHeight() : 0.0;
 }
 
-void UHutongSmallBuildingTool::FlipFacing()
-{
-	// A quarter turn each press: a hut at a lane mouth may face any of its four sides.
-	BaySide = static_cast<EHutongBaySide>(((int32)BaySide + 1) % 4);
-}
-
 void UHutongSmallBuildingTool::AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse)
 {
 	double MinX, MinY, MaxX, MaxY;
@@ -78,8 +72,19 @@ void UHutongSmallBuildingTool::AdjustBracketValue(int32 Delta, bool bFine, bool 
 void UHutongSmallBuildingTool::OnPlacementStarted(const FVector& HitWorld)
 {
 	BaySide = ComputeDefaultBaySide();
-	// Bay count depends on the frontage drawn, so it never carries between placements.
+	// Bay count depends on the frontage drawn, so it resets between placements.
 	BayCountOverride = 0;
+}
+
+bool UHutongSmallBuildingTool::OnRectCommitted(const FVector& HitWorld)
+{
+	return false;
+}
+
+void UHutongSmallBuildingTool::OnPlacementHover(const FVector& HitWorld)
+{
+	if (bRotateModeActive) return;
+	BaySide = bRectCommitted ? ComputeClosestSide(HitWorld.X, HitWorld.Y) : ComputeDefaultBaySide();
 }
 
 void UHutongSmallBuildingTool::CancelPlacement()
@@ -103,8 +108,26 @@ TArray<FText> UHutongSmallBuildingTool::GetToolHelpLines() const
 	Lines[0] = NSLOCTEXT("HutongSmallBuildingTool", "HelpSpan",
 		"Drag out a small freestanding building: a guard post (堆撥房), shed (棚), lone room or shrine (土地廟). Pick one in Presets.");
 	Lines.Insert(NSLOCTEXT("HutongSmallBuildingTool", "HelpKeys",
-		"F turns the front a quarter round while placing; [ and ] set the number of bays."), 1);
+		"After the size click, move to the side the facade should face and click to place; [ and ] set the number of bays."), 1);
 	return Lines;
+}
+
+TArray<FText> UHutongSmallBuildingTool::GetStageNames() const
+{
+	TArray<FText> Names = Super::GetStageNames();
+	Names.Add(NSLOCTEXT("HutongSmallBuildingTool", "StageFacing", "Facing"));
+	return Names;
+}
+
+FText UHutongSmallBuildingTool::GetStagePromptText() const
+{
+	if (bIsDragging && bRectCommitted && !bRotateModeActive)
+	{
+		return NSLOCTEXT("HutongSmallBuildingTool", "PromptSide",
+			"Move to pick which side the facade faces, then click to place. "
+			"[ and ] change the bay count.");
+	}
+	return Super::GetStagePromptText();
 }
 
 void UHutongSmallBuildingTool::Render(IToolsContextRenderAPI* RenderAPI)

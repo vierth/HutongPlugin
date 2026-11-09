@@ -56,8 +56,6 @@ struct FHutongGateHouseParams
 	double ColumnHeightInDiameters = HutongCanon::Module::ColumnHeightInDiameters;
 
 
-	// --- Doorway ---
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(EditCondition="Style != EHutongGateStyle::Ruyi", UIMin="0.25", UIMax="0.9", ClampMin="0.1", ClampMax="1", ToolTip="Doorway clear width as a fraction of the bay (pier span on a Ruyi Gate (如意門))."))
 	double DoorWidthFraction = 0.45;
 
@@ -82,27 +80,22 @@ struct FHutongGateHouseParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(DisplayName="Min Clear Width", EditCondition="bLeavesOpen", UIMin="0", UIMax="150", ClampMin="0", Units="cm", ToolTip="Minimum clear opening left between the ajar leaves, in cm."))
 	double MinClearWidth = 90.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(DisplayName="Variation Seed", EditCondition="bLeavesOpen", ToolTip="Seed for the per-gate variation in leaf angles."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(DisplayName="Variation Seed", EditCondition="bLeavesOpen", ToolTip="Picks one of four leaf-angle variations, so gates of one size and style can share a mesh."))
 	int32 RandomSeed = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(DisplayName="Door Pegs (門簪)", UIMin="0", UIMax="4", ClampMin="0", ClampMax="6", ToolTip="Number of door pegs (門簪) projecting above the door head."))
 	int32 DoorPegCount = 4;
 
-	// 如意門 is held to two 門簪 however it is set.
 	int32 GetDoorPegCount() const
 	{
 		return HasBrickScreen() ? FMath::Min(DoorPegCount, HutongCanon::Gate::RuyiDoorPegs) : DoorPegCount;
 	}
-
-	// --- 如意門 only ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(DisplayName="Door Head Projection (門頭)", EditCondition="Style == EHutongGateStyle::Ruyi", UIMin="0", UIMax="30", ClampMin="0", Units="cm", ToolTip="Projection of the brick door head (門頭) frieze from the wall, in cm; 0 omits it."))
 	double DoorHeadProjection = 18.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(HutongBasic, DisplayName="Carved Door Head (雕花門頭)", EditCondition="Style == EHutongGateStyle::Ruyi", ToolTip="Carves the brick door head (門頭); off leaves it plain (素活)."))
 	bool bCarvedDoorHead = true;
-
-	// --- Shell ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Base Course Height", UIMin="0", UIMax="200", Units="cm", ToolTip="Height of the base course (下鹼) above the floor, in cm; 0 for automatic."))
 	double BaseCourseHeight = 0.0;
@@ -124,12 +117,8 @@ struct FHutongGateHouseParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shell", meta=(DisplayName="Chitou Corbel Courses", EditCondition="bHasChitou", UIMin="0", UIMax="6", ClampMin="0", ClampMax="10", ToolTip="Number of corbel courses at the top of each gable pier (墀頭)."))
 	int32 ChitouCorbelSteps = 3;
 
-	// --- Roof ---
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Front Roof Overhang", UIMin="0", UIMax="200", Units="cm", ToolTip="How far the front eave projects past the wall, in cm; 0 for automatic."))
 	double RoofOverhang = 0.0;
-
-	// No rear overhang: the gate's rear eave faces the court and is built as a front eave.
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Roof Rise", UIMin="0", UIMax="300", ClampMin="0", Units="cm", ToolTip="Height of the ridge above the eave, in cm; 0 for automatic."))
 	double RoofRise = 0.0;
@@ -180,9 +169,6 @@ struct FHutongGateHouseParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Structure", meta=(DisplayName="Column Taper (收分)", UIMin="0", UIMax="0.02", ClampMin="0", ClampMax="0.05", ToolTip="Column taper (收分) as a fraction of the column height."))
 	double ColumnTaperRatio = HutongCanon::Module::ColumnTaperRatio;
 
-	// Set by the tool from the drag rect.
-
-	// Set by detail level: 筒瓦 here states rank; never a checkbox.
 	bool bPlainTileForDetail = false;
 
 	double Width = 400.0;
@@ -190,7 +176,6 @@ struct FHutongGateHouseParams
 
 	double GetColumnHeight() const { return FMath::Max(GetEaveHeight() - FloorHeight, 1.0); }
 
-	// Vertical counterpart of Min Clear Width.
 	double GetDoorHeadHeight() const
 	{
 		return FMath::Max(DoorHeadHeight, HutongGen::Passage::MinHeadZ(FloorHeight, ThresholdHeight));
@@ -200,26 +185,20 @@ struct FHutongGateHouseParams
 	double GetMinEaveHeight() const { return GetDoorHeadHeight() + 20.0; }
 
 	double GetEaveHeight() const { return FMath::Max(EaveHeight, GetMinEaveHeight()); }
-	// Roof above the column tops, the ceiling at the column line, and the roof's base
-	// (HutongGen::Proportions::RoofLift).
 	double GetRoofLift() const { return HutongGen::Proportions::RoofLift(GetColumnDiameter(), GetRoofOverhang(), HutongGen::Jiajia::EaveJu(GetPurlins())); }
 	double GetUndersideRise() const { return HutongGen::Proportions::UndersideRise(GetColumnDiameter(), GetRoofOverhang(), HutongGen::Jiajia::EaveJu(GetPurlins())); }
 	double GetRoofBaseHeight() const { return GetEaveHeight() + GetRoofLift(); }
 
-	// 柱徑, same module as the siheyuan.
 	double GetColumnDiameter() const
 	{
 		return HutongGen::Proportions::ColumnDiameter(GetColumnHeight(), ColumnHeightInDiameters);
 	}
 
-	// Pier projection: at least covers the corner column.
 	double GetChitouProjection() const
 	{
 		return HutongGen::Proportions::ChitouProjection(ChitouProjection, 0.5 * GetColumnDiameter());
 	}
 
-	// 上檐出 over the street by rank: house rule on 柱高, cut by gate rank. A 大門 in a 封護檐 street
-	// face that projects nothing, so this is all that comes forward.
 	double GetRoofOverhang() const
 	{
 		if (RoofOverhang > 0.0) return RoofOverhang;
@@ -232,7 +211,6 @@ struct FHutongGateHouseParams
 			GetColumnHeight(), HutongCanon::Module::EaveOverhangRatio);
 	}
 
-	// Door plane setback from the 檐柱 line.
 	double GetDoorPlaneFraction() const
 	{
 		switch (Style)
@@ -243,28 +221,22 @@ struct FHutongGateHouseParams
 		}
 	}
 
-	// 如意門 fills its bay with brick round a narrow doorway; the others open between columns.
 	bool HasBrickScreen() const { return Style == EHutongGateStyle::Ruyi; }
 
-	// 五檁中柱式 with the frame showing on the passage walls: 蠻子門 (圖5-1-4.2), 廣亮大門 (圖5-1-1 and its text,
-	// the door on the 中柱).
+	// 蠻子門 (圖5-1-4.2), 廣亮大門 (圖5-1-1): 五檁中柱式, the door on the 中柱.
 	bool HasCentreColumn() const { return Style == EHutongGateStyle::Manzi || Style == EHutongGateStyle::Guangliang; }
 
 	// 鑽金柱 frame, the door on the 前金柱 (圖5-1-3).
 	bool HasFrontVeranda() const { return Style == EHutongGateStyle::Jinzhu; }
 
-	// Columns proud of the passage walls, the cross frame and 廊心 between them showing.
 	bool HasWallFrame() const { return HasCentreColumn() || HasFrontVeranda(); }
 
-	// The structural fact the size band follows.
 	EHutongPurlins GetPurlins() const
 	{
 		return (Style == EHutongGateStyle::Ruyi) ? EHutongPurlins::Three : EHutongPurlins::Five;
 	}
 
-	// Built rise: the 舉架 section's over this depth unless RoofRise is set. Single source for generator,
-	// massing block and ridge estimate (estimate reading the section while the roof read the field put
-	// a gate's ridge below its row's).
+	// Single source for generator, massing block and ridge estimate.
 	double GetRoofRise(double OverDepth) const
 	{
 		if (RoofRise > 0.0) return RoofRise;
@@ -276,7 +248,6 @@ struct FHutongGateHouseParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Doorway", meta=(HutongBasic, DisplayName="Door Stones (門墩)", ToolTip="Settings for the door stones (門墩) at the foot of the door jambs."))
 	FHutongDoorStoneParams DoorStones;
 
-	// 筒瓦 for the two gates announcing an official, 合瓦 for the other two.
 	EHutongRoofTile GetRoofTile() const
 	{
 		if (bPlainTileForDetail) return EHutongRoofTile::He;
@@ -295,7 +266,6 @@ struct FHutongGateHouseParams
 		return S;
 	}
 
-	// Size band for a style: 面闊 along the facing side, 進深, eave band. All zero when off.
 	using FSizeRange = HutongCanon::Gate::FSizeBand;
 
 	// UNVERIFIED, looser than the door-plane fractions.

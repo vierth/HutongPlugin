@@ -18,7 +18,6 @@ class UPlaceLabelSubsystem : public UTickableWorldSubsystem
 	GENERATED_BODY()
 
 public:
-	// Regions register themselves from BeginPlay.
 	void RegisterRegion(UPlaceRegionComponent* Region);
 	void UnregisterRegion(UPlaceRegionComponent* Region);
 
@@ -33,7 +32,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Place Labels")
 	void UpdateForLocation(const FVector& WorldLocation, bool bForce = false);
 
-	// Highest display priority wins, smallest area breaks the tie.
 	UPlaceRegionComponent* FindInnermostRegion(const FVector& WorldLocation) const;
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
@@ -52,7 +50,6 @@ public:
 private:
 	void BuildChain(UPlaceRegionComponent* Innermost, TArray<FPlaceLabelEntry>& OutChain) const;
 
-	// True when the new chain differs from the current one by length or by any region.
 	bool ChainDiffers(const TArray<FPlaceLabelEntry>& NewChain) const;
 
 	bool TryGetPlayerLocation(FVector& OutLocation) const;

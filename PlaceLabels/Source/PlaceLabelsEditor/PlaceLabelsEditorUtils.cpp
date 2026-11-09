@@ -27,7 +27,6 @@ namespace PlaceLabelsEditorUtils
 			FLinearColor OutlineColor;
 		};
 
-		// The hierarchy this plugin was built around.
 		const FStarterType StarterTypes[] =
 		{
 			{ TEXT("DA_Type_District"), TEXT("district"), TEXT("城區"), TEXT("chengqu"), TEXT("District"),
@@ -42,7 +41,7 @@ namespace PlaceLabelsEditorUtils
 			{ TEXT("DA_Type_Hutong"), TEXT("hutong"), TEXT("胡同"), TEXT("hutong"), TEXT("Lane"),
 			  40, TEXT("area,district"), EPlaceParentRelation::Containing, FLinearColor(0.35f, 0.9f, 0.45f) },
 
-			// Adjacent, not Containing: a compound abuts the lane it is addressed on.
+			// Adjacent: a compound abuts the lane it is addressed on.
 			{ TEXT("DA_Type_Compound"), TEXT("compound"), TEXT("院"), TEXT("yuan"), TEXT("Compound"),
 			  50, TEXT("hutong,avenue"), EPlaceParentRelation::Adjacent, FLinearColor(1.0f, 0.85f, 0.2f) },
 
@@ -56,7 +55,7 @@ namespace PlaceLabelsEditorUtils
 			{ TEXT("DA_Type_Lake"), TEXT("lake"), TEXT("湖"), TEXT("hu"), TEXT("Lake"),
 			  36, TEXT("area,district"), EPlaceParentRelation::Containing, FLinearColor(0.2f, 0.5f, 0.9f) },
 
-			// 護城河 runs along the wall, inside nothing: Adjacent. Most specific water type.
+			// 護城河 runs along the wall: Adjacent. Most specific water type.
 			{ TEXT("DA_Type_Moat"), TEXT("moat"), TEXT("護城河"), TEXT("huchenghe"), TEXT("Moat"),
 			  38, TEXT("district,area"), EPlaceParentRelation::Adjacent, FLinearColor(0.15f, 0.4f, 0.75f) },
 
@@ -81,7 +80,7 @@ namespace PlaceLabelsEditorUtils
 			const FString PackageName =
 				FString::Printf(TEXT("%s/%s"), StarterTypePackagePath, Def.AssetName);
 
-			// Never overwrite: these are meant to be tuned.
+			// Existing assets are kept: these are meant to be tuned.
 			if (FindPackage(nullptr, *PackageName)
 				|| FPackageName::DoesPackageExist(PackageName))
 			{
@@ -130,7 +129,6 @@ namespace PlaceLabelsEditorUtils
 			OutCreatedNames.Add(Def.AssetName);
 		}
 
-		// Save immediately rather than leaving them dirty.
 		if (PackagesToSave.Num() > 0)
 		{
 			UEditorLoadingAndSavingUtils::SavePackages(PackagesToSave, /*bOnlyDirty*/ false);

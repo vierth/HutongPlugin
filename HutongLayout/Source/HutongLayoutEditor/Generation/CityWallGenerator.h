@@ -10,6 +10,22 @@ enum class EHutongCityWallRank : uint8
 {
 	Inner UMETA(DisplayName = "Inner City (內城)", ToolTip = "The inner city's wall: about 12 m high and 20 m thick at the foot."),
 	Outer UMETA(DisplayName = "Outer City (外城)", ToolTip = "The outer city's lower, thinner wall: about 6.4 m high and 6.4 m at the foot."),
+	Palace UMETA(DisplayName = "Palace City (紫禁城)", ToolTip = "The Forbidden City's wall: 7.9 m high, 8.62 m at the foot, 6.66 m at the top, red on the side facing the palace."),
+};
+
+UENUM(BlueprintType)
+enum class EHutongWallCornerShape : uint8
+{
+	Platform UMETA(DisplayName = "Square Platform (城角)", ToolTip = "A square platform under a corner tower, battered round the outside."),
+	Rounded  UMETA(DisplayName = "Rounded (甕城)", ToolTip = "The wall carried round a curve, as at a barbican's outer corners."),
+};
+
+UENUM(BlueprintType)
+enum class EHutongCornerTower : uint8
+{
+	None        UMETA(DisplayName = "None", ToolTip = "The platform alone."),
+	ArrowTower  UMETA(DisplayName = "Corner Arrow Tower (角箭樓)", ToolTip = "An L-shaped arrow tower wrapping the corner, as on the inner city's corners."),
+	PalaceTower UMETA(DisplayName = "Palace Corner Tower (紫禁城角樓)", ToolTip = "The Forbidden City's corner tower: a cross of halls under three eaves and a cross-ridged roof, in yellow glazed tile."),
 };
 
 // 城牆: battered brick wall over a rammed-earth core, crenellated 垛口牆 on the outer edge, plain 宇牆 on
@@ -43,20 +59,29 @@ struct FHutongCityWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Parapet Thickness", EditCondition="!bDeriveFromRank", UIMin="30", UIMax="150", ClampMin="10", Units="cm", ToolTip="Thickness of the outer parapet, in cm."))
 	double ParapetThickness = HutongCanon::CityWall::ParapetThicknessCm;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Merlon Width (垛)", UIMin="80", UIMax="300", ClampMin="30", Units="cm", ToolTip="Width of each merlon between two crenels, in cm; fitted to the run."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Merlon Width (垛)", EditCondition="!bDeriveFromRank", UIMin="60", UIMax="300", ClampMin="30", Units="cm", ToolTip="Width of each merlon between two crenels, in cm; fitted to the run."))
 	double MerlonWidth = HutongCanon::CityWall::MerlonWidthCm;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Crenel Width (垛口)", UIMin="20", UIMax="120", ClampMin="10", Units="cm", ToolTip="Width of each crenel, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Crenel Width (垛口)", EditCondition="!bDeriveFromRank", UIMin="20", UIMax="120", ClampMin="10", Units="cm", ToolTip="Width of each crenel, in cm."))
 	double CrenelWidth = HutongCanon::CityWall::CrenelWidthCm;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Crenel Depth", UIMin="20", UIMax="150", ClampMin="0", Units="cm", ToolTip="How far each crenel is cut down from the parapet top, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Crenel Depth", EditCondition="!bDeriveFromRank", UIMin="20", UIMax="150", ClampMin="0", Units="cm", ToolTip="How far each crenel is cut down from the parapet top, in cm."))
 	double CrenelDepth = HutongCanon::CityWall::CrenelDepthCm;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Merlon Top Width", EditCondition="!bDeriveFromRank", UIMin="0", UIMax="200", ClampMin="0", Units="cm", ToolTip="Width of a narrower step on top of each merlon, in cm; zero for a plain merlon."))
+	double MerlonTopWidth = 0.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Merlon Top Height", EditCondition="!bDeriveFromRank && MerlonTopWidth > 0", UIMin="5", UIMax="80", ClampMin="1", Units="cm", ToolTip="Height of the narrower step on top of each merlon, in cm."))
+	double MerlonTopHeight = HutongCanon::CityWall::PalaceMerlonStepCm;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Loopholes (射眼)", ToolTip="Cuts a square loophole through each merlon."))
 	bool bLoopholes = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Loophole Size", EditCondition="bLoopholes", UIMin="10", UIMax="50", ClampMin="5", Units="cm", ToolTip="Width and height of each loophole, in cm."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Loophole Width", EditCondition="bLoopholes && !bDeriveFromRank", UIMin="10", UIMax="50", ClampMin="5", Units="cm", ToolTip="Width of each loophole, in cm."))
 	double LoopholeSize = HutongCanon::CityWall::LoopholeSizeCm;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Loophole Height", EditCondition="bLoopholes && !bDeriveFromRank", UIMin="0", UIMax="80", ClampMin="0", Units="cm", ToolTip="Height of each loophole, in cm; zero makes it square."))
+	double LoopholeHeight = 0.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Battlements", meta=(DisplayName="Inner Parapet (宇牆)", ToolTip="Builds the low plain parapet along the inner edge of the walk."))
 	bool bInnerParapet = true;
@@ -94,26 +119,51 @@ struct FHutongCityWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ramp (馬道)", meta=(DisplayName="Ramp Slope", EditCondition="bRamp", UIMin="8", UIMax="25", ClampMin="4", ClampMax="35", Units="deg", ToolTip="Slope of the ramp, in degrees."))
 	double RampSlopeDeg = HutongCanon::CityWall::RampSlopeDeg;
 
-	// Rank figures, or the fields once pinned.
 	struct FRankDefaults
 	{
 		double Height, BaseWidth, TopWidth, ParapetHeight, ParapetThickness, BastionWidth, BastionProjection;
+		double MerlonWidth = HutongCanon::CityWall::MerlonWidthCm;
+		double CrenelWidth = HutongCanon::CityWall::CrenelWidthCm;
+		double CrenelDepth = HutongCanon::CityWall::CrenelDepthCm;
+		double MerlonTopWidth = 0.0;
+		double MerlonTopHeight = HutongCanon::CityWall::PalaceMerlonStepCm;
+		double LoopholeSize = HutongCanon::CityWall::LoopholeSizeCm;
+		double LoopholeHeight = 0.0;
 	};
 	FRankDefaults GetRankDefaults() const
 	{
 		using namespace HutongCanon::CityWall;
-		return Rank == EHutongCityWallRank::Outer
-			? FRankDefaults{ OuterHeightCm, OuterBaseWidthCm, OuterTopWidthCm, OuterParapetHeightCm, OuterParapetThicknessCm, OuterBastionWidthCm, OuterBastionProjectionCm }
-			: FRankDefaults{ HeightCm, BaseWidthCm, TopWidthCm, ParapetHeightCm, ParapetThicknessCm, BastionWidthCm, BastionProjectionCm };
+		switch (Rank)
+		{
+		case EHutongCityWallRank::Outer:
+			return { OuterHeightCm, OuterBaseWidthCm, OuterTopWidthCm, OuterParapetHeightCm, OuterParapetThicknessCm, OuterBastionWidthCm, OuterBastionProjectionCm };
+		case EHutongCityWallRank::Palace:
+			return { PalaceHeightCm, PalaceBaseWidthCm, PalaceTopWidthCm, PalaceParapetHeightCm, PalaceParapetThicknessCm, PalaceBastionWidthCm, PalaceBastionProjectionCm,
+				PalaceMerlonWidthCm, PalaceCrenelWidthCm, PalaceCrenelDepthCm, PalaceMerlonTopWidthCm, PalaceMerlonStepCm };
+		default:
+			return { HeightCm, BaseWidthCm, TopWidthCm, ParapetHeightCm, ParapetThicknessCm, BastionWidthCm, BastionProjectionCm };
+		}
 	}
-	// Choosing a city takes its figures, over any pinned by hand (a pinned wall once ignored the choice).
+	// JUDGEMENT — a barbican's rounded corner, the outer face's radius in base widths (德勝門's, from the user's photographs).
+	double GetRoundedCorner() const { return 1.6 * GetBaseWidth(); }
+	double GetCornerPlatform() const
+	{
+		using namespace HutongCanon::CityWall;
+		switch (Rank)
+		{
+		case EHutongCityWallRank::Outer:  return OuterCornerPlatformCm;
+		case EHutongCityWallRank::Palace: return PalaceCornerPlatformCm;
+		default:                          return CornerPlatformCm;
+		}
+	}
+	// The face toward the palace: the inner face and everything on it.
+	bool HasRedInnerFace() const { return Rank == EHutongCityWallRank::Palace; }
 	void ChooseRank(EHutongCityWallRank InRank)
 	{
 		Rank = InRank;
 		bDeriveFromRank = true;
 	}
 
-	// Writes the rank's figures into the fields and stops deriving, so one can be changed by hand.
 	void PinFromRank()
 	{
 		if (!bDeriveFromRank) return;
@@ -121,48 +171,60 @@ struct FHutongCityWallParams
 		Height = R.Height; BaseWidth = R.BaseWidth; TopWidth = R.TopWidth;
 		ParapetHeight = R.ParapetHeight; ParapetThickness = R.ParapetThickness;
 		BastionWidth = R.BastionWidth; BastionProjection = R.BastionProjection;
+		MerlonWidth = R.MerlonWidth; CrenelWidth = R.CrenelWidth; CrenelDepth = R.CrenelDepth;
+		MerlonTopWidth = R.MerlonTopWidth; MerlonTopHeight = R.MerlonTopHeight;
+		LoopholeSize = R.LoopholeSize; LoopholeHeight = R.LoopholeHeight;
 		bDeriveFromRank = false;
 	}
 
 	double GetHeight() const { return FMath::Max(bDeriveFromRank ? GetRankDefaults().Height : Height, 200.0); }
 	double GetBaseWidth() const { return FMath::Max(bDeriveFromRank ? GetRankDefaults().BaseWidth : BaseWidth, 200.0); }
-	// Never wider than the base (no overhang) and never so narrow the parapets meet.
 	double GetTopWidth() const
 	{
 		const double MinTop = GetParapetThickness() + (bInnerParapet ? GetInnerParapetThickness() : 0.0) + 100.0;
 		return FMath::Clamp(bDeriveFromRank ? GetRankDefaults().TopWidth : TopWidth, FMath::Min(MinTop, GetBaseWidth()), GetBaseWidth());
 	}
-	// Horizontal set-in of each face from foot to top.
 	double GetBatter() const { return 0.5 * (GetBaseWidth() - GetTopWidth()); }
 	double GetFootingHeight() const { return FMath::Clamp(FootingHeight, 0.0, 0.5 * GetHeight()); }
 	double GetParapetHeight() const { return FMath::Max(bDeriveFromRank ? GetRankDefaults().ParapetHeight : ParapetHeight, 40.0); }
 	double GetParapetThickness() const { return FMath::Max(bDeriveFromRank ? GetRankDefaults().ParapetThickness : ParapetThickness, 10.0); }
 	double GetBastionWidth() const { return FMath::Max(bDeriveFromRank ? GetRankDefaults().BastionWidth : BastionWidth, 200.0); }
 	double GetBastionProjection() const { return FMath::Max(bDeriveFromRank ? GetRankDefaults().BastionProjection : BastionProjection, 100.0); }
-	// Height the ramp climbs: a centimetre under the walk, so its top never shares the walk's plane.
+	// A centimetre under the walk, so its top stays off the walk's plane.
 	double GetRampRise() const { return GetHeight() - 1.0; }
 	double GetRampRun() const { return GetRampRise() / FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(RampSlopeDeg, 4.0, 35.0))); }
-	double GetCrenelDepth() const { return FMath::Clamp(CrenelDepth, 0.0, GetParapetHeight() - 20.0); }
+	double GetMerlonWidth() const { return FMath::Max(bDeriveFromRank ? GetRankDefaults().MerlonWidth : MerlonWidth, 30.0); }
+	double GetCrenelWidth() const { return FMath::Max(bDeriveFromRank ? GetRankDefaults().CrenelWidth : CrenelWidth, 10.0); }
+	double GetCrenelDepth() const { return FMath::Clamp(bDeriveFromRank ? GetRankDefaults().CrenelDepth : CrenelDepth, 0.0, GetParapetHeight() - 20.0); }
+	// Zero: a plain merlon. Clamped to the merlon as fitted to the run.
+	double GetMerlonTopWidth() const { return FMath::Max(bDeriveFromRank ? GetRankDefaults().MerlonTopWidth : MerlonTopWidth, 0.0); }
+	// Within the merlon above the crenel sill.
+	double GetMerlonTopHeight() const
+	{
+		if (GetMerlonTopWidth() <= 0.0) return 0.0;
+		return FMath::Clamp(bDeriveFromRank ? GetRankDefaults().MerlonTopHeight : MerlonTopHeight, 1.0, 0.5 * GetCrenelDepth());
+	}
+	double GetLoopholeWidth() const { return FMath::Max(bDeriveFromRank ? GetRankDefaults().LoopholeSize : LoopholeSize, 5.0); }
+	double GetLoopholeHeight() const
+	{
+		const double Asked = bDeriveFromRank ? GetRankDefaults().LoopholeHeight : LoopholeHeight;
+		return Asked > 0.0 ? Asked : GetLoopholeWidth();
+	}
 	double GetInnerParapetHeight() const { return FMath::Max(InnerParapetHeight, 20.0); }
 	double GetInnerParapetThickness() const { return FMath::Max(InnerParapetThickness, 10.0); }
-	// Top of everything: the merlons.
 	double GetOverallHeight() const { return GetHeight() + GetParapetHeight(); }
 
-	// Merlons on a run: a merlon at each end, crenels between, widths fitted to the length.
 	int32 GetMerlonCount(double RunLength) const
 	{
-		const double Mw = FMath::Max(MerlonWidth, 30.0), Cw = FMath::Max(CrenelWidth, 10.0);
+		const double Mw = GetMerlonWidth(), Cw = GetCrenelWidth();
 		return FMath::Max(1, FMath::RoundToInt32((RunLength + Cw) / (Mw + Cw)));
 	}
 
-	// Set by the component from its footprint.
 	double Length = 2000.0;
 };
 
 namespace HutongGen
 {
-	// Where the 馬道 lies along its leg, built frame (outer face on -Y): the 馬道門's outer face, the
-	// incline's foot, the landing's start and the top end. False when the leg is too short for it.
 	struct FCityWallRamp
 	{
 		double XGate = 0.0, XFoot = 0.0, XLand = 0.0, XTop = 0.0;
@@ -171,6 +233,16 @@ namespace HutongGen
 	};
 	bool CityWallRampLayout(const FHutongCityWallParams& P, FCityWallRamp& Out);
 
-	// Detail: Massing builds the body alone; Far adds footing and battlements; Near cuts the loopholes.
 	void BuildCityWall(UE::Geometry::FDynamicMesh3& Mesh, const FHutongCityWallParams& P, bool bBattlements, bool bLoopholes);
+
+	// 城角: a square platform PlatformSize across with its outer corner at the origin, outer faces on X = 0 and Y = 0;
+	// a leg of P's section abuts each port, the face at X = PlatformSize (Y 0..base) and Y = PlatformSize (X 0..base).
+	// bOuterParapet false: the outside edges carry no 垛口牆 (a tower's walls rise from them).
+	void BuildWallCorner(UE::Geometry::FDynamicMesh3& Mesh, const FHutongCityWallParams& P, double PlatformSize,
+		bool bBattlements, bool bLoopholes, bool bOuterParapet = true);
+
+	// The same ports, the wall between them carried round a quarter circle of short mitred legs, the outer face
+	// reaching out to the arc of radius Size about (Size, Size).
+	void BuildRoundedCorner(UE::Geometry::FDynamicMesh3& Mesh, const FHutongCityWallParams& P, double Size,
+		bool bBattlements, bool bLoopholes);
 }

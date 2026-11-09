@@ -10,12 +10,8 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// Metadata survives a CSV round trip; confidence travels as a number, and a display name or empty
-// cell must not parse as one.
-
 namespace
 {
-	// Own world: independent of the open level.
 	UWorld* MakeTestWorld()
 	{
 		UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
@@ -85,10 +81,8 @@ bool FPlaceLabelsExchangeMetadataTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the header names the metadata columns"),
 		Written.Contains(TEXT("source,confidence")));
 
-	// The scale travels as its own number: a display name would be a translation of it.
 	TestTrue(TEXT("the conjectural region wrote a 2"), Written.Contains(TEXT(",2,")));
 
-	// Wipe what the file carries, and one thing it does not, before reading it back.
 	Attested->Source = FText::GetEmpty();
 	Attested->Confidence = EPlaceConfidence::Unknown;
 	Guessed->Confidence = EPlaceConfidence::Unknown;
@@ -103,7 +97,7 @@ bool FPlaceLabelsExchangeMetadataTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("5 came back as attested"), Attested->Confidence == EPlaceConfidence::Attested);
 	TestTrue(TEXT("2 came back as conjectural"), Guessed->Confidence == EPlaceConfidence::Conjectural);
 
-	// A blank cell is "not my column", not "no evidence": the region keeps what it had.
+	// A blank cell leaves the field alone: the region keeps what it had.
 	Guessed->Confidence = EPlaceConfidence::Probable;
 	FString Blanked = Written.Replace(TEXT(",2,"), TEXT(",,"));
 	TestTrue(TEXT("the blanked file is writable"), FFileHelper::SaveStringToFile(Blanked, *Path,
@@ -118,7 +112,6 @@ bool FPlaceLabelsExchangeMetadataTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// The panel's foot names the last commit to change this plugin, its own stamp and not HutongLayout's.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPlaceLabelsPluginUpdatedTest,
 	"PlaceLabels.Panel.PluginUpdated",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

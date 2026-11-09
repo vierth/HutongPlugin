@@ -24,18 +24,22 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Misc/Paths.h"
+#include "Misc/MessageDialog.h"
+#include "Misc/ScopedSlowTask.h"
+#include "AssetRegistry/AssetData.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "Tools/HutongAudit.h"
+#include "Tools/HutongSharing.h"
+#include "Tools/HutongCourts.h"
+#include "HAL/FileManager.h"
+#include "Misc/PackageName.h"
 #include "Widgets/Notifications/SNotificationList.h"
 
 namespace
 {
-	UWorld* EditorWorld()
-	{
-		return GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
-	}
+	using HutongDetailOps::EditorWorld;
 
-	// Open the dialog on the file this button last used, so a second export offers the first's
-	// name to bump. The folder only if it still exists; the name regardless, since the name is
-	// what is remembered.
+	// Folder only while it still exists.
 	void DialogDefaults(const FString& Remembered, const TCHAR* FallbackName,
 		FString& OutDir, FString& OutName)
 	{
@@ -122,13 +126,153 @@ void UHutongLayoutModeSettings::FindOverlappingBuildings()
 	FSlateNotificationManager::Get().AddNotification(Info);
 }
 
+void UHutongLayoutModeSettings::AuditLoaded()
+{
+	TArray<HutongAudit::FAudited> Audited;
+	for (const UHutongBuildingComponent* B : HutongDetailOps::CollectLoaded(EditorWorld()))
+	{
+		Audited.Add({ B, HutongAudit::Audit(B, TracedOutline) });
+	}
+	FString Summary = HutongAudit::SummaryTable(Audited);
+	UE_LOG(LogTemp, Display, TEXT("Hutong audit:\n%s"), *Summary);
+
+	FString Dir, Name;
+	DialogDefaults(LastAuditFile, TEXT("HutongAudit.csv"), Dir, Name);
+	IDesktopPlatform* Platform = FDesktopPlatformModule::Get();
+	TArray<FString> Files;
+	const void* Parent = FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr);
+	if (Platform && Platform->SaveFileDialog(Parent, TEXT("Write the audit as CSV"), Dir, Name,
+		TEXT("Comma-separated values (*.csv)|*.csv"), EFileDialogFlags::None, Files) && Files.Num() > 0)
+	{
+		if (HutongAudit::WriteCsv(Audited, Files[0]))
+		{
+			LastAuditFile = Files[0];
+			SaveConfig();
+			Summary += FString::Printf(TEXT("\nEvery check written to %s"), *Files[0]);
+		}
+		else Summary += FString::Printf(TEXT("\nCould not write %s"), *Files[0]);
+	}
+	FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(Summary),
+		NSLOCTEXT("HutongLayout", "AuditTitle", "Loaded buildings against the Qing figures"));
+}
+
+void UHutongLayoutModeSettings::ReportMeshSharing()
+{
+	const TArray<UHutongBuildingComponent*> Buildings = HutongDetailOps::CollectLoaded(EditorWorld());
+	TArray<HutongSharing::FRow> Rows;
+	if (!HutongSharing::MeasureAll(Buildings, TracedOutline, /*bShowDialog*/ true, Rows)) return;
+	FString Summary = HutongSharing::SummaryTable(Rows) + HutongSharing::DescribeWallPieces(HutongSharing::CountWallPieces(Buildings, &Rows));
+	UE_LOG(LogTemp, Display, TEXT("Hutong mesh sharing:\n%s"), *Summary);
+
+	FString Dir, Name;
+	DialogDefaults(LastSharingFile, TEXT("HutongSharing.csv"), Dir, Name);
+	IDesktopPlatform* Platform = FDesktopPlatformModule::Get();
+	TArray<FString> Files;
+	const void* Parent = FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr);
+	if (Platform && Platform->SaveFileDialog(Parent, TEXT("Write the mesh sharing report as CSV"), Dir, Name,
+		TEXT("Comma-separated values (*.csv)|*.csv"), EFileDialogFlags::None, Files) && Files.Num() > 0)
+	{
+		if (HutongSharing::WriteCsv(Rows, Files[0]))
+		{
+			LastSharingFile = Files[0];
+			SaveConfig();
+			Summary += FString::Printf(TEXT("\nEvery building written to %s"), *Files[0]);
+		}
+		else Summary += FString::Printf(TEXT("\nCould not write %s"), *Files[0]);
+	}
+	FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(Summary),
+		NSLOCTEXT("HutongLayout", "SharingTitle", "Meshes the loaded buildings would need"));
+}
+
+void UHutongLayoutModeSettings::ApplyMeshSharing()
+{
+	const FText Question = NSLOCTEXT("HutongLayout", "ApplySharingAsk",
+		"Resize and move every building in the level to its shared size? Locked buildings, city walls and Unknowns stay. Ctrl+Z undoes it.");
+	if (FMessageDialog::Open(EAppMsgType::YesNo, Question) != EAppReturnType::Yes) return;
+
+	const HutongSharing::FApplied Applied = HutongSharing::Apply(HutongDetailOps::CollectAll(EditorWorld()), TracedOutline, /*bShowDialog*/ true);
+	RefreshCounts();
+	FMessageDialog::Open(EAppMsgType::Ok, FText::Format(NSLOCTEXT("HutongLayout", "ApplySharingDone",
+		"{0} buildings resized, {1} moved. {2} pushed less to stay clear of something; {3} still collide (see the Mesh Sharing Report's CSV)."),
+		Applied.Resized, Applied.Moved, Applied.HeldBack, Applied.Collides));
+}
+
+void UHutongLayoutModeSettings::ParentLoadedToTiles()
+{
+	const HutongCourts::FParented R = HutongCourts::ParentToTiles(EditorWorld(), HutongDetailOps::CollectLoaded(EditorWorld()));
+	FNotificationInfo Info(FText::Format(NSLOCTEXT("HutongLayout", "ParentedToTiles",
+		"{0} buildings parented to their map tile, {1} already were. {2} on no tile; {3} refused (a Static building under a Movable tile)."),
+		R.Parented, R.Already, R.OffMap, R.Refused));
+	Info.ExpireDuration = 6.0f;
+	FSlateNotificationManager::Get().AddNotification(Info);
+}
+
+void UHutongLayoutModeSettings::DetachLoadedFromTiles()
+{
+	const int32 Detached = HutongCourts::DetachFromTiles(EditorWorld(), HutongDetailOps::CollectLoaded(EditorWorld()));
+	FNotificationInfo Info(FText::Format(NSLOCTEXT("HutongLayout", "DetachedFromTiles", "{0} buildings detached from their map tile."), Detached));
+	Info.ExpireDuration = 4.0f;
+	FSlateNotificationManager::Get().AddNotification(Info);
+}
+
 void UHutongLayoutModeSettings::DeleteUnusedGeneratedMeshes()
 {
-	const TArray<UStaticMesh*> Unused = HutongGen::FindUnusedLibraryMeshes();
+	const TArray<FAssetData> Unused = HutongGen::FindUnusedLibraryMeshes();
 	UE_LOG(LogTemp, Display, TEXT("Hutong: %d unused generated mesh(es)."), Unused.Num());
-	if (Unused.Num() == 0) return;
-	TArray<UObject*> Objects(Unused);
-	ObjectTools::DeleteObjects(Objects, /*bShowConfirmation*/ true);
+	if (Unused.Num() == 0)
+	{
+		FNotificationInfo Info(NSLOCTEXT("HutongLayout", "NoUnusedMeshes", "No unused generated meshes."));
+		Info.ExpireDuration = 4.0f;
+		FSlateNotificationManager::Get().AddNotification(Info);
+		return;
+	}
+	const FText Question = FText::Format(NSLOCTEXT("HutongLayout", "DeleteUnusedAsk",
+		"Delete {0} generated meshes no building uses?"), Unused.Num());
+	if (FMessageDialog::Open(EAppMsgType::OkCancel, Question) != EAppReturnType::Ok) return;
+
+	// Loading each mesh queues builds that stall thousands, so unloaded ones go as files.
+	TArray<UObject*> Loaded;
+	TArray<FString> OnDisk;
+	for (const FAssetData& Asset : Unused)
+	{
+		FString Filename;
+		if (Asset.IsAssetLoaded() || FindPackage(nullptr, *Asset.PackageName.ToString()))
+		{
+			if (UObject* Mesh = Asset.GetAsset()) Loaded.Add(Mesh);
+		}
+		else if (FPackageName::DoesPackageExist(Asset.PackageName.ToString(), &Filename))
+		{
+			OnDisk.Add(FPaths::ConvertRelativePathToFull(Filename));
+		}
+	}
+
+	constexpr int32 BatchSize = 500;
+	int32 Deleted = 0;
+	FScopedSlowTask Progress(OnDisk.Num() + 1, NSLOCTEXT("HutongLayout", "DeletingUnused", "Deleting unused generated meshes"));
+	Progress.MakeDialog(/*bShowCancelButton*/ true);
+	IAssetRegistry& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
+	for (int32 First = 0; First < OnDisk.Num() && !Progress.ShouldCancel(); First += BatchSize)
+	{
+		const int32 Count = FMath::Min(BatchSize, OnDisk.Num() - First);
+		Progress.EnterProgressFrame(Count);
+		TArray<FString> Gone;
+		for (int32 i = First; i < First + Count; ++i)
+		{
+			if (IFileManager::Get().Delete(*OnDisk[i], /*RequireExists*/ false, /*EvenReadOnly*/ true)) Gone.Add(OnDisk[i]);
+		}
+		Registry.ScanModifiedAssetFiles(Gone);
+		Deleted += Gone.Num();
+	}
+	Progress.EnterProgressFrame(1);
+	if (Loaded.Num() > 0 && !Progress.ShouldCancel())
+	{
+		Deleted += ObjectTools::DeleteObjects(Loaded, /*bShowConfirmation*/ false);
+	}
+	const FText Summary = FText::Format(NSLOCTEXT("HutongLayout", "DeletedUnused", "Deleted {0} of {1} unused generated meshes."),
+		Deleted, Unused.Num());
+	FNotificationInfo Info(Summary);
+	Info.ExpireDuration = 6.0f;
+	FSlateNotificationManager::Get().AddNotification(Info);
 }
 
 TArray<FString> UHutongLayoutModeSettings::GetConvertOptions() const
@@ -180,12 +324,10 @@ void UHutongLayoutModeSettings::ApplyDetailLevel()
 
 bool UHutongLayoutModeSettings::CanApplyConvert() const
 {
-	// As Detail Level: lit while any selected building is not already the chosen type and preset, so a
-	// newly selected building can take the same choice without picking it again.
+	// Lit while any selected building differs from the choice, so a newly selected one takes it without re-picking.
 	const TArray<HutongDetailOps::FConvertTarget>& Targets = HutongDetailOps::ConvertTargets();
 	const int32 Index = Targets.IndexOfByPredicate([this](const HutongDetailOps::FConvertTarget& T) { return T.Label == ConvertTo; });
 	if (Index == INDEX_NONE) return false;
-	// Exactly what Convert acts on: another type, or this type with another named preset.
 	return HutongDetailOps::CollectSelected().ContainsByPredicate([&](const UHutongBuildingComponent* B)
 	{
 		return HutongDetailOps::FindConvertTargetIndex(B) != Index || (!ConvertPreset.IsEmpty() && B->Preset != ConvertPreset);
@@ -242,7 +384,6 @@ void UHutongLayoutModeSettings::FuseSelection()
 
 void UHutongLayoutModeSettings::SyncToSelection()
 {
-	// Mixed levels leave the dropdown where it was.
 	const TArray<UHutongBuildingComponent*> Picked = HutongDetailOps::CollectSelected();
 	if (Picked.Num() > 0 && !Picked.ContainsByPredicate([&](const UHutongBuildingComponent* B) { return B->DetailLevel != Picked[0]->DetailLevel; }))
 	{
@@ -297,7 +438,6 @@ void UHutongLayoutModeSettings::DoExport(bool bSelection, const TCHAR* FallbackN
 {
 	FString Dir, Name;
 	DialogDefaults(Remembered, FallbackName, Dir, Name);
-	// A fresh time-stamped name each time: an export never lands on an older file unasked.
 	Name = FString::Printf(TEXT("%s_%s.%s"), FallbackName, *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")), HutongExchange::FileExtension);
 
 	FString Path;
@@ -308,8 +448,6 @@ void UHutongLayoutModeSettings::DoExport(bool bSelection, const TCHAR* FallbackN
 	else            HutongExchange::ExportAll(EditorWorld(), Path, Result);
 	HutongExchange::Report(Result, TEXT("export"));
 
-	// Remember only after a successful write, so a failed export does not aim the next dialog at
-	// a file never written.
 	if (Result.bSucceeded)
 	{
 		Remembered = Path;
@@ -360,14 +498,13 @@ void UHutongLayoutModeSettings::ImportAtRecordedCoordinates()
 	HutongExchange::FResult Result;
 	HutongExchange::ImportAtRecordedTransforms(EditorWorld(), Path,
 		bUpdateMatchingPlacements ? HutongExchange::EMode::Sync : HutongExchange::EMode::Additive,
-		ImportFolder, Result, &HutongImportTypes::ResolveUnknownTypes);
+		ImportFolder, Result, &HutongImportTypes::ResolveUnknownTypes, bBuildGeometryOnImport);
 	HutongExchange::Report(Result, TEXT("import"));
 
 	if (Result.bSucceeded) { LastSceneFile = Path; SaveConfig(); }
 	HutongOverlaps::CheckAfterImport(Result.Placed);
 
-	// Select the set as it lands so the move/rotate gizmos turn it as one: coordinates from
-	// another level mean nothing here.
+	// Selected so the gizmos turn the set as one.
 	if (Result.bSucceeded && Result.Placed.Num() > 0 && GEditor)
 	{
 		GEditor->SelectNone(/*bNoteSelectionChange*/ false, /*bDeselectBSPSurfs*/ true);
@@ -395,8 +532,6 @@ void UHutongLayoutModeSettings::PlaceSceneByHand()
 	FString Path;
 	if (!PickOpenFile(Dir, Name, Path)) return;
 
-	// The Import tool seeds itself from this on start: the file is chosen here, the placement
-	// is the tool's.
 	LastSceneFile = Path;
 	SaveConfig();
 	if (!UHutongLayoutEdMode::StartTool(TEXT("HutongImportTool")))
@@ -414,14 +549,7 @@ void UHutongLayoutModeSettings::RefreshCounts()
 	{
 		++LoadedBuildings;
 
-		// Off the baked mesh rather than by rebuilding one.
-		const AStaticMeshActor* Actor = Cast<AStaticMeshActor>(B->GetOwner());
-		const UStaticMeshComponent* Comp = Actor ? Actor->GetStaticMeshComponent() : nullptr;
-		const UStaticMesh* Mesh = Comp ? Comp->GetStaticMesh() : nullptr;
-		if (Mesh && Mesh->GetNumLODs() > 0)
-		{
-			LoadedTriangles += Mesh->GetNumTriangles(0);
-		}
+		LoadedTriangles += HutongGen::CountBuiltTriangles(B->GetOwner(), /*bWaitForBuild*/ true);
 	}
 }
 

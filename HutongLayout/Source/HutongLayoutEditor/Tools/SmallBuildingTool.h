@@ -16,7 +16,7 @@ public:
 	FHutongSmallBuildingParams Params;
 };
 
-// Places a 小房: guard post, shed, lone room or shrine. Front on the drag's -Y side; F turns it round.
+// Places a 小房: guard post, shed, lone room or shrine. A third click picks the facade side.
 UCLASS()
 class UHutongSmallBuildingTool : public URectDragToolBase
 {
@@ -24,22 +24,24 @@ class UHutongSmallBuildingTool : public URectDragToolBase
 public:
 	virtual void AdjustHeight(double DeltaCm) override;
 	virtual double GetPreviewHeight() const override;
-	virtual void FlipFacing() override;
 	virtual void AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse) override;
 	virtual void CancelPlacement() override;
 	virtual TArray<FText> GetToolHelpLines() const override;
+	virtual FText GetStagePromptText() const override;
+	virtual TArray<FText> GetStageNames() const override;
 	virtual void Render(IToolsContextRenderAPI* RenderAPI) override;
 
 protected:
 	virtual void RegisterToolSettings() override;
 	virtual void OnPlacementStarted(const FVector& HitWorld) override;
+	virtual bool OnRectCommitted(const FVector& HitWorld) override;
+	virtual void OnPlacementHover(const FVector& HitWorld) override;
 	virtual void BuildMeshForRect(double SizeX, double SizeY, UE::Geometry::FDynamicMesh3& OutMesh,
 		EHutongDetail Level) override;
 	virtual void AttachBuildingComponent(AStaticMeshActor* Actor, double SizeX, double SizeY) override;
 	virtual FString GetActorNameBase() const override { return TEXT("Hutong_SmallBuilding"); }
 	virtual FString GetPlacementDetail() const override;
 
-	// The params with the drag's footprint, across and along the front.
 	FHutongSmallBuildingParams SizedParams(double SizeX, double SizeY) const;
 
 	UPROPERTY()

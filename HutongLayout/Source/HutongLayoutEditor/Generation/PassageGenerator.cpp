@@ -13,7 +13,6 @@ namespace HutongGen
 		const double Eave = P.GetEaveHeight();
 
 		Shell::FRoofParams Roof;
-		// No side overhang: the roof bears on the two walls, edges buried in them.
 		Roof.FrontOverhang = 0.0;
 		Roof.RearOverhang = 0.0;
 		Roof.FasciaDepth = 0.0;
@@ -28,7 +27,6 @@ namespace HutongGen
 		Roof.Rise = P.GetRoofRise(Span);
 		Roof.Tile = EHutongRoofTile::He;
 
-		// AppendGableRoof tags its own material; no 山牆, no rake: it bears into a wall each side.
 		Roof.RakeDepth = 0.0;
 		Roof.bTileRuns = P.bHasTileRuns;
 		Shell::AppendGableRoof(Mesh, Run, Span, Eave, Roof);

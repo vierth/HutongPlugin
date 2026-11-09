@@ -12,7 +12,6 @@ APlaceRegionActor::APlaceRegionActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
 
-	// Never streamed.
 	bIsSpatiallyLoaded = false;
 
 	Region = CreateDefaultSubobject<UPlaceRegionComponent>(TEXT("Region"));
@@ -59,7 +58,7 @@ void APlaceRegionActor::RecomputeParent()
 		return;
 	}
 
-	// No transaction: FScopedTransaction lives in UnrealEd and this is a runtime module.
+	// Modify only: FScopedTransaction lives in UnrealEd, and this is a runtime module.
 	Modify();
 	Region->RecomputeDerivedParent();
 }
@@ -99,7 +98,6 @@ FString APlaceRegionActor::GetDefaultActorLabel() const
 		return Super::GetDefaultActorLabel();
 	}
 
-	// Prefer pinyin over the Chinese name.
 	FString Stem;
 	if (!Region->Name.Pinyin.IsEmpty())
 	{

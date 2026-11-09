@@ -41,7 +41,7 @@ void UHutongCourtsTool::RegisterToolSettings()
 void UHutongCourtsTool::Setup()
 {
 	Super::Setup();
-	// Placement settings mean nothing to a tool that places nothing.
+	// Hidden: placement settings apply only to placing tools.
 	for (UInteractiveToolPropertySet* Set : { (UInteractiveToolPropertySet*)MetadataSettings.Get(), (UInteractiveToolPropertySet*)Placement.Get(),
 			(UInteractiveToolPropertySet*)DetailSettings.Get(), (UInteractiveToolPropertySet*)Snap.Get(), (UInteractiveToolPropertySet*)Appearance.Get() })
 	{
@@ -135,7 +135,6 @@ void UHutongCourtsTool::RefreshFromSelection(bool bForce)
 		: FString::Printf(TEXT("%d building%s selected, %s"), Selected.Num(), Selected.Num() == 1 ? TEXT("") : TEXT("s"),
 			Names.Num() == 0 ? TEXT("in no court") : *FString::Printf(TEXT("in %s"), *FString::Join(Names, TEXT(", "))));
 
-	// A fresh suggestion for a new court, unless typed.
 	if (Selected.Num() > 0 && (CourtName.IsEmpty() || bNameSuggested))
 	{
 		CourtName = HutongCourts::SuggestName(EditingWorld(), Selected);

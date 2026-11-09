@@ -27,6 +27,9 @@ public:
 	UPROPERTY(EditAnywhere, Category="Gallery", meta=(DisplayName="Include Variants", ToolTip="Lays out every variant of each type."))
 	bool bIncludeVariants = true;
 
+	UPROPERTY(EditAnywhere, Category="Gallery", meta=(DisplayName="All Four Facings", ToolTip="Places each piece four times, as laid out and turned a quarter, a half and three quarters, each rebuilt from its own settings, to check that a building and its turned twin share one mesh. A type that cannot face a way leaves that square empty."))
+	bool bAllFacings = false;
+
 	UPROPERTY(EditAnywhere, Category="Gallery", meta=(DisplayName="Spacing", UIMin="200", UIMax="1500", ClampMin="50", Units="cm", ToolTip="Clear ground between one footprint and the next in a cluster, in cm. Clusters stand twice this apart, categories three times."))
 	double Spacing = 700.0;
 
@@ -85,7 +88,7 @@ protected:
 	virtual FString GetPlacementDetail() const override;
 	virtual double GetPreviewHeight() const override { return 0.0; }
 
-	// Nothing to bake: SpawnFinalActor is fully overridden, as in the compound.
+	// SpawnFinalActor is fully overridden, as in the compound.
 	virtual void BuildMeshForRect(double, double, UE::Geometry::FDynamicMesh3&, EHutongDetail) override {}
 
 	UPROPERTY()
@@ -105,7 +108,6 @@ public:
 
 namespace HutongGallery
 {
-	// Where each piece lands, in the gallery's local frame (its min corner at 0), in placement order.
 	struct FPlacedPiece
 	{
 		FString Label;
@@ -115,10 +117,13 @@ namespace HutongGallery
 	};
 	TArray<FPlacedPiece> Plan(const UHutongGalleryToolProperties* Settings);
 
-	// The category's name in the outliner and the tool.
+	bool TurnPiece(class UHutongBuildingComponent* Building, int32 Quarter);
+
+	void ForEachAttached(const UHutongGalleryToolProperties* Settings, UWorld* World,
+		TFunctionRef<void(const FString& Label, class AStaticMeshActor* Actor)> Visit);
+
 	FString CategoryName(EHutongGalleryCategory Category);
 
-	// What one piece costs.
 	struct FHutongCostRow
 	{
 		static constexpr int32 NumLevels = 4;   // Massing, Far, Near, Hero — EHutongDetail's order
@@ -129,21 +134,15 @@ namespace HutongGallery
 		int32   MaterialSlots[NumLevels] = {};
 		double  BuildMs[NumLevels] = {};
 
-		// Near: the level every earlier figure was measured at.
 		int32 NearTriangles() const { return Triangles[(int32)EHutongDetail::Near]; }
 	};
 
-	// The building component type each piece attaches, attached to throwaway actors in World.
 	TArray<UClass*> AttachedClasses(const UHutongGalleryToolProperties* Settings, UWorld* World);
 
-	// Every piece built at Level, handed over with its label and footprint.
 	void ForEachBuilt(const UHutongGalleryToolProperties* Settings, EHutongDetail Level,
 		TFunctionRef<void(const FString& Label, const FVector2D& Footprint, const UE::Geometry::FDynamicMesh3& Mesh)> Visit);
 
-	// Every piece at Near, retagged like a placement, 15 m apart, as OBJ: a material group per slot
-	// and a "# item <label> <x>" line per piece. For offline viewing.
 	void WriteObj(const UHutongGalleryToolProperties* Settings, const FString& Path);
 
-	// Builds every piece and prices it at every level; spawns nothing. Cost.Report asserts each builds.
 	TArray<FHutongCostRow> BuildCostReport(const UHutongGalleryToolProperties* Settings);
 }

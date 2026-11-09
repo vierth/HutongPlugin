@@ -9,7 +9,6 @@
 
 namespace
 {
-	// First triangle a vertical ray from From meets going Dir (+1 up, -1 down); -1 if none.
 	int32 FirstHitVertical(const UE::Geometry::FDynamicMesh3& M, const FVector3d& From, double Dir)
 	{
 		int32 Best = -1;
@@ -37,8 +36,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongExposedFrameTest,
 
 bool FHutongExposedFrameTest::RunTest(const FString& Parameters)
 {
-	// 徹上明造: from inside, looking up always meets timber (the shell's boards, the frame, the rafters),
-	// never sky or tile; from above, the roof comes first (no member through it).
 	UHutongGalleryToolProperties* S = NewObject<UHutongGalleryToolProperties>();
 	int32 Pieces = 0;
 	HutongGallery::ForEachBuilt(S, EHutongDetail::Near,

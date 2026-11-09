@@ -13,7 +13,6 @@ class UHutongPresetLibrary : public UObject
 public:
 	static UHutongPresetLibrary* Get();
 
-	// Presets the plugin ships, held in code.
 	static void RegisterBuiltIn(FName ToolKey, const FString& Name,
 		const UScriptStruct* Type, const void* Data);
 
@@ -26,7 +25,6 @@ public:
 	TMap<FString, FString> Presets;
 
 private:
-	// Not a UPROPERTY: these are compiled in, never serialised.
 	static TMap<FString, FString>& BuiltIns();
 };
 
@@ -37,10 +35,8 @@ class UHutongPresetProperties : public UInteractiveToolPropertySet
 	GENERATED_BODY()
 
 public:
-	// ToolKey namespaces saved names per tool.
 	void Initialize(FName InToolKey, UInteractiveToolPropertySet* InOwnerSet, FName ParamsPropertyName);
 
-	// Runs after a preset is applied, to refresh the details panel.
 	TFunction<void()> OnPresetLoaded;
 
 	UPROPERTY(EditAnywhere, Category = "Preset", meta = (DisplayName = "Type / Preset", GetOptions = "GetPresetNames", ToolTip = "Existing preset to load or delete."))
@@ -57,14 +53,11 @@ public:
 	UFUNCTION()
 	TArray<FString> GetPresetNames() const;
 
-	// Picking a preset applies it; students picked one and placed the previous type.
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 
-	// Namespace key, compared against a component's own key.
 	FName GetToolKey() const { return ToolKey; }
 
 private:
-	// Resolves the params struct on the owning set; false if the owner is gone.
 	bool GetParams(const UScriptStruct*& OutType, void*& OutData) const;
 
 	FName ToolKey;

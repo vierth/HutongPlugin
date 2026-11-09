@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
 #include "Generation/HutongDetail.h"
+#include "Tools/HutongAudit.h"
 #include "HutongLayoutModeSettings.generated.h"
 
 // The step drawn sizes round to, in 營造尺 (32 cm): buildings of one kind come out the same size and share
@@ -31,7 +32,6 @@ namespace HutongSizeStep
 		}
 	}
 
-	// Length rounded to a whole number of steps, never under one step.
 	inline double Round(double Length, double StepCm)
 	{
 		if (StepCm <= 0.0) return Length;
@@ -47,8 +47,6 @@ class UHutongLayoutModeSettings : public UObject
 	GENERATED_BODY()
 
 public:
-	// Categories: Geometry, Export, Import, Housekeeping, Selection, Information (FHutongModeSettingsCustomization
-	// orders them and draws every action as a button row with its description, greyed when it has nothing to act on).
 
 	// Tool panel's simple/advanced switch; toggled there, not on this panel.
 	UPROPERTY(config)
@@ -63,6 +61,10 @@ public:
 	// wants them hidden. Seeded on Enter so a fresh object cannot report hidden plans as visible.
 	UPROPERTY(EditAnywhere, config, Category = "Geometry", meta = (DisplayName = "Size Step", ToolTip = "Drawn and resized footprints round to this step, so buildings of one kind match and share one mesh. Snapping to a placed building still wins."))
 	EHutongSizeStep SizeStep = EHutongSizeStep::FiveCun;
+
+	// What the traced outlines follow on the map; the audit (HutongAudit) takes eave overhangs off the depth when it is the roof.
+	UPROPERTY(EditAnywhere, config, Category = "Audit", meta = (DisplayName = "Outlines Traced On", ToolTip = "What the map's building outlines were traced on. Eaves: the Qing-figure audit in the hover readout takes the roof's overhang off each depth before judging it."))
+	EHutongTracedOutline TracedOutline = EHutongTracedOutline::Walls;
 
 	UPROPERTY(EditAnywhere, Category = "Geometry", meta = (DisplayName = "Show Plan Outlines", ToolTip = "Show every building's footprint outline."))
 	bool bShowPlanOutlines = true;
@@ -82,8 +84,6 @@ public:
 	void RevertLoadedToLayout();
 
 	void RevertSelectedToLayout();
-
-	// ---- Selection: a setting, then Apply (drawn by FHutongModeSettingsCustomization) ----
 
 	// Follows the selection: shows the selected buildings' level until changed.
 	UPROPERTY(EditAnywhere, config, Category = "Selection", meta = (DisplayName = "Detail Level", ToolTip = "Detail level for the selected buildings."))
@@ -108,12 +108,10 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Selection", meta = (DisplayName = "Divide At Bay Line", UIMin = "0", UIMax = "32", ClampMin = "0", ToolTip = "Bay line to divide at, counted from the start; 0 is the middle."))
 	int32 DivideAtBayLine = 0;
 
-	// Whether the selection holds anything the button acts on.
 	bool HasSelection() const;
 	bool HasSelectedLayout() const;
 	bool HasSelectedBuilt() const;
 
-	// What each Apply would do, for its button's enabled state.
 	bool CanApplyDetailLevel() const;
 	bool CanApplyConvert() const;
 	bool CanApplyDivide() const;
@@ -124,17 +122,11 @@ public:
 	void ApplyDivide();
 	void FuseSelection();
 
-	// Called when the editor selection changes: the level dropdown shows what is selected.
 	void SyncToSelection();
 
-	// ---- Export ----
-
-	// Writes each loaded building's placement and its changes from type defaults: enough to rebuild the street.
 	void ExportAll();
 
 	void ExportSelection();
-
-	// ---- Import ----
 
 	// Off: the file's buildings go back to the coordinates it recorded. On: the Import tool carries
 	// the set under the cursor to be turned and dropped by hand.
@@ -149,11 +141,12 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Import", meta = (DisplayName = "Update Matching Placements", ToolTip = "Update buildings already in the level instead of adding copies."))
 	bool bUpdateMatchingPlacements = true;
 
-	// Coordinates from another level mean nothing here, so the Import tool carries the set under
-	// the cursor, turns it with R and drops it on a click.
+	// Not saved: geometry on import is asked for each session, never inherited.
+	UPROPERTY(EditAnywhere, Transient, Category = "Import", meta = (DisplayName = "Build Geometry On Import", ToolTip = "Builds the imported buildings that were built in the file. Off: every building arrives laid out, to be built later with Generate."))
+	bool bBuildGeometryOnImport = false;
+
 	void PlaceSceneByHand();
 
-	// Straight back to the world coordinates the file recorded, with no drag.
 	void ImportAtRecordedCoordinates();
 
 	// Remembered here rather than on the import tool's property set.
@@ -168,23 +161,31 @@ public:
 	UPROPERTY(config)
 	FString LastSelectionExportFile;
 
-	// ---- Housekeeping ----
+	UPROPERTY(config)
+	FString LastAuditFile;
 
-	// Placement unchanged: rebuilt from the parameters each building carries.
+	void AuditLoaded();
+
+	UPROPERTY(config)
+	FString LastSharingFile;
+
+	void ReportMeshSharing();
+
+	void ApplyMeshSharing();
+
 	void RebuildLoaded();
 
 	void RebuildSelection();
 
-	// One editable material asset per slot, worn by every placement and rebuild instead of the
-	// tinted default until a palette material is assigned. Existing assets are kept.
 	void CreateStarterMaterials();
 
-	// Identical buildings share one mesh asset under /Game/HutongLayout/Generated; a rebuild or a deleted
-	// building can leave one no building wears.
-	// Two buildings on one footprint under different ids; imports check their own arrivals.
 	void FindOverlappingBuildings();
 
 	void DeleteUnusedGeneratedMeshes();
+
+	void ParentLoadedToTiles();
+
+	void DetachLoadedFromTiles();
 
 	// ---- Information ----
 
@@ -194,11 +195,9 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Information", meta = (DisplayName = "Triangles", ToolTip = "Triangles in the loaded buildings at the last count."))
 	int64 LoadedTriangles = 0;
 
-	// Counted on demand rather than every frame.
 	void RefreshCounts();
 
 private:
-	// The two export buttons differ in what they gather and which name they remember.
 	void DoExport(bool bSelection, const TCHAR* FallbackName, FString& Remembered);
 
 public:

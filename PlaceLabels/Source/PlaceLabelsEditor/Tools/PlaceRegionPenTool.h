@@ -51,7 +51,6 @@ public:
 	UPROPERTY(EditAnywhere, Category = "New Region")
 	FName OutlinerFolder = TEXT("RegionLabels");
 
-	// Set by the tool so the buttons above can reach it.
 	TWeakObjectPtr<class UPlaceRegionPenTool> OwningTool;
 
 	// Turn on for interiors and single floors, where the sky above should not count as inside.
@@ -121,7 +120,7 @@ public:
 	virtual void Render(IToolsContextRenderAPI* RenderAPI) override;
 	virtual void DrawHUD(FCanvas* Canvas, IToolsContextRenderAPI* RenderAPI) override;
 
-	// Region deletes, imports and edits do not notify the tool.
+	// Polls the level's regions: region deletes, imports and edits send the tool no notice.
 	virtual void OnTick(float DeltaTime) override;
 
 	// IClickDragBehaviorTarget.
@@ -140,33 +139,26 @@ public:
 	virtual bool OnUpdateHover(const FInputDeviceRay& DevicePos) override;
 	virtual void OnEndHover() override;
 
-	// Driven by the mode's global key handler and by the property set's buttons.
-
 	// Backspace.
 	void UndoLastPoint();
 
-	// Delete. Removes whichever corner is under the cursor, at either stage.
+	// Delete.
 	void DeleteHoveredPoint();
 
-	// Closes the outline and moves to the confirm stage.
 	void CloseOutline();
 
-	// Spawns the region from the confirmed outline and clears the name and type for the next one.
 	void ConfirmRegion();
 
-	// Abandons whatever stage is in progress.
 	void CancelDrawing();
 
 	bool IsDrawing() const { return PendingPoints.Num() > 0; }
 	bool IsAwaitingConfirm() const { return bAwaitingConfirm; }
 
-	// True whenever there is an outline on screen, at either stage.
 	bool IsActive() const { return PendingPoints.Num() > 0; }
 
 	FText GetStagePromptText() const;
 	FText GetDrawingSummaryText() const;
 
-	// Pending region's name; the mode panel's form edits it while an outline is in hand.
 	UPlaceRegionPenToolProperties* GetPendingSettings() const { return Settings; }
 	void NotifyPendingSettingsChanged()
 	{
@@ -181,31 +173,23 @@ protected:
 
 	UWorld* GetTargetWorld() const;
 
-	// Scene trace onto whatever the ray hits, falling back to a horizontal plane.
 	bool TryHitGround(const FInputDeviceRay& Ray, FVector& OutHit) const;
 	FInputRayHit GroundRayHit(const FInputDeviceRay& Ray) const;
 
-	// Applies the Shift angle constraint and then the snap ladder.
 	FVector ResolveCandidatePoint(const FVector& TracedHit, int32 IgnorePointIndex = INDEX_NONE);
 
 	void RefreshCachedRegions();
 	void UpdateReadout();
 
-	// Screen-constant handle sizing, cached from the last Render.
 	double PickRadiusAt(const FVector& WorldPoint) const;
 	double HandleSizeAt(const FVector& WorldPoint) const;
 
 	enum class EHover : uint8
 	{
-		// Free ground. A click appends a point while drawing, and does nothing once closed.
 		Ground,
-		// Over an existing corner: drag moves it, Alt+click removes it.
 		Point,
-		// Over a segment between two corners: a click inserts one there.
 		Segment,
-		// Over the first corner with three or more placed: a click closes the outline.
 		CloseTarget,
-		// Over a HutongLayout building, with nothing drawn yet: a click takes its footprint.
 		Footprint,
 	};
 
@@ -237,27 +221,21 @@ protected:
 	int32 HoverPointIndex = INDEX_NONE;
 	int32 HoverSegmentIndex = INDEX_NONE;
 
-	// The building footprint under the cursor, previewed before it is adopted.
 	TArray<FVector> HoveredFootprint;
 	FString HoveredFootprintLabel;
 
-	// Outline finished, waiting for a name and a confirmation.
 	bool bAwaitingConfirm = false;
 
-	// Drag
 	bool bDraggingPoint = false;
 	bool bDragMoved = false;
 	int32 DraggedPointIndex = INDEX_NONE;
 	FVector2D PressPixel = FVector2D::ZeroVector;
 
-	// Level's regions, refreshed periodically and after each spawn, not per hover tick.
 	TArray<TWeakObjectPtr<UPlaceRegionComponent>> CachedRegions;
 	double TimeSinceCacheRefresh = 0.0;
 
-	// What the last placement produced.
 	TWeakObjectPtr<AActor> LastPlacedActor;
 
-	// From the last Render, so hover picking sizes handles as drawn.
 	FVector CameraPosition = FVector::ZeroVector;
 	double WorldPerPixelOrtho = 1.0;
 	double WorldPerPixelPerUnitDistance = 0.001;

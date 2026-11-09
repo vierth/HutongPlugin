@@ -17,6 +17,7 @@
 #include "Engine/Selection.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Misc/MessageDialog.h"
 #include "Misc/ScopedSlowTask.h"
 #include "ScopedTransaction.h"
 #include "WorldPartition/WorldPartition.h"
@@ -137,15 +138,19 @@ int32 SetLevel(const TArray<UHutongBuildingComponent*>& InBuildings, EHutongDeta
 
 		B->Modify();
 		B->DetailLevel = Level;
-		// Same seam as every parameter edit.
 		B->Rebuild();
 
-		// Rebuild does not apply attachments (lights, plan outline); compound and gallery call this too.
+		// Attachments (lights, plan outline) sit outside Rebuild.
 		B->ApplyPlacementAttachments();
 	}
-	// Footprints may have changed; no tool is active to invalidate the snap cache.
+	// No active tool invalidates the snap cache.
 	HutongSnap::Invalidate();
 	return Work.Num();
+}
+
+UWorld* EditorWorld()
+{
+	return GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
 }
 
 int32 Rebuild(const TArray<UHutongBuildingComponent*>& InBuildings)
@@ -174,12 +179,12 @@ int32 Rebuild(const TArray<UHutongBuildingComponent*>& InBuildings)
 		B->Rebuild();
 		B->ApplyPlacementAttachments();
 	}
-	// Footprints may have changed; no tool is active to invalidate the snap cache.
+	// No active tool invalidates the snap cache.
 	HutongSnap::Invalidate();
 	return Work.Num();
 }
 
-int32 GeneratePlanned(const TArray<UHutongBuildingComponent*>& InBuildings)
+int32 GeneratePlanned(const TArray<UHutongBuildingComponent*>& InBuildings, bool bAsk)
 {
 	const TArray<UHutongBuildingComponent*> Buildings = Unlocked(InBuildings);
 	TArray<UHutongBuildingComponent*> Work;
@@ -189,14 +194,18 @@ int32 GeneratePlanned(const TArray<UHutongBuildingComponent*>& InBuildings)
 		if (B && B->bPlanOnly && B->HasGeometry()) Work.Add(B);
 	}
 	if (Work.Num() == 0) return 0;
+	if (bAsk && FMessageDialog::Open(EAppMsgType::OkCancel, FText::Format(LOCTEXT("GenerateAsk",
+		"Generate geometry for {0} laid-out building(s)?"), Work.Num())) != EAppReturnType::Ok) return 0;
 
 	const FScopedTransaction Transaction(LOCTEXT("GenerateGeometry", "Generate Hutong Geometry"));
 
 	FScopedSlowTask Task((float)Work.Num(), LOCTEXT("Generating", "Generating geometry…"));
-	Task.MakeDialog();
+	Task.MakeDialog(/*bShowCancelButton*/ true);
 
+	int32 Built = 0;
 	for (UHutongBuildingComponent* B : Work)
 	{
+		if (Task.ShouldCancel()) break;
 		const AActor* Owner = B->GetOwner();
 		Task.EnterProgressFrame(1.0f,
 			FText::FromString(Owner ? Owner->GetActorNameOrLabel() : TEXT("building")));
@@ -205,10 +214,11 @@ int32 GeneratePlanned(const TArray<UHutongBuildingComponent*>& InBuildings)
 		B->bPlanOnly = false;
 		B->Rebuild();
 		B->ApplyPlacementAttachments();
+		++Built;
 	}
-	// Footprints may have changed; no tool is active to invalidate the snap cache.
+	// No active tool invalidates the snap cache.
 	HutongSnap::Invalidate();
-	return Work.Num();
+	return Built;
 }
 
 int32 RevertToPlan(const TArray<UHutongBuildingComponent*>& InBuildings)
@@ -244,7 +254,6 @@ int32 RevertToPlan(const TArray<UHutongBuildingComponent*>& InBuildings)
 
 const TArray<FConvertTarget>& ConvertTargets()
 {
-	// Built once from the component classes: a new type joins automatically.
 	static TArray<FConvertTarget> Targets;
 	if (Targets.Num() > 0) return Targets;
 
@@ -269,10 +278,7 @@ const TArray<FConvertTarget>& ConvertTargets()
 		}
 	}
 
-	// Kin next to each other, so stepping through with T moves between near choices: buildings with
-	// rooms, then gates, walls, courtyard pieces, the temple. Variants keep their own order.
-	// Family: what a building may turn into from the menu (user, 2026-10-03) — roofed buildings, gates,
-	// the temple and the pavilion; walls; ways (corridor, passage, path); furnishings.
+	// Kin adjacent, so stepping through with T moves between near choices.
 	struct FRank { UClass* Class; int32 Group; int32 Family; };
 	static const TArray<FRank> Order = {
 		{ UHutongSiheyuanBuildingComponent::StaticClass(), 0, 0 }, { UHutongEarPassageBuildingComponent::StaticClass(), 0, 0 },
@@ -283,7 +289,8 @@ const TArray<FConvertTarget>& ConvertTargets()
 		{ UHutongHallBuildingComponent::StaticClass(), 4, 0 }, { UHutongPavilionBuildingComponent::StaticClass(), 4, 0 },
 		{ UHutongWallBuildingComponent::StaticClass(), 2, 1 }, { UHutongScreenWallBuildingComponent::StaticClass(), 2, 1 },
 		// City scale: a lane wall's footprint would make a sliver of it, so it turns only into Unknown.
-		{ UHutongCityWallBuildingComponent::StaticClass(), 2, 4 },
+		{ UHutongCityWallBuildingComponent::StaticClass(), 2, 4 }, { UHutongWallCornerBuildingComponent::StaticClass(), 2, 5 },
+		{ UHutongArrowTowerBuildingComponent::StaticClass(), 1, 6 }, { UHutongCityGateBuildingComponent::StaticClass(), 1, 7 },
 		{ UHutongCorridorBuildingComponent::StaticClass(), 3, 2 }, { UHutongPassageBuildingComponent::StaticClass(), 3, 2 },
 		{ UHutongPathBuildingComponent::StaticClass(), 3, 2 },
 		{ UHutongFlowerBedBuildingComponent::StaticClass(), 5, 3 }, { UHutongWaterJarBuildingComponent::StaticClass(), 5, 3 },
@@ -295,7 +302,6 @@ const TArray<FConvertTarget>& ConvertTargets()
 		T.Group = R == INDEX_NONE ? 7 : Order[R].Group;
 		T.Family = R == INDEX_NONE ? INDEX_NONE : Order[R].Family;
 	}
-	// A class missing from the list goes last, by label.
 	Targets.StableSort([&](const FConvertTarget& A, const FConvertTarget& B)
 	{
 		const int32 RA = RankOf(A.Class), RB = RankOf(B.Class);
@@ -323,8 +329,6 @@ FText ConvertGroupName(int32 Group)
 
 bool CanExchange(const FConvertTarget& From, const FConvertTarget& To)
 {
-	// A type outside every family turns only into itself.
-	// A traced footprint of unknown type may become anything, and anything may go back to it.
 	if (From.Family == UnknownFamily || To.Family == UnknownFamily) return true;
 	return From.Class == To.Class || (From.Family != INDEX_NONE && From.Family == To.Family);
 }
@@ -352,7 +356,6 @@ int32 FindConvertTargetIndex(const UHutongBuildingComponent* Building)
 {
 	if (!Building) return INDEX_NONE;
 	const TArray<FConvertTarget>& Targets = ConvertTargets();
-	// The label names the variant (院牆 or 隔牆); the class alone is the fallback.
 	const FString Label = Building->GetTypeLabel().ToString();
 	const int32 ByLabel = Targets.IndexOfByPredicate([&](const FConvertTarget& T) { return T.Label == Label; });
 	if (ByLabel != INDEX_NONE) return ByLabel;
@@ -367,7 +370,6 @@ FName PresetKeyOf(const FConvertTarget& Target)
 
 namespace
 {
-	// Editable fields that differ, nested structs walked so a field is named rather than its group.
 	void CollectDifferences(const UStruct* Struct, const void* Mine, const void* Theirs, const FString& Prefix, TArray<FString>& Out)
 	{
 		for (TFieldIterator<FProperty> It(Struct); It; ++It)
@@ -395,7 +397,6 @@ UHutongBuildingComponent* MakeAsDrawn(const UHutongBuildingComponent& Placed, UC
 	UHutongBuildingComponent* Drawn = Class ? NewObject<UHutongBuildingComponent>(
 		GetTransientPackage(), Class, NAME_None, RF_Transient) : nullptr;
 	if (!Drawn) return nullptr;
-	// Order as a conversion: kind, then preset, then what the drag writes.
 	if (!Variant.IsNone()) Drawn->SetTypeVariant(Variant);
 	if (!Preset.IsEmpty()) Drawn->ApplyPresetParams(Preset);
 	Drawn->ApplyDragDerived(Placed);
@@ -421,8 +422,7 @@ namespace
 		return Building->GetDrawnBayCount();
 	}
 
-	// The bays are what the map attests: the count drawn before stays. Forced stays forced; a derived
-	// count is forced only where the new values would derive another.
+	// The bay count drawn stays: the map attests it.
 	void CarryBayCount(UHutongBuildingComponent* Building, int32 DrawnBays, int32 Forced)
 	{
 		if (DrawnBays < 1 || GetBayCountOverride(Building) == INDEX_NONE) return;
@@ -457,7 +457,6 @@ bool ApplyPresetAsDrawn(UHutongBuildingComponent* Building, const FString& Prese
 	if (!Building || Building->bLocked || !UHutongPresetLibrary::Get()->GetPresetNames(Building->GetPresetKey()).Contains(Preset)) return false;
 	const UHutongBuildingComponent* Drawn = MakeAsDrawn(*Building, Building->GetClass(), OwnVariant(Building), Preset);
 	if (!Drawn) return false;
-	// The outline stays where it was drawn; the new values may read it differently (a corridor's walk).
 	const FVector2D Footprint = Building->GetFootprintSize();
 	const int32 DrawnBays = PlanBayCount(Building);
 	const int32 Forced = GetBayCountOverride(Building);
@@ -470,7 +469,6 @@ bool ApplyPresetAsDrawn(UHutongBuildingComponent* Building, const FString& Prese
 
 namespace
 {
-	// Hutong_Shopfront_a1b2c3 -> Hutong_Siheyuan_a1b2c3: keep the placement's guid tail, rename the type.
 	void RelabelForType(AActor* Actor, const UHutongBuildingComponent* Building)
 	{
 		if (!Actor || !Building) return;
@@ -490,7 +488,6 @@ UHutongBuildingComponent* ConvertBuilding(UHutongBuildingComponent* Old,
 	AActor* Actor = Old->GetOwner();
 	if (!Actor) return nullptr;
 
-	// Only placement state survives a type change; per-type parameters do not.
 	const FVector2D Footprint = Old->GetFootprintSize();
 	const FHutongFootprintSkew Skew = Old->FootprintSkew;
 	const bool bRunAlongY = Old->IsRunAlongY();
@@ -502,7 +499,7 @@ UHutongBuildingComponent* ConvertBuilding(UHutongBuildingComponent* Old,
 	const bool bLODs = Old->bBuildLODChain;
 	const FHutongPalette Palette = Old->Palette;
 	const FGuid Id = Old->BuildingId;
-	// Read before the old one goes: the new type's values as a drag over this footprint gives them.
+	// Read before the old one goes.
 	const UHutongBuildingComponent* Drawn = MakeAsDrawn(*Old, Target.Class, Target.Variant, Preset);
 	const int32 DrawnBays = PlanBayCount(Old);
 	const int32 Forced = GetBayCountOverride(Old);
@@ -514,7 +511,7 @@ UHutongBuildingComponent* ConvertBuilding(UHutongBuildingComponent* Old,
 	UHutongBuildingComponent* New = NewObject<UHutongBuildingComponent>(
 		Actor, Target.Class, NAME_None, RF_Transactional);
 
-	// Same id: a conversion is not a new placement; earlier exports still name it.
+	// Same id, so earlier exports still name it.
 	New->BuildingId = Id;
 	New->Palette = Palette;
 	New->DetailLevel = Level;
@@ -522,7 +519,7 @@ UHutongBuildingComponent* ConvertBuilding(UHutongBuildingComponent* Old,
 	New->bBespokeMesh = bBespoke;
 	New->bBuildLODChain = bLODs;
 
-	// Order: kind, preset, footprint. Wall thickness is capped per role, so the role must be set first.
+	// Role first: wall thickness is capped per role.
 	if (!Target.Variant.IsNone()) New->SetTypeVariant(Target.Variant);
 	if (!Preset.IsEmpty() && New->ApplyPresetParams(Preset)) New->Preset = Preset;
 	if (Drawn) CopyParams(*Drawn, *New);
@@ -530,7 +527,6 @@ UHutongBuildingComponent* ConvertBuilding(UHutongBuildingComponent* Old,
 	New->SetRunAlongY(bRunAlongY);
 	New->SetFootprintSize(Footprint);
 	if (bHasFacade) New->SetFacade(Facade);
-	// Corner skew is placement state and carries over.
 	New->FootprintSkew = Skew;
 	CarryBayCount(New, DrawnBays, Forced);
 
@@ -553,7 +549,6 @@ void RebuildEdited(UHutongBuildingComponent* Building)
 TArray<UHutongBuildingComponent*> NeedingChange(const TArray<UHutongBuildingComponent*>& Buildings,
 	int32 TypeIndex, const FString& Preset)
 {
-	// One already of the chosen type and preset loses nothing and is left alone.
 	TArray<UHutongBuildingComponent*> Out;
 	for (UHutongBuildingComponent* B : Buildings)
 	{
@@ -586,7 +581,6 @@ int32 ChangeTypeOrPreset(const TArray<UHutongBuildingComponent*>& InBuildings, i
 		{
 			if (Target.IsValid() && TypeIndex != FindConvertTargetIndex(B))
 			{
-				// The keys and the menu change a building only within its family; the Scene tab converts freely.
 				if (!CanAllBecome({ B }, Target)) continue;
 				if (ConvertBuilding(B, Target, Preset) == nullptr) continue;
 				bConverted = true;
@@ -595,13 +589,11 @@ int32 ChangeTypeOrPreset(const TArray<UHutongBuildingComponent*>& InBuildings, i
 			}
 			if (B->GetOwner()) B->GetOwner()->Modify();
 			B->Modify();
-			// As if drawn here with the new preset: the drag's own values come out the same.
 			if (!ApplyPresetAsDrawn(B, Preset)) continue;
 			RebuildEdited(B);
 			++Changed;
 		}
 	}
-	// Footprints may have changed with the type.
 	if (bConverted) HutongSnap::Invalidate();
 	return Changed;
 }
@@ -616,7 +608,6 @@ bool AdjustBays(const TArray<UHutongBuildingComponent*>& InBuildings, int32 Delt
 	const FScopedTransaction Transaction(LOCTEXT("AdjustBays", "Change Bay Count"));
 	for (UHutongBuildingComponent* B : Work)
 	{
-		// A derived count is seeded from the bays drawn, so the first press steps from what is seen.
 		const int32 Forced = GetBayCountOverride(B);
 		const int32 Current = Forced > 0 ? Forced : FMath::Max(1, B->GetDrawnBayCount());
 		const int32 Next = FMath::Clamp(Current + Delta, 1, B->GetMaxBayCount());
@@ -625,6 +616,24 @@ bool AdjustBays(const TArray<UHutongBuildingComponent*>& InBuildings, int32 Delt
 		B->Modify();
 		SetBayCountOverride(B, Next);
 		RebuildEdited(B);
+	}
+	return true;
+}
+
+bool MoveDoorBay(const TArray<UHutongBuildingComponent*>& InBuildings, int32 StepsRight)
+{
+	// The index runs along +X of the build frame, which is the left hand of someone facing the facade.
+	const int32 Delta = -StepsRight;
+	TArray<UHutongBuildingComponent*> Work = Unlocked(InBuildings);
+	Work.RemoveAll([Delta](const UHutongBuildingComponent* B) { return !B || !B->CanMoveDoorBay() || !B->CanStepDoorBay(Delta); });
+	if (Work.Num() == 0 || Delta == 0) return false;
+
+	const FScopedTransaction Transaction(LOCTEXT("MoveDoorBay", "Move Door Bay"));
+	for (UHutongBuildingComponent* B : Work)
+	{
+		if (B->GetOwner()) B->GetOwner()->Modify();
+		B->Modify();
+		if (B->MoveDoorBay(Delta)) RebuildEdited(B);
 	}
 	return true;
 }
@@ -686,13 +695,63 @@ bool ToggleGate(const TArray<UHutongBuildingComponent*>& InBuildings)
 	{
 		if (W->GetOwner()) W->GetOwner()->Modify();
 		W->Modify();
-		// Any opening off; none, a gate (牆垣門) on.
 		const bool bOpen = W->Params.bHasGate || W->Params.Doorway != EHutongWallDoorway::None;
 		W->Params.bHasGate = !bOpen;
-		if (bOpen) W->Params.Doorway = EHutongWallDoorway::None;
+		if (bOpen)
+		{
+			W->Params.Doorway = EHutongWallDoorway::None;
+			W->Params.MoreGatePositions.Reset();
+		}
 		RebuildEdited(W);
 	}
 	return true;
+}
+
+bool AddGate(const TArray<UHutongBuildingComponent*>& InBuildings)
+{
+	TArray<UHutongWallBuildingComponent*> Walls;
+	for (UHutongBuildingComponent* B : Unlocked(InBuildings))
+	{
+		if (UHutongWallBuildingComponent* W = Cast<UHutongWallBuildingComponent>(B)) Walls.Add(W);
+	}
+	if (Walls.Num() == 0) return false;
+
+	const FScopedTransaction Transaction(LOCTEXT("AddGate", "Add Wall Gate"));
+	int32 Added = 0;
+	for (UHutongWallBuildingComponent* W : Walls)
+	{
+		FHutongWallParams P = W->Params;
+		const double L = W->Length;
+		const int32 Before = P.GetGateSpans(L).Num();
+		if (!P.bHasGate)
+		{
+			P.bHasGate = true;
+		}
+		else
+		{
+			TArray<FVector2D> Clear;
+			double From = 0.0;
+			for (const FHutongWallGateSpan& S : P.GetGateSpans(L))
+			{
+				Clear.Add(FVector2D(From, S.PierX0));
+				From = S.PierX1;
+			}
+			Clear.Add(FVector2D(From, L));
+			double Best = -1.0, At = 0.5 * L;
+			for (const FVector2D& C : Clear)
+			{
+				if (C.Y - C.X > Best) { Best = C.Y - C.X; At = 0.5 * (C.X + C.Y); }
+			}
+			P.MoreGatePositions.Add(L > 0.0 ? At / L : 0.5);
+		}
+		if (P.GetGateSpans(L).Num() <= Before) continue;
+		if (W->GetOwner()) W->GetOwner()->Modify();
+		W->Modify();
+		W->Params = P;
+		RebuildEdited(W);
+		++Added;
+	}
+	return Added > 0;
 }
 
 int32 Convert(const TArray<UHutongBuildingComponent*>& Buildings, const FConvertTarget& Target,
@@ -706,7 +765,6 @@ int32 Convert(const TArray<UHutongBuildingComponent*>& Buildings, const FConvert
 	for (UHutongBuildingComponent* B : Buildings)
 	{
 		if (!B || !B->GetOwner()) continue;
-		// Already this type and variant: only a new preset to load (rebuild is a separate button).
 		if (B->GetClass() == Target.Class && B->GetTypeVariant() == Target.Variant)
 		{
 			if (!Preset.IsEmpty() && B->Preset != Preset) PresetOnly.Add(B);
@@ -735,14 +793,13 @@ int32 Convert(const TArray<UHutongBuildingComponent*>& Buildings, const FConvert
 		RebuildEdited(B);
 		++Converted;
 	}
-	// Footprints may have changed; no tool is active to invalidate the snap cache.
+	// No active tool invalidates the snap cache.
 	HutongSnap::Invalidate();
 	return Converted;
 }
 
 namespace
 {
-	// Bay line positions along the run, actor-local, sorted.
 	TArray<double> BayLines(const UHutongBuildingComponent* B)
 	{
 		FHutongPlanBays Bays;
@@ -751,7 +808,6 @@ namespace
 		return Bays.Boundaries;
 	}
 
-	// Skew kept by one end after a cut: its two corners stay, the cut corners zero.
 	// bAlongX = run axis; bStart = the end at the origin.
 	FHutongFootprintSkew EndSkew(const FHutongFootprintSkew& Skew, bool bAlongX, bool bStart)
 	{
@@ -764,7 +820,6 @@ namespace
 		return Out;
 	}
 
-	// Either corner at this end is skewed.
 	bool EndHasSkew(const FHutongFootprintSkew& Skew, bool bAlongX, bool bStart)
 	{
 		int32 A, B;
@@ -772,7 +827,6 @@ namespace
 		return !Skew.Get(A).IsNearlyZero() || !Skew.Get(B).IsNearlyZero();
 	}
 
-	// Hand-placed joins are inexact.
 	constexpr double JoinToleranceCm = 5.0;
 	constexpr double JoinToleranceDeg = 0.5;
 }
@@ -832,7 +886,6 @@ UHutongBuildingComponent* DivideBuilding(UHutongBuildingComponent* Building, int
 		return nullptr;
 	}
 
-	// Second piece starts at the cut, same line and facing, keeps the far end's corners.
 	const FTransform Xf = Owner->GetActorTransform();
 	FTransform NewXf = Xf;
 	NewXf.SetLocation(Xf.TransformPosition(bAlongX ? FVector(Cut, 0.0, 0.0) : FVector(0.0, Cut, 0.0)));
@@ -852,7 +905,6 @@ UHutongBuildingComponent* DivideBuilding(UHutongBuildingComponent* Building, int
 	}
 	NewActor->SetFolderPath(Owner->GetFolderPath());
 
-	// Duplicate keeps type and parameters with no per-type code; placement state is overwritten after.
 	UHutongBuildingComponent* New = DuplicateObject<UHutongBuildingComponent>(Building, NewActor);
 	New->SetFlags(RF_Transactional);
 	New->BuildingId = FGuid::NewGuid();
@@ -926,7 +978,6 @@ bool CanFuse(const UHutongBuildingComponent* Building, const UHutongBuildingComp
 	else if (FMath::Abs(Along + OtherRun) <= JoinToleranceCm) bOutAtEnd = false;
 	else return Refuse(LOCTEXT("FuseApart", "The two do not stand end to end."));
 
-	// Join corners must be square: a skewed end has nothing to meet.
 	if (EndHasSkew(Building->FootprintSkew, bAlongX, !bOutAtEnd)
 		|| EndHasSkew(Other->FootprintSkew, bAlongX, bOutAtEnd))
 	{
@@ -950,7 +1001,6 @@ bool FuseBuildings(UHutongBuildingComponent* Building, UHutongBuildingComponent*
 	const double Run = bAlongX ? Size.X : Size.Y;
 	const double OtherRun = bAlongX ? OtherSize.X : OtherSize.Y;
 
-	// Fused bay count = sum of both sides' bays.
 	const int32 BaysA = FMath::Max(BayLines(Building).Num() - 1, 1);
 	const int32 BaysB = FMath::Max(BayLines(Other).Num() - 1, 1);
 
@@ -958,12 +1008,10 @@ bool FuseBuildings(UHutongBuildingComponent* Building, UHutongBuildingComponent*
 	FTransform Fused = Xf;
 	if (!bAtEnd)
 	{
-		// Neighbour comes first: fused building starts at its origin, on this one's line.
 		Fused.SetLocation(Xf.TransformPosition(bAlongX ? FVector(-OtherRun, 0.0, 0.0) : FVector(0.0, -OtherRun, 0.0)));
 	}
 	const FVector2D FusedSize = bAlongX ? FVector2D(Run + OtherRun, Size.Y) : FVector2D(Size.X, Run + OtherRun);
 
-	// Outer ends keep their skew; the join is square (checked above).
 	const FHutongFootprintSkew& StartSkew = bAtEnd ? Building->FootprintSkew : Other->FootprintSkew;
 	const FHutongFootprintSkew& EndSkewSrc = bAtEnd ? Other->FootprintSkew : Building->FootprintSkew;
 	FHutongFootprintSkew Skew = EndSkew(StartSkew, bAlongX, /*bStart*/ true);

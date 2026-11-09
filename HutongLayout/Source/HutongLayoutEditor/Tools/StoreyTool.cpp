@@ -29,14 +29,12 @@ void UHutongStoreyTool::RegisterToolSettings()
 void UHutongStoreyTool::OnPlacementStarted(const FVector& HitWorld)
 {
 	BaySide = ComputeDefaultBaySide();
-	// Bay count depends on the frontage drawn.
 	if (Settings) Settings->Params.BayCountOverride = 0;
 }
 
 void UHutongStoreyTool::CancelPlacement()
 {
 	Super::CancelPlacement();
-	// The override applies only to the footprint being drawn.
 	if (Settings) Settings->Params.BayCountOverride = 0;
 }
 
@@ -71,9 +69,7 @@ void UHutongStoreyTool::AttachBuildingComponent(AStaticMeshActor* Actor, double 
 	if (!Building) return;
 
 	if (Settings) Building->Params = Settings->Params;
-	// The previewed count, mirrored onto the component.
 	if (Settings) Building->BayCountOverride = Settings->Params.BayCountOverride;
-	// The component keeps the rect's extents and side, not frontage/depth.
 	Building->FootprintX = SizeX;
 	Building->FootprintY = SizeY;
 	Building->BaySide = BaySide;
@@ -90,7 +86,6 @@ void UHutongStoreyTool::AttachBuildingComponent(AStaticMeshActor* Actor, double 
 void UHutongStoreyTool::AdjustHeight(double DeltaCm)
 {
 	if (!Settings) return;
-	// Keys move the upper storey: a 樓 rises by its own storey; the street sets the ground floor.
 	Settings->Params.UpperStoreyHeight =
 		FMath::Clamp(Settings->Params.UpperStoreyHeight + DeltaCm, 140.0, 500.0);
 }
@@ -182,7 +177,6 @@ int32 UHutongStoreyTool::ComputeBayCountForSide() const
 void UHutongStoreyTool::AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse)
 {
 	if (!Settings || Delta == 0) return;
-	// Seeded from the count currently on screen.
 	const int32 Current = ComputeBayCountForSide();
 	Settings->Params.BayCountOverride = FMath::Clamp(Current + Delta, 1, 24);
 }

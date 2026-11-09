@@ -42,7 +42,6 @@ void UHutongInnerGateTool::GetEffectiveRectBounds(
 	const FHutongInnerGateParams::FSizeRange R = Settings->Params.GetSizeRange();
 	if (R.FrontageMax <= 0.0) return;
 
-	// One end of each extent is the drag anchor.
 	auto ClampAxis = [](double& Lo, double& Hi, double MinLen, double MaxLen)
 	{
 		const double Want = FMath::Clamp(Hi - Lo, MinLen, MaxLen);
@@ -80,7 +79,6 @@ HutongGen::EBaySide UHutongInnerGateTool::ComputeClosestSide(double Hx, double H
 	const FVector2D Local = WorldXYToLocalRect(FVector(Hx, Hy, 0.0));
 	double MinX, MinY, MaxX, MaxY;
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
-	// Front or back only, as the gate house: the ends are the 進深, no doorway.
 	return HutongGen::BaySide::ClosestOnAxis(
 		HutongGen::BaySide::IsAlongX(BaySide), Local.X, Local.Y, MinX, MinY, MaxX, MaxY);
 }
@@ -99,7 +97,6 @@ bool UHutongInnerGateTool::OnRectCommitted(const FVector& HitWorld)
 void UHutongInnerGateTool::OnPlacementHover(const FVector& HitWorld)
 {
 	if (bRotateModeActive) return;
-	// Untouched until the rect is committed.
 	if (bRectCommitted)
 	{
 		BaySide = ComputeClosestSide(HitWorld.X, HitWorld.Y);
@@ -133,14 +130,13 @@ void UHutongInnerGateTool::AttachBuildingComponent(AStaticMeshActor* Actor, doub
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: plan outline and lights attach to the actor root, which needs the component live.
+	// After registration: attachments need the component live.
 	Building->ApplyPlacementAttachments();
 }
 
 void UHutongInnerGateTool::AdjustHeight(double DeltaCm)
 {
 	if (!Settings) return;
-	// Floor = walkable doorway height.
 	Settings->Params.EaveHeight = FMath::Clamp(Settings->Params.EaveHeight + DeltaCm,
 		FMath::Max(120.0, Settings->Params.GetMinEaveHeight()), 600.0);
 }
@@ -193,7 +189,6 @@ void UHutongInnerGateTool::Render(IToolsContextRenderAPI* RenderAPI)
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
 	if (MaxX - MinX < 1.0 || MaxY - MinY < 1.0) return;
 
-	// One opening: one chevron through the face.
 	DrawRectBaysAndFacing(PDI, BaySide, MinX, MinY, MaxX, MaxY, {});
 }
 

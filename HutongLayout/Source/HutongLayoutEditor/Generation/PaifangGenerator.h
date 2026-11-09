@@ -42,8 +42,6 @@ struct FHutongPaifangParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Paifang", meta=(DisplayName="Side Bay Drop", UIMin="0", UIMax="0.4", ClampMin="0", ClampMax="0.6", ToolTip="Drop of the side bays' lintels below the central one, as a fraction of the height."))
 	double SideBayDrop = 0.17;
 
-	// --- Lintels ---
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(DisplayName="Architrave Depth", UIMin="20", UIMax="150", ClampMin="8", Units="cm", ToolTip="Depth of the architrave (額枋) beam, in cm."))
 	double ArchitraveDepth = 62.0;
 
@@ -59,15 +57,11 @@ struct FHutongPaifangParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Lintels", meta=(HutongBasic, DisplayName="Has Plaque (匾額)", EditCondition="bHasLowerArchitrave", ToolTip="Adds a name plaque (匾額) in the central bay."))
 	bool bHasPlaque = true;
 
-	// --- Base ---
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Base", meta=(DisplayName="Plinth Height (夾杆石)", UIMin="0", UIMax="250", ClampMin="0", Units="cm", ToolTip="Height of the post clamp stones (夾杆石), in cm."))
 	double PlinthHeight = 120.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Base", meta=(DisplayName="Plinth Spread", UIMin="0", UIMax="80", ClampMin="0", Units="cm", ToolTip="How far each plinth extends beyond its column on every side, in cm."))
 	double PlinthSpread = 22.0;
-
-	// --- Roofs ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(EditCondition="bHasRoofs", UIMin="20", UIMax="200", ClampMin="10", Units="cm", ToolTip="How far each roof's eave overhangs the frame, in cm."))
 	double RoofOverhang = 62.0;
@@ -75,8 +69,6 @@ struct FHutongPaifangParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roofs", meta=(EditCondition="bHasRoofs", UIMin="20", UIMax="200", ClampMin="10", Units="cm", ToolTip="Rise of each roof from eave to ridge, in cm."))
 	double RoofRise = 62.0;
 
-	// Frame height, central 樓 eave on the architrave, 樓 rise: shared by generator, massing block,
-	// preview and ridge estimate.
 	double GetHeight() const { return FMath::Max(Height, 50.0); }
 	double GetRoofEaveZ() const { return GetHeight() + FMath::Max(ArchitraveDepth, 8.0); }
 	double GetRoofRise() const { return FMath::Max(RoofRise, 5.0); }
@@ -113,9 +105,8 @@ struct FHutongPaifangParams
 	double ColumnTaperRatio = HutongCanon::Module::ColumnTaperRatio;
 
 
-	// Set by detail level: 筒瓦 here states rank; never a checkbox.
+	// Set by detail level: 筒瓦 here states rank.
 	bool bPlainTileForDetail = false;
-	// Set by the tool from the drag rect.
 	double Length = 900.0;
 	double Depth = 200.0;
 
@@ -123,13 +114,11 @@ struct FHutongPaifangParams
 
 	double GetColumnRadius() const { return FMath::Max(0.5 * ColumnDiameter, 4.0); }
 
-	// Column radius as laid, capped on a shallow plinth depth.
 	double GetColumnRadiusFor(double PlanDepth) const
 	{
 		return FMath::Min(GetColumnRadius(), 0.4 * FMath::Max(PlanDepth, 1.0));
 	}
 
-	// Bay spacing via the shared helper (wider 明間); the plan reads its divisions from here.
 	double GetBayBoundary(int32 Index, int32 Bays, double Span, double ColumnRadius) const
 	{
 		return HutongGen::BayBoundary(Index, Bays, Span, ColumnRadius, SideBayWidthRatio, Bays / 2);

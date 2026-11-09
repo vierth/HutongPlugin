@@ -22,7 +22,6 @@ struct FHutongFlowerBedParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bed", meta=(HutongBasic, DisplayName="Stone Kerb", ToolTip="Builds the kerb in dressed stone instead of brick."))
 	bool bStoneKerb = false;
 
-	// Set by the tool from the drag rect.
 	double SizeX = 200.0;
 	double SizeY = 140.0;
 };

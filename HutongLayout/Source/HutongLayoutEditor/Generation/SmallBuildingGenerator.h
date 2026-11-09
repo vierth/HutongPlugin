@@ -6,9 +6,6 @@
 #include "Generation/HutongBays.h"
 #include "SmallBuildingGenerator.generated.h"
 
-// The minor buildings dotting the map: guard posts at lane mouths and bridgeheads, sheds, a lone room, a
-// wayside shrine. PROVISIONAL — shaped from general knowledge, not yet on the user's figures (open-todos).
-
 UENUM(BlueprintType)
 enum class EHutongSmallRoof : uint8
 {
@@ -68,19 +65,16 @@ struct FHutongSmallBuildingParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Tile Courses (壟)", ToolTip="Models each tile course on the roof as geometry."))
 	bool bHasTileRuns = true;
 
-	// A lean-to's slab, and the overhang at its back.
 	static constexpr double LeanToSlab = 14.0;
 	static constexpr double LeanToRearOverhang = 15.0;
 
 	double GetEaveHeight() const { return FMath::Max(EaveHeight, 120.0); }
 	double GetFloorHeight() const { return FMath::Clamp(FloorHeight, 0.0, 0.3 * GetEaveHeight()); }
-	// No exposed frame: the roof stands on the wall top.
 	double GetRoofLift() const { return 0.0; }
 	double GetRoofBaseHeight() const { return GetEaveHeight() + GetRoofLift(); }
 	double GetRoofRise() const { return FMath::Max(RoofRise, 10.0); }
 	double GetRoofOverhang() const { return FMath::Max(RoofOverhang, 0.0); }
 
-	// Set by the component from its footprint, along and across the front.
 	double Width = 400.0;
 	double Depth = 360.0;
 	int32 BayCountOverride = 0;
@@ -93,13 +87,12 @@ struct FHutongSmallBuildingParams
 	{
 		return BayCountOverride > 0 ? BayCountOverride : HutongGen::ComputeBayCount(GetWidth(), MinBayWidth, FMath::Max(MaxBayWidth, MinBayWidth));
 	}
-	// Even bays: a humble building has no 明間 wider than the rest.
 	double GetBayBoundary(int32 i, int32 BayCount) const { return GetWidth() * i / FMath::Max(BayCount, 1); }
 	int32 GetDoorBay(int32 BayCount) const { return BayCount / 2; }
 };
 
 namespace HutongGen
 {
-	// Front on -Y, width along X. bDetail off: walls, roof and platform only (塊).
+	// Front on -Y, width along X.
 	void BuildSmallBuilding(UE::Geometry::FDynamicMesh3& Mesh, const FHutongSmallBuildingParams& P, bool bDetail);
 }

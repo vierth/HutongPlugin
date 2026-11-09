@@ -131,7 +131,6 @@ namespace HutongWallRun
 			Leg->SetRunAlongY(false);
 			Leg->SetFootprintSize(FVector2D(FMath::Max(S.Length, 10.0), Run.Thickness));
 			Leg->FootprintSkew = S.Skew;
-			// Corner offsets are the joins; square extension does not stack with them.
 			Leg->StartExtend = 0.0;
 			Leg->EndExtend = 0.0;
 		}

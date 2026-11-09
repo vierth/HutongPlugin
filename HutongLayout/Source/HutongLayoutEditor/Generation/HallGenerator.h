@@ -47,23 +47,19 @@ struct FHutongHallParams
 		return FMath::Max(FMath::Min(FMath::Max(Width, 1.0) / (G::Frontage + G::EaveColumn), FMath::Max(Depth, 1.0) / (G::Depth + G::EaveColumn)), 1.0);
 	}
 	double GetGrandCover() const { return HutongCanon::Frame::RoofCover * HutongCanon::GrandHall::EaveColumn * GetGrandScale(); }
-	// The roof's surface over the 檐柱 line: 正心桁 top, rafter, cover.
 	double GetGrandSurfaceAtColumns() const
 	{
 		namespace G = HutongCanon::GrandHall;
 		return (G::PlatformHeight + G::ToPurlin + 0.5 * G::Purlin + G::Rafter) * GetGrandScale() + GetGrandCover();
 	}
 
-	// Roof figures shared by generator, massing block, preview and ridge estimate. The 大式 hall's read
-	// Width and Depth, so fill them first.
+	// The 大式 hall's read Width and Depth, so fill them first.
 	double GetEaveHeight() const
 	{
 		namespace G = HutongCanon::GrandHall;
 		return IsGrand() ? (G::PlatformHeight + G::ColumnHeight) * GetGrandScale() : FMath::Max(EaveHeight, 100.0);
 	}
 	double GetRoofOverhangBuilt() const { return IsGrand() ? HutongCanon::GrandHall::Overhang * GetGrandScale() : FMath::Max(RoofOverhang, 0.0); }
-	// Roof above the column tops, the ceiling at the column line, and the roof's base
-	// (HutongGen::Proportions::RoofLift).
 	double GetRoofLift() const
 	{
 		if (IsGrand()) return GetGrandSurfaceAtColumns() - HutongCanon::GrandHall::OverhangJu * GetRoofOverhangBuilt() - GetEaveHeight();
@@ -75,7 +71,7 @@ struct FHutongHallParams
 		return HutongGen::Proportions::UndersideRise(FMath::Max(ColumnDiameter, 2.0), FMath::Max(RoofOverhang, 0.0), HutongGen::Jiajia::EaveJu(Purlins));
 	}
 	double GetRoofBaseHeight() const { return GetEaveHeight() + GetRoofLift(); }
-	// The 舉架 over a depth; the 大式 hall's is the figure's own steps, 廊步 then three 金步.
+	// The 大式 hall's is the figure's own: 廊步 then three 金步.
 	HutongGen::FHutongRoofSection GetRoofSection(double OverDepth) const
 	{
 		if (!IsGrand())
@@ -94,7 +90,6 @@ struct FHutongHallParams
 		}
 		return S;
 	}
-	// From the 舉架 over the hall's depth; no override field.
 	double GetRoofRise(double OverDepth) const { return FMath::Max(GetRoofSection(OverDepth).Rise(), 20.0); }
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(UIMin="20", UIMax="80", ClampMin="8", Units="cm", ToolTip="Thickness of the walls, in cm."))
@@ -123,8 +118,6 @@ struct FHutongHallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Hall", meta=(DisplayName="Base Course Projection", UIMin="0", UIMax="15", ClampMin="0", Units="cm", ToolTip="How far the base course stands proud of the wall face, in cm."))
 	double BaseCourseProjection = 4.0;
 
-	// --- Bays ---
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bays", meta=(DisplayName="Min Bay Width", UIMin="200", UIMax="500", ClampMin="100", Units="cm", ToolTip="Smallest bay width when deriving the bay count, in cm."))
 	double MinBayWidth = 300.0;
 
@@ -145,8 +138,6 @@ struct FHutongHallParams
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bays", meta=(DisplayName="Bracket Reach", EditCondition="bHasBrackets", UIMin="20", UIMax="90", ClampMin="5", Units="cm", ToolTip="Length of each sparrow brace (雀替) along the beam, in cm."))
 	double BracketReach = 40.0;
-
-	// --- Facade ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Facade", meta=(DisplayName="Door Width Fraction", UIMin="0.4", UIMax="0.95", ClampMin="0.2", ClampMax="1", ToolTip="Width of the lattice door (隔扇) opening as a fraction of the central bay (明間) width."))
 	double DoorWidthFraction = 0.72;
@@ -180,8 +171,6 @@ struct FHutongHallParams
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Facade", meta=(DisplayName="Window Paper (窗紙)", ToolTip="Builds a window paper (窗紙) pane behind each window lattice."))
 	bool bHasWindowPaper = true;
-
-	// --- Roof ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(HutongBasic, DisplayName="Roof Tile (瓦作)", ToolTip="Tile type laid on the roof."))
 	EHutongRoofTile RoofTile = EHutongRoofTile::Tong;
@@ -242,8 +231,7 @@ struct FHutongHallParams
 
 	double GetColumnRadius() const { return FMath::Max(0.5 * ColumnDiameter, 4.0); }
 
-	// Column radius as laid, capped on narrow plans. Bay boundaries inset by it, so the plan must
-	// ask for the same value as the generator.
+	// Bay boundaries inset by it, so the plan must ask for the same value as the generator.
 	double GetColumnRadiusFor(double Frontage, double PlanDepth) const
 	{
 		return FMath::Min(GetColumnRadius(), 0.2 * FMath::Min(FMath::Max(Frontage, 1.0), FMath::Max(PlanDepth, 1.0)));
@@ -256,11 +244,9 @@ struct FHutongHallParams
 			SideBayWidthRatio, BayCount / 2);
 	}
 
-	// Set by the tool from the drag rect.
 	double Width = 900.0;
 	double Depth = 620.0;
 
-	// Forces the bay count; bracket keys drive it during placement.
 	int32 BayCountOverride = 0;
 };
 

@@ -30,7 +30,6 @@ void UHutongPavilionTool::GetEffectiveRectBounds(
 {
 	Super::GetEffectiveRectBounds(OutMinX, OutMinY, OutMaxX, OutMaxY);
 
-	// Held roughly square.
 	const double SX = OutMaxX - OutMinX;
 	const double SY = OutMaxY - OutMinY;
 	if (SX < 1.0 || SY < 1.0) return;
@@ -41,7 +40,6 @@ void UHutongPavilionTool::GetEffectiveRectBounds(
 		else          Lo = Hi - Want;
 	};
 
-	// A round plan is exactly square: its circle fits the smaller side.
 	if (Settings && Settings->Params.IsRound())
 	{
 		const double Side = FMath::Min(SX, SY);
@@ -82,7 +80,6 @@ void UHutongPavilionTool::AttachBuildingComponent(AStaticMeshActor* Actor, doubl
 	Building->ApplyPlacementAttachments();
 }
 
-// The params sized to the rect being drawn (or the figure's own, before the first click).
 FHutongPavilionParams UHutongPavilionTool::GetSizedParams() const
 {
 	FHutongPavilionParams P = Settings ? Settings->Params : FHutongPavilionParams();
@@ -102,7 +99,6 @@ FHutongPavilionParams UHutongPavilionTool::GetSizedParams() const
 void UHutongPavilionTool::AdjustHeight(double DeltaCm)
 {
 	if (!Settings) return;
-	// Starts from the height on screen: every size is frozen at the figure's, then the eave moves.
 	const FHutongPavilionParams Sized = GetSizedParams();
 	FHutongPavilionParams& P = Settings->Params;
 	if (P.bDeriveProportions)
@@ -141,8 +137,6 @@ TArray<FText> UHutongPavilionTool::GetToolHelpLines() const
 	return Lines;
 }
 
-// A round plan draws as it will stand: the columns' circle (the footprint), the 台基's circle dashed, the
-// six columns with posts to the eave, and the 垂帶踏跺 before the entry bay with an arrow in.
 void UHutongPavilionTool::Render(IToolsContextRenderAPI* RenderAPI)
 {
 	Super::Render(RenderAPI);
@@ -196,7 +190,6 @@ void UHutongPavilionTool::Render(IToolsContextRenderAPI* RenderAPI)
 	}
 	if (Height > 0.0) Circle(R, HeightColor, 3.0f, true, Height);
 
-	// Before the entry bay, on the plan's -Y: the steps' outline, then an arrow walking in.
 	if (P.bHasSteps && P.GetFloorHeight() > 0.0)
 	{
 		const double Half = 0.5 * C::RoundStepWidthPerBay * Bay + C::StringerWidth * P.GetColumnDiameter();

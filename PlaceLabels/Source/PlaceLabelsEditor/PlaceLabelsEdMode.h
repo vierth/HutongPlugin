@@ -22,7 +22,7 @@ public:
 	virtual TMap<FName, TArray<TSharedPtr<FUICommandInfo>>> GetModeCommands() const override;
 
 private:
-	// Enter, Backspace and Escape are not routed to interactive tools by the framework.
+	// Routes Enter, Backspace and Escape to the tools.
 	TSharedPtr<IInputProcessor> InputProcessor;
 	// The context's own answer, put back on Exit.
 	bool bContextEndedToolsOnSave = true;

@@ -5,11 +5,8 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// The weld is the one piece here that reshapes a level without being watched.
-
 namespace
 {
-	// A square with its lower-left corner at (X, Y).
 	TArray<FVector2D> Square(double X, double Y, double Size)
 	{
 		return { FVector2D(X, Y), FVector2D(X + Size, Y),
@@ -35,7 +32,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPlaceLabelsSeamGapTest,
 
 bool FPlaceLabelsSeamGapTest::RunTest(const FString& Parameters)
 {
-	// Two squares meant to abut along x = 100, drawn 3 cm apart.
 	TArray<TArray<FVector2D>> Polygons;
 	Polygons.Add(Square(0.0, 0.0, 100.0));
 	Polygons.Add(Square(103.0, 0.0, 100.0));
@@ -51,7 +47,6 @@ bool FPlaceLabelsSeamGapTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("near misses found along the seam"), Seams[0].NearMissCount > 0);
 	}
 
-	// Well beyond tolerance, the same pair is simply two separate places.
 	TArray<TArray<FVector2D>> FarApart;
 	FarApart.Add(Square(0.0, 0.0, 100.0));
 	FarApart.Add(Square(500.0, 0.0, 100.0));
@@ -68,7 +63,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPlaceLabelsSeamOverlapTest,
 
 bool FPlaceLabelsSeamOverlapTest::RunTest(const FString& Parameters)
 {
-	// The same fault the other way: the second square starts 4 cm inside the first.
 	TArray<TArray<FVector2D>> Polygons;
 	Polygons.Add(Square(0.0, 0.0, 100.0));
 	Polygons.Add(Square(96.0, 0.0, 100.0));
@@ -83,7 +77,6 @@ bool FPlaceLabelsSeamOverlapTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("reported as an overlap"), Seams[0].bOverlapping);
 	}
 
-	// And it welds shut, leaving nothing to report.
 	TArray<bool> Changed;
 	PlaceLabelsTopology::FWeldReport Report;
 	PlaceLabelsTopology::WeldPolygons(Polygons, 25.0, Changed, Report);
@@ -111,11 +104,9 @@ bool FPlaceLabelsWeldGapTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("corners were moved"), Report.CornersMoved > 0);
 	TestEqual(TEXT("no cluster refused"), Report.ClustersRefused, 0);
 
-	// Corner count is unchanged: this is corner-to-corner welding, and nothing needed splitting.
 	TestEqual(TEXT("first square still has four corners"), Polygons[0].Num(), 4);
 	TestEqual(TEXT("second square still has four corners"), Polygons[1].Num(), 4);
 
-	// The two pairs that were 3 cm apart now sit on the shared midline at x = 101.5.
 	TestTrue(TEXT("shared corner at the foot of the seam"),
 		AnyVertexNear(Polygons[0], FVector2D(101.5, 0.0), 0.01)
 		&& AnyVertexNear(Polygons[1], FVector2D(101.5, 0.0), 0.01));
@@ -123,12 +114,10 @@ bool FPlaceLabelsWeldGapTest::RunTest(const FString& Parameters)
 		AnyVertexNear(Polygons[0], FVector2D(101.5, 100.0), 0.01)
 		&& AnyVertexNear(Polygons[1], FVector2D(101.5, 100.0), 0.01));
 
-	// And the whole point: the seam detector now finds nothing.
 	TArray<PlaceLabelsTopology::FPolygonSeam> Seams;
 	PlaceLabelsTopology::FindPolygonSeams(Polygons, 25.0, Seams);
 	TestEqual(TEXT("no seam survives the weld"), Seams.Num(), 0);
 
-	// Idempotent: re-welding is a no-op, else the panel reports work on every press.
 	TArray<bool> SecondPass;
 	PlaceLabelsTopology::FWeldReport SecondReport;
 	PlaceLabelsTopology::WeldPolygons(Polygons, 25.0, SecondPass, SecondReport);
@@ -143,7 +132,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPlaceLabelsWeldTJunctionTest,
 
 bool FPlaceLabelsWeldTJunctionTest::RunTest(const FString& Parameters)
 {
-	// A small square abutting the middle of a long one's right-hand edge, 2 cm short of it.
 	TArray<TArray<FVector2D>> Polygons;
 	Polygons.Add(Square(0.0, 0.0, 200.0));
 	Polygons.Add(Square(202.0, 50.0, 50.0));
@@ -152,12 +140,10 @@ bool FPlaceLabelsWeldTJunctionTest::RunTest(const FString& Parameters)
 	PlaceLabelsTopology::FWeldReport Report;
 	PlaceLabelsTopology::WeldPolygons(Polygons, 25.0, Changed, Report);
 
-	// The long square gains a corner where each of the small square's corners landed.
 	TestEqual(TEXT("two corners inserted into the long square"), Report.CornersInserted, 2);
 	TestEqual(TEXT("long square now has six corners"), Polygons[0].Num(), 6);
 	TestEqual(TEXT("small square still has four"), Polygons[1].Num(), 4);
 
-	// Both sides now carry a corner at exactly the same two points on x = 200.
 	TestTrue(TEXT("shared corner at y = 50"),
 		AnyVertexNear(Polygons[0], FVector2D(200.0, 50.0), 0.01)
 		&& AnyVertexNear(Polygons[1], FVector2D(200.0, 50.0), 0.01));
@@ -178,11 +164,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPlaceLabelsWeldThreeWayTest,
 
 bool FPlaceLabelsWeldThreeWayTest::RunTest(const FString& Parameters)
 {
-	// Three regions meeting at one courtyard corner, each a few centimetres off.
 	TArray<TArray<FVector2D>> Polygons;
-	Polygons.Add(Square(0.0, 0.0, 100.0));            // corner at (100, 100)
-	Polygons.Add(Square(104.0, 0.0, 100.0));          // corner at (104, 100)
-	Polygons.Add(Square(0.0, 103.0, 100.0));          // corner at (100, 103)
+	Polygons.Add(Square(0.0, 0.0, 100.0));
+	Polygons.Add(Square(104.0, 0.0, 100.0));
+	Polygons.Add(Square(0.0, 103.0, 100.0));
 
 	TArray<bool> Changed;
 	PlaceLabelsTopology::FWeldReport Report;
@@ -190,7 +175,6 @@ bool FPlaceLabelsWeldThreeWayTest::RunTest(const FString& Parameters)
 
 	TestEqual(TEXT("no cluster refused"), Report.ClustersRefused, 0);
 
-	// All three ended up on one point rather than three.
 	const FVector2D Shared(101.3333333, 101.0);
 	TestTrue(TEXT("first region meets at the shared corner"),
 		AnyVertexNear(Polygons[0], Shared, 0.01));
@@ -208,7 +192,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPlaceLabelsWeldRefusesChainTest,
 
 bool FPlaceLabelsWeldRefusesChainTest::RunTest(const FString& Parameters)
 {
-	// Proximity is transitive and distance is not.
 	TArray<TArray<FVector2D>> Polygons;
 	for (int32 i = 0; i < 6; ++i)
 	{
@@ -237,12 +220,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPlaceLabelsWeldFourWayTest,
 
 bool FPlaceLabelsWeldFourWayTest::RunTest(const FString& Parameters)
 {
-	// The other side of the refusal.
 	TArray<TArray<FVector2D>> Polygons;
-	Polygons.Add(Square(0.0, 0.0, 100.0));            // corner at (100, 100)
-	Polygons.Add(Square(103.0, 0.0, 100.0));          // corner at (103, 100)
-	Polygons.Add(Square(0.0, 102.0, 100.0));          // corner at (100, 102)
-	Polygons.Add(Square(104.0, 103.0, 100.0));        // corner at (104, 103)
+	Polygons.Add(Square(0.0, 0.0, 100.0));
+	Polygons.Add(Square(103.0, 0.0, 100.0));
+	Polygons.Add(Square(0.0, 102.0, 100.0));
+	Polygons.Add(Square(104.0, 103.0, 100.0));
 
 	TArray<bool> Changed;
 	PlaceLabelsTopology::FWeldReport Report;
@@ -251,7 +233,6 @@ bool FPlaceLabelsWeldFourWayTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("nothing refused"), Report.ClustersRefused, 0);
 	TestTrue(TEXT("all four moved"), Changed[0] && Changed[1] && Changed[2] && Changed[3]);
 
-	// All four now meet at one point rather than four.
 	const FVector2D Shared((100.0 + 103.0 + 100.0 + 104.0) / 4.0,
 						   (100.0 + 100.0 + 102.0 + 103.0) / 4.0);
 	for (int32 i = 0; i < 4; ++i)
@@ -269,7 +250,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPlaceLabelsWeldLeavesRealGapsTest,
 
 bool FPlaceLabelsWeldLeavesRealGapsTest::RunTest(const FString& Parameters)
 {
-	// A deliberate gap (lane between compounds) survives the weld.
 	TArray<TArray<FVector2D>> Polygons;
 	Polygons.Add(Square(0.0, 0.0, 100.0));
 	Polygons.Add(Square(950.0, 0.0, 100.0));
@@ -292,10 +272,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPlaceLabelsWeldKeepsTrianglesTest,
 	"PlaceLabels.Topology.WeldKeepsTriangles",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-// A cluster taking two corners of a triangle is refused: collapsing them leaves zero area.
 bool FPlaceLabelsWeldKeepsTrianglesTest::RunTest(const FString& Parameters)
 {
-	// Two corners of the triangle within tolerance of each other and of the square's corner.
 	TArray<TArray<FVector2D>> Polygons;
 	Polygons.Add({ FVector2D(0.0, 0.0), FVector2D(10.0, 6.0), FVector2D(200.0, 300.0) });
 	Polygons.Add({ FVector2D(5.0, 3.0), FVector2D(-200.0, 3.0),
@@ -317,7 +295,6 @@ bool FPlaceLabelsWeldKeepsTrianglesTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("the triangle was left exactly as it was"),
 		Polygons[0][1].X, Before[0][1].X, 0.001);
 
-	// A polygon with corners to spare still welds, and the cleanup pass takes the duplicate out.
 	{
 		TArray<TArray<FVector2D>> Wide;
 		Wide.Add({ FVector2D(0.0, 0.0), FVector2D(10.0, 6.0), FVector2D(200.0, 300.0),

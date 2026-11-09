@@ -28,13 +28,11 @@ void UHutongPathTool::GetEffectiveRectBounds(
 {
 	const FVector2D Local = WorldXYToLocalRect(CurrentWorld);
 
-	// Short axis dragged, not collapsed as on wall and paifang; only held to a band.
 	const FHutongPathParams& P = Settings ? Settings->Params : FHutongPathParams();
 	const double Extras = 2.0 * P.GetKerbWidth();
 	const double Lo = FMath::Max(P.WidthMin, 10.0) + Extras;
 	const double Hi = FMath::Max(P.WidthMax, FMath::Max(P.WidthMin, 10.0) + 1.0) + Extras;
 
-	// The anchor is one end of each extent; the far end moves.
 	auto Band = [&](double& OutLo, double& OutHi, double Reach)
 	{
 		const double Want = FMath::Clamp(FMath::Abs(Reach), Lo, Hi);
@@ -95,7 +93,6 @@ void UHutongPathTool::AdjustHeight(double DeltaCm)
 
 double UHutongPathTool::GetPreviewHeight() const
 {
-	// A path has no height to preview; the corner posts would be noise.
 	return 0.0;
 }
 

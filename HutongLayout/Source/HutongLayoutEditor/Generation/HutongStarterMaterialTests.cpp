@@ -26,7 +26,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongStarterMaterialNamingTest,
 
 bool FHutongStarterMaterialNamingTest::RunTest(const FString& Parameters)
 {
-	// Each slot has its own, uniquely named starter asset.
 	TSet<FString> Names;
 	for (int32 Slot = 0; Slot < HutongGen::MatSlot_Count; ++Slot)
 	{
@@ -41,7 +40,6 @@ bool FHutongStarterMaterialNamingTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a slot outside the enum has no asset"),
 		HutongGen::StarterMaterialAssetName(HutongGen::MatSlot_Count).IsEmpty());
 
-	// A missing asset is an ordinary answer, not an error: every spawn asks.
 	TestNull(TEXT("an out-of-range slot finds nothing"),
 		HutongGen::FindStarterMaterial(HutongGen::MatSlot_Count));
 	return true;
@@ -53,20 +51,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongStarterMaterialCreateTest,
 
 bool FHutongStarterMaterialCreateTest::RunTest(const FString& Parameters)
 {
-	// Project temp mount: the test leaves nothing the project keeps.
 	const FString Path = FString::Printf(TEXT("/Temp/HutongTests/Materials_%s"), *FGuid::NewGuid().ToString().Left(8));
 	TArray<FString> Created, Skipped;
 	const int32 Count = HutongGen::CreateStarterMaterialsAt(Path, Created, Skipped);
 	TestEqual(TEXT("one material per slot is created"), Count, (int32)HutongGen::MatSlot_Count);
 	TestEqual(TEXT("nothing was skipped on a fresh path"), Skipped.Num(), 0);
 
-	// Second run finds all, writes none.
 	HutongGen::CreateStarterMaterialsAt(Path, Created, Skipped);
 	TestEqual(TEXT("a second run creates nothing"), Created.Num(), 0);
 	TestEqual(TEXT("a second run skips every slot"), Skipped.Num(), (int32)HutongGen::MatSlot_Count);
 
-	// Each material wired: base colour from the Color parameter, a roughness, and the palette's Color
-	// default for its slot (roof darker than body).
 	auto Loaded = [&](int32 Slot) -> UMaterial*
 	{
 		const FString Name = HutongGen::StarterMaterialAssetName(Slot);
@@ -81,7 +75,6 @@ bool FHutongStarterMaterialCreateTest::RunTest(const FString& Parameters)
 			EO ? (UMaterialExpression*)EO->BaseColor.Expression : nullptr);
 		TestNotNull(*FString::Printf(TEXT("slot %d roughness is connected"), Slot),
 			EO ? (UMaterialExpression*)EO->Roughness.Expression : nullptr);
-		// Patterned slot: normal from the pattern; roughness runs through the multiply carrying its figure.
 		if (HutongGen::StarterMaterialHasRelief(Slot))
 		{
 			TestNotNull(*FString::Printf(TEXT("slot %d's normal is the pattern's"), Slot),
@@ -101,8 +94,7 @@ bool FHutongStarterMaterialCreateTest::RunTest(const FString& Parameters)
 			Colour.Equals(FHutongPalette().GetSlotColor(Slot), 1.0e-4f));
 	}
 
-	// Custom nodes are HLSL: with a real RHI they compile here and errors fail the test; under the null
-	// RHI nothing compiles and nothing is claimed.
+	// With a real RHI the HLSL custom nodes compile here; under the null RHI the check is skipped.
 	if (GShaderCompilingManager)
 	{
 		GShaderCompilingManager->FinishAllCompilation();
@@ -133,7 +125,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongStarterMaterialSlotNamesTest,
 
 bool FHutongStarterMaterialSlotNamesTest::RunTest(const FString& Parameters)
 {
-	// Whatever material a slot wears, the baked mesh names the slot.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
@@ -148,7 +139,7 @@ bool FHutongStarterMaterialSlotNamesTest::RunTest(const FString& Parameters)
 		TEXT("SlotNames"), FHutongPalette());
 	if (!TestNotNull(TEXT("the house is spawned"), Actor)) { World->DestroyWorld(false); return false; }
 
-	UStaticMesh* Mesh = Actor->GetStaticMeshComponent()->GetStaticMesh();
+	UStaticMesh* Mesh = HutongGen::GetBuiltMeshComponent(Actor)->GetStaticMesh();
 	if (TestNotNull(TEXT("the actor carries a mesh"), Mesh))
 	{
 		const TArray<FStaticMaterial>& Mats = Mesh->GetStaticMaterials();
@@ -170,7 +161,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongGablePedimentSlotTest,
 
 bool FHutongGablePedimentSlotTest::RunTest(const FString& Parameters)
 {
-	// On a 硬山 house the face above the eave line on the gable is brick, not tile.
 	FHutongSiheyuanParams P;
 	P.Width = 1040.0; P.Depth = 600.0;
 
@@ -180,8 +170,7 @@ bool FHutongGablePedimentSlotTest::RunTest(const FString& Parameters)
 		Mesh.HasAttributes() ? Mesh.Attributes()->GetMaterialID() : nullptr;
 	if (!TestNotNull(TEXT("the mesh carries material IDs"), (void*)Mat)) return false;
 
-	// Faces on the +X gable plane, above the eave and below the apex ridge-strip cap. Primitives are
-	// CCW-from-outside (the bake reverses), so an outward face's dynamic-mesh normal points inward.
+	// Primitives are CCW-from-outside (the bake reverses), so an outward face's dynamic-mesh normal points inward.
 	const double Eave = P.GetRoofBaseHeight();
 	const double Top = Eave + 0.6 * P.GetRoofRise();
 	int32 Brick = 0, Tile = 0;

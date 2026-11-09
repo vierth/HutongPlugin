@@ -15,9 +15,8 @@ namespace HutongGen
 		const double T = FMath::Max(P.Thickness, 1.0);
 		const double Eave = P.GetEaveHeight();
 
-		// Built centred on Y = 0; the caller offsets to the rect min corner by the footprint depth.
 		const double PlinthP = FMath::Max(P.PlinthProjection, 0.0);
-		const double CY = PlinthP + 0.5 * T;                 // wall centre line in the rect
+		const double CY = PlinthP + 0.5 * T;
 		const double WY0 = CY - 0.5 * T;
 		const double WY1 = CY + 0.5 * T;
 
@@ -25,7 +24,6 @@ namespace HutongGen
 		const double BaseH = FMath::Clamp(P.GetBaseCourseHeight(), 0.0, (Eave - PlinthH) * 0.7);
 		const double BaseP = FMath::Max(P.BaseCourseProjection, 0.0);
 
-		// 須彌座: three courses, middle recessed.
 		FSlotScope StoneTag(Mesh, MatSlot_Stone);
 		if (PlinthH > 0.0)
 		{
@@ -43,7 +41,6 @@ namespace HutongGen
 		}
 		StoneTag.Close();
 
-		// 2) 下鹼 and wall body.
 		const double BodyBottom = PlinthH + BaseH;
 		if (BaseH > 0.0 && BaseP > 0.0)
 		{
@@ -57,7 +54,6 @@ namespace HutongGen
 			AppendBox(Mesh, FVector3d(0.0, WY0, PlinthH), FVector3d(L, WY1, Eave));
 		}
 
-		// 影壁心: four bars proud of the wall, not a slab with a hole.
 		if (P.bHasPanel)
 		{
 			const double FieldZ0 = BodyBottom;
@@ -67,7 +63,6 @@ namespace HutongGen
 				* FMath::Min(L, FMath::Max(FieldH, 1.0));
 			const double Proj = FMath::Max(P.BorderProjection, 0.0);
 
-			// Otherwise no panel.
 			if (Proj > 0.0 && L > 4.0 * Border && FieldH > 4.0 * Border)
 			{
 				const double X0 = 1.5 * Border, X1 = L - 1.5 * Border;
@@ -78,14 +73,13 @@ namespace HutongGen
 					const double A = FaceY;
 					const double B = FaceY + Dir * Proj;
 					const double Lo = FMath::Min(A, B), Hi = FMath::Max(A, B);
-					// Top and bottom bars full width; side bars between.
 					AppendBox(Mesh, FVector3d(X0, Lo, Z0), FVector3d(X1, Hi, Z0 + Border));
 					AppendBox(Mesh, FVector3d(X0, Lo, Z1 - Border), FVector3d(X1, Hi, Z1));
 					AppendBox(Mesh, FVector3d(X0, Lo, Z0 + Border),
 						FVector3d(X0 + Border, Hi, Z1 - Border));
 					AppendBox(Mesh, FVector3d(X1 - Border, Lo, Z0 + Border),
 						FVector3d(X1, Hi, Z1 - Border));
-					// Field is 白灰: a skim a hair proud of the brick so the faces are not coplanar; ranged tag since more follows.
+					// Field is 白灰: a skim a hair proud of the brick, off its plane; ranged tag since more follows.
 					const double SkimLo = Dir < 0.0 ? FaceY - 0.6 : FaceY - 0.2;
 					const double SkimHi = Dir < 0.0 ? FaceY + 0.2 : FaceY + 0.6;
 					const int32 First = Mesh.MaxTriangleID();
@@ -98,7 +92,6 @@ namespace HutongGen
 			}
 		}
 
-		// 4) Roof.
 		Shell::FRoofParams Roof;
 		Roof.FrontOverhang = FMath::Max(P.RoofOverhang, 0.0);
 		Roof.RearOverhang = FMath::Max(P.RoofOverhang, 0.0);

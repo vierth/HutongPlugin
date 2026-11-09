@@ -14,17 +14,19 @@
 #include "Widgets/Text/STextBlock.h"
 #include "Generation/HutongBuildingComponent.h"
 #include "Tools/HutongPanelFilter.h"
+#include "Tools/HutongSaveState.h"
 #include "Widgets/Layout/SWrapBox.h"
 #include "PropertyHandle.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
 
 TSharedRef<IDetailCustomization> FHutongCollapsedCategoriesCustomization::Make(TArray<FName> InCategories,
-	TArray<FName> InHiddenParamFields)
+	TArray<FName> InHiddenParamFields, FName InHiddenOnFor)
 {
 	TSharedRef<FHutongCollapsedCategoriesCustomization> C = MakeShared<FHutongCollapsedCategoriesCustomization>();
 	C->Categories = MoveTemp(InCategories);
 	C->HiddenParamFields = MoveTemp(InHiddenParamFields);
+	C->HiddenOnFor = InHiddenOnFor;
 	return C;
 }
 
@@ -35,8 +37,21 @@ void FHutongCollapsedCategoriesCustomization::CustomizeDetails(IDetailLayoutBuil
 		DetailBuilder.EditCategory(Category).InitiallyCollapsed(true);
 	}
 
-	// The tool already decides these (each wall tool forces its role), so the panel hides them.
-	if (HiddenParamFields.Num() > 0)
+	bool bHideHere = HiddenParamFields.Num() > 0;
+	if (bHideHere && !HiddenOnFor.IsNone())
+	{
+		TArray<TWeakObjectPtr<UObject>> Objects;
+		DetailBuilder.GetObjectsBeingCustomized(Objects);
+		bHideHere = Objects.Num() > 0 && Objects.ContainsByPredicate([this](const TWeakObjectPtr<UObject>& O)
+		{
+			for (const UClass* C = O.IsValid() ? O->GetClass() : nullptr; C; C = C->GetSuperClass())
+			{
+				if (C->GetFName() == HiddenOnFor) return true;
+			}
+			return false;
+		});
+	}
+	if (bHideHere)
 	{
 		const TSharedPtr<IPropertyHandle> Params = DetailBuilder.GetProperty(TEXT("Params"));
 		if (Params.IsValid() && Params->IsValidHandle())
@@ -106,7 +121,6 @@ void FHutongPresetCustomization::CustomizeDetails(IDetailLayoutBuilder& DetailBu
 
 namespace
 {
-	// The switch lives on the mode's settings; with the mode down, on their defaults (the same config).
 	bool ShowAdvanced()
 	{
 		const UHutongLayoutModeSettings* Active = UHutongLayoutEdMode::GetActiveSettings();
@@ -121,7 +135,6 @@ namespace
 		Defaults->SaveConfig();
 	}
 
-	// Hidden where the simple view hides it: the property, or failing that its hidden descendants.
 	void HideForSimpleView(IDetailLayoutBuilder& DetailBuilder, const TSharedPtr<IPropertyHandle>& Handle, TArray<const FProperty*>& Parents)
 	{
 		const FProperty* Prop = Handle.IsValid() && Handle->IsValidHandle() ? Handle->GetProperty() : nullptr;
@@ -151,24 +164,26 @@ namespace
 		const TCHAR* Class;
 		TArray<FName> Categories;
 		TArray<FName> HiddenParamFields;
+		FName HiddenOnFor = NAME_None;
 	};
 
-	// **Register against the class declaring the properties, never a subclass.** A details view asks
-	// once per class it found properties on and walks upward; a class declaring nothing is never asked.
-	// `Params` is on UHutongWallToolProperties, so registering on the wall tools' subclasses hid nothing.
 	const TArray<FCollapsed>& Collapsed()
 	{
+		// A corner carries no ramp or bastion.
+		static const TArray<FName> CornerHidden = {
+			TEXT("bBastions"), TEXT("BastionSpacing"), TEXT("BastionWidth"), TEXT("BastionProjection"),
+			TEXT("bRamp"), TEXT("RampPosition"), TEXT("bRampRisesTowardStart"), TEXT("RampWidth"), TEXT("RampSlopeDeg") };
 		static const TArray<FName> WallCategories = {
 			TEXT("Cap"), TEXT("Window Details"), TEXT("Garden Doorway Details"), TEXT("Gate Details") };
 		static const TArray<FCollapsed> Table = {
 			{ TEXT("HutongSnapProperties"), { TEXT("Snapping") } },
 			{ TEXT("HutongAppearanceProperties"), { TEXT("Appearance") } },
-			// Evidence notes for tracing; a student placing freely need not open them.
 			{ TEXT("HutongMetadataProperties"), { TEXT("Metadata") } },
-			// Both wall tools force their role; no picker.
 			{ TEXT("HutongWallToolProperties"), WallCategories, { TEXT("Role") } },
-			// Placed wall keeps Role editable: retyping a run is a Details edit, not a redraw.
 			{ TEXT("HutongWallBuildingComponent"), WallCategories },
+			{ TEXT("HutongCityWallToolProperties"), {}, { TEXT("Rank") }, TEXT("HutongPalaceWallToolProperties") },
+			{ TEXT("HutongWallCornerToolProperties"), {}, CornerHidden },
+			{ TEXT("HutongWallCornerBuildingComponent"), {}, CornerHidden },
 		};
 		return Table;
 	}
@@ -202,19 +217,41 @@ void FHutongBuildingComponentCustomization::CustomizeDetails(IDetailLayoutBuilde
 	const UHutongBuildingComponent* First = Objects.Num() > 0 ? Cast<UHutongBuildingComponent>(Objects[0].Get()) : nullptr;
 	const UClass* Class = First ? First->GetClass() : nullptr;
 
-	// A type with no preset (built in or saved) has nothing to pick: the dropdown's only entry is empty.
+	TArray<TWeakObjectPtr<UHutongBuildingComponent>> Watched;
+	for (const TWeakObjectPtr<UObject>& O : Objects)
+	{
+		if (UHutongBuildingComponent* B = Cast<UHutongBuildingComponent>(O.Get())) Watched.Add(B);
+	}
+	const TSharedRef<HutongSaveState::FPolled> Status = MakeShared<HutongSaveState::FPolled>([Watched]()
+	{
+		TArray<UHutongBuildingComponent*> Live;
+		for (const TWeakObjectPtr<UHutongBuildingComponent>& B : Watched)
+		{
+			if (B.IsValid()) Live.Add(B.Get());
+		}
+		return Live;
+	});
+	DetailBuilder.EditCategory(ViewCategory)
+	.AddCustomRow(NSLOCTEXT("HutongPanel", "SaveStateRow", "Saved"))
+	.WholeRowContent()
+	[
+		SNew(STextBlock)
+		.Text_Lambda([Status]() { return Status->Get().Text; })
+		.ColorAndOpacity_Lambda([Status]() { return FSlateColor(Status->Get().Colour); })
+		.ToolTipText(NSLOCTEXT("HutongPanel", "SaveStateTip", "Whether this building's changes are saved to the level."))
+		.AutoWrapText(true)
+	];
+
 	if (First && First->GetPresetOptions().Num() <= 1) DetailBuilder.HideCategory(TEXT("Preset"));
 
 	if (!bAdvanced)
 	{
-		// Rows: the simple view's rule, at every level of every Hutong struct.
 		for (TFieldIterator<FProperty> It(Class); Class && It; ++It)
 		{
 			if (!It->HasAnyPropertyFlags(CPF_Edit) || !IsOurs(*It)) continue;
 			TArray<const FProperty*> Parents;
 			HideForSimpleView(DetailBuilder, DetailBuilder.GetProperty(It->GetFName(), It->GetOwnerClass()), Parents);
 		}
-		// Categories holding no Hutong field (the component's engine tags, activation, cooking…).
 		TArray<FName> Categories;
 		DetailBuilder.GetCategoryNames(Categories);
 		for (const FName& Name : Categories)
@@ -229,9 +266,6 @@ void FHutongBuildingComponentCustomization::CustomizeDetails(IDetailLayoutBuilde
 		}
 	}
 
-	// The tool's order: who and what first, the type's own settings in declaration order, the
-	// placement's leftovers last; engine categories after everything.
-	// A wall's openings are what a student places it for: straight after Metadata.
 	const bool bWall = Class && Class->IsChildOf(UHutongWallBuildingComponent::StaticClass());
 	DetailBuilder.SortCategories([bWall](const TMap<FName, IDetailCategoryBuilder*>& All)
 	{
@@ -263,8 +297,6 @@ void FHutongBuildingComponentCustomization::CustomizeDetails(IDetailLayoutBuilde
 
 FText HutongPanelCustomizations::PluginUpdatedText()
 {
-	// The last commit to change the plugin, written into the source by .githooks/pre-commit: copying,
-	// checking out or rebuilding cannot move it.
 	const FDateTime Utc = FDateTime::FromUnixTimestamp(HUTONG_PLUGIN_UPDATED_UTC);
 	const FText When = FText::FromString((Utc + (FDateTime::Now() - FDateTime::UtcNow())).ToString(TEXT("%Y-%m-%d %H:%M")));
 	return FText::Format(NSLOCTEXT("HutongScene", "Version", "Plugin last updated {0}"), When);
@@ -295,8 +327,6 @@ void FHutongModeSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& De
 				return FReply::Handled();
 			});
 	};
-	// One action per line, its description on hover: written beside it, it wrapped a word a line in a
-	// narrow panel.
 	auto Action = [&](IDetailCategoryBuilder& Category, const FText& Label, const FText& Tip, FDo Do, FCan Can = nullptr)
 	{
 		Category.AddCustomRow(Label)
@@ -306,7 +336,6 @@ void FHutongModeSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& De
 			SNew(SBox).WidthOverride(190.0f).Padding(FMargin(0.0f, 2.0f))[Button(Label, Tip, Do, Can)]
 		];
 	};
-	// A switch: the box, then its whole label (in the name column the label was cut to leave the box half the row).
 	auto Property = [&](IDetailCategoryBuilder& Category, FName Name) -> IDetailPropertyRow*
 	{
 		const TSharedRef<IPropertyHandle> Handle = DetailBuilder.GetProperty(Name);
@@ -324,7 +353,6 @@ void FHutongModeSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& De
 		}
 		return &Row;
 	};
-	// A setting with an Apply button, lit while applying it would change something.
 	auto WithApply = [&](IDetailCategoryBuilder& Category, FName Name, const FText& Tip, FDo Do, FCan Can)
 	{
 		const TSharedRef<IPropertyHandle> Handle = DetailBuilder.GetProperty(Name);
@@ -370,6 +398,15 @@ void FHutongModeSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& De
 	Action(Geometry, NSLOCTEXT("HutongScene", "RevSelected", "Revert Selected"),
 		NSLOCTEXT("HutongScene", "RevSelectedWhat", "Remove geometry from the selected buildings, keeping their outlines."), &S::RevertSelectedToLayout, &S::HasSelectedBuilt);
 
+	IDetailCategoryBuilder& Audit = Category(TEXT("Audit"));
+	Property(Audit, GET_MEMBER_NAME_CHECKED(S, TracedOutline));
+	Action(Audit, NSLOCTEXT("HutongScene", "AuditLoaded", "Audit Loaded Buildings"),
+		NSLOCTEXT("HutongScene", "AuditLoadedWhat", "Judge every loaded building against the Qing figures for its court role; summary by role, every check to a CSV."), &S::AuditLoaded);
+	Action(Audit, NSLOCTEXT("HutongScene", "MeshSharing", "Mesh Sharing Report"),
+		NSLOCTEXT("HutongScene", "MeshSharingWhat", "Count the meshes the loaded buildings would need at each size rule; every building to a CSV. Moves nothing."), &S::ReportMeshSharing);
+	Action(Audit, NSLOCTEXT("HutongScene", "ApplySharing", "Apply Shared Sizes"),
+		NSLOCTEXT("HutongScene", "ApplySharingWhat", "Resize every building in the level to its shared size, keeping touching buildings joined and walls meeting them."), &S::ApplyMeshSharing);
+
 	IDetailCategoryBuilder& Export = Category(TEXT("Export"));
 	Action(Export, NSLOCTEXT("HutongScene", "ExportAll", "Export All"),
 		NSLOCTEXT("HutongScene", "ExportAllWhat", "Save every building in the level to a new file."), &S::ExportAll);
@@ -381,6 +418,7 @@ void FHutongModeSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& De
 		NSLOCTEXT("HutongScene", "ImportLayoutWhat", "Place the buildings from a layout file."), &S::ImportLayout);
 	Property(Import, GET_MEMBER_NAME_CHECKED(S, bCustomizePlacement));
 	Property(Import, GET_MEMBER_NAME_CHECKED(S, bUpdateMatchingPlacements));
+	Property(Import, GET_MEMBER_NAME_CHECKED(S, bBuildGeometryOnImport));
 	Property(Import, GET_MEMBER_NAME_CHECKED(S, ImportFolder));
 
 	IDetailCategoryBuilder& Housekeeping = Category(TEXT("Housekeeping"));
@@ -394,8 +432,11 @@ void FHutongModeSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& De
 		NSLOCTEXT("HutongScene", "StarterWhat", "Create an editable material for each surface in /Game/HutongLayout/Materials."), &S::CreateStarterMaterials);
 	Action(Housekeeping, NSLOCTEXT("HutongScene", "Unused", "Delete Unused Meshes"),
 		NSLOCTEXT("HutongScene", "UnusedWhat", "Delete generated meshes no building uses."), &S::DeleteUnusedGeneratedMeshes);
+	Action(Housekeeping, NSLOCTEXT("HutongScene", "ParentTiles", "Parent To Map Tiles"),
+		NSLOCTEXT("HutongScene", "ParentTilesWhat", "Attach every loaded building to the map tile under it: moving or selecting the tile in the Outliner takes its buildings along."), &S::ParentLoadedToTiles);
+	Action(Housekeeping, NSLOCTEXT("HutongScene", "DetachTiles", "Detach From Map Tiles"),
+		NSLOCTEXT("HutongScene", "DetachTilesWhat", "Detach every loaded building from its map tile, back to its court folder."), &S::DetachLoadedFromTiles);
 
-	// Only with something selected: it acts on nothing else.
 	IDetailCategoryBuilder& Selection = Category(TEXT("Selection"));
 	if (Settings->HasSelection())
 	{
@@ -434,10 +475,11 @@ void HutongPanelCustomizations::Register()
 	{
 		const TArray<FName> Categories = C.Categories;
 		const TArray<FName> Hidden = C.HiddenParamFields;
+		const FName HiddenOnFor = C.HiddenOnFor;
 		PropertyEditor.RegisterCustomClassLayout(C.Class,
-			FOnGetDetailCustomizationInstance::CreateLambda([Categories, Hidden]
+			FOnGetDetailCustomizationInstance::CreateLambda([Categories, Hidden, HiddenOnFor]
 			{
-				return FHutongCollapsedCategoriesCustomization::Make(Categories, Hidden);
+				return FHutongCollapsedCategoriesCustomization::Make(Categories, Hidden, HiddenOnFor);
 			}));
 	}
 	PropertyEditor.RegisterCustomClassLayout(TEXT("HutongPresetProperties"),

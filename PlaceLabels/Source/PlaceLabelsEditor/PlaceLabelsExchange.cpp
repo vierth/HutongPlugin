@@ -25,13 +25,11 @@ namespace PlaceLabelsExchange
 
 namespace
 {
-	// Column order for the CSV.
 	const TCHAR* CsvHeader =
 		TEXT("regionId,actorLabel,typeId,chinese,pinyin,english,note,source,confidence,corners,areaM2");
 
 	FString EscapeCsv(const FString& In)
 	{
-		// Quote if the value could break the row; double inner quotes.
 		if (!In.Contains(TEXT(",")) && !In.Contains(TEXT("\"")) && !In.Contains(TEXT("\n"))
 			&& !In.Contains(TEXT("\r")))
 		{
@@ -42,7 +40,6 @@ namespace
 		return FString::Printf(TEXT("\"%s\""), *Escaped);
 	}
 
-	// Splits one CSV record into fields, honouring quotes and embedded newlines.
 	bool ParseCsvRecord(const FString& Text, int32& Cursor, TArray<FString>& OutFields)
 	{
 		OutFields.Reset();
@@ -93,7 +90,6 @@ namespace
 			}
 			if (C == TEXT('\r') || C == TEXT('\n'))
 			{
-				// Swallow CRLF as one terminator.
 				if (C == TEXT('\r') && Cursor + 1 < Text.Len() && Text[Cursor + 1] == TEXT('\n'))
 				{
 					++Cursor;
@@ -135,7 +131,7 @@ namespace
 		return In.IsEmpty() ? FText::GetEmpty() : FText::FromString(In);
 	}
 
-	// Confidence is a number, 1–5. Empty cell keeps the current value: "not my column", not "no evidence".
+	// Empty cell keeps the current value.
 	EPlaceConfidence ParseConfidence(const FString& Field, EPlaceConfidence Current)
 	{
 		const FString Trimmed = Field.TrimStartAndEnd();
@@ -147,7 +143,6 @@ namespace
 		return (Value >= 1 && Value <= 5) ? static_cast<EPlaceConfidence>(Value) : Current;
 	}
 
-	// Writes the outline as a GeoJSON linear ring.
 	TArray<TSharedPtr<FJsonValue>> MakeRing(const TArray<FVector2D>& World)
 	{
 		TArray<TSharedPtr<FJsonValue>> Ring;
@@ -189,7 +184,6 @@ namespace
 		return nullptr;
 	}
 
-	// Applies a world-space outline to a region, re-centring the actor on it.
 	void ApplyWorldOutline(UPlaceRegionComponent* Region, const TArray<FVector2D>& World, double Z)
 	{
 		if (!Region || World.Num() < 3)
@@ -222,7 +216,6 @@ namespace
 			Region->LocalPoints.Emplace(Local.X, Local.Y);
 		}
 
-		// Normalise winding on the way in.
 		if (PlaceLabelsGeo::SignedArea2D(Region->LocalPoints) < 0.0)
 		{
 			Algo::Reverse(Region->LocalPoints);
@@ -278,7 +271,6 @@ void GatherTypeAssets(TMap<FName, UPlaceLabelTypeAsset*>& OutTypes)
 		{
 			if (!Type->TypeId.IsNone())
 			{
-				// First wins.
 				OutTypes.FindOrAdd(Type->TypeId, Type);
 			}
 		}
@@ -305,7 +297,6 @@ void ExportGeoJson(UWorld* World, const FString& FilePath, FResult& OutResult)
 			continue;
 		}
 
-		// Assign an id to anything drawn before the field existed.
 		Region->EnsureRegionId();
 
 		TArray<TSharedPtr<FJsonValue>> Rings;
@@ -325,7 +316,7 @@ void ExportGeoJson(UWorld* World, const FString& FilePath, FResult& OutResult)
 		Properties->SetStringField(TEXT("english"), TextOrEmpty(Region->Name.English));
 		Properties->SetStringField(TEXT("note"), TextOrEmpty(Region->Note));
 
-		// Confidence as its number: a display name would not survive another language.
+		// Confidence as its number, independent of display language.
 		Properties->SetStringField(TEXT("source"), TextOrEmpty(Region->Source));
 		Properties->SetNumberField(TEXT("confidence"), static_cast<int32>(Region->Confidence));
 		Properties->SetNumberField(TEXT("z"), Region->GetComponentLocation().Z);
@@ -337,7 +328,6 @@ void ExportGeoJson(UWorld* World, const FString& FilePath, FResult& OutResult)
 		}
 		Properties->SetNumberField(TEXT("areaM2"), Region->GetWorldArea() / 10000.0);
 
-		// The parent is written as a label for a human reading the file.
 		if (const UPlaceRegionComponent* Parent = Region->GetEffectiveParent())
 		{
 			Properties->SetStringField(TEXT("parentLabel"),
@@ -369,7 +359,7 @@ void ExportGeoJson(UWorld* World, const FString& FilePath, FResult& OutResult)
 		return;
 	}
 
-	// No BOM: RFC 8259 excludes it; strict readers choke.
+	// RFC 8259 forbids a BOM; strict readers reject one.
 	if (!FFileHelper::SaveStringToFile(Output, *FilePath,
 			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
 	{
@@ -419,7 +409,7 @@ void ExportCsv(UWorld* World, const FString& FilePath, FResult& OutResult)
 		++OutResult.Exported;
 	}
 
-	// UTF-8 *with* a BOM here, unlike the JSON.
+	// UTF-8 with a BOM, so spreadsheets read it as UTF-8.
 	if (!FFileHelper::SaveStringToFile(Output, *FilePath,
 			FFileHelper::EEncodingOptions::ForceUTF8))
 	{
@@ -515,7 +505,6 @@ void ImportGeoJson(UWorld* World, const FString& FilePath, FResult& OutResult)
 			continue;
 		}
 
-		// Outer ring only.
 		const TArray<TSharedPtr<FJsonValue>>* Ring = nullptr;
 		if (!(*Rings)[0]->TryGetArray(Ring) || !Ring)
 		{
@@ -588,7 +577,7 @@ void ImportGeoJson(UWorld* World, const FString& FilePath, FResult& OutResult)
 			}
 			Region = Actor->Region;
 
-			// File's id, not the one OnComponentCreated minted, or re-import duplicates every region.
+			// The file's id replaces the one OnComponentCreated minted, so re-import matches regions.
 			Region->Modify();
 			Region->RegionId = Id.IsValid() ? Id : FGuid::NewGuid();
 			Existing.Add(Region);
@@ -644,7 +633,6 @@ void ImportGeoJson(UWorld* World, const FString& FilePath, FResult& OutResult)
 		bIsNew ? ++OutResult.Created : ++OutResult.Updated;
 	}
 
-	// One hierarchy sweep at the end.
 	for (UPlaceRegionComponent* Region : Existing)
 	{
 		if (Region && Region->bAutoParent && !Region->ExplicitParent)
@@ -675,7 +663,7 @@ void ImportCsv(UWorld* World, const FString& FilePath, FResult& OutResult)
 		return;
 	}
 
-	// Resolve columns by name, so reordering them in a spreadsheet.
+	// Columns resolved by name, so a spreadsheet may reorder them.
 	TMap<FString, int32> Columns;
 	for (int32 i = 0; i < Header.Num(); ++i)
 	{
@@ -716,7 +704,7 @@ void ImportCsv(UWorld* World, const FString& FilePath, FResult& OutResult)
 	{
 		++RowNumber;
 
-		// Trailing newline yields an empty record; not reported.
+		// A trailing newline yields an empty record; skipped silently.
 		if (Row.Num() == 0 || (Row.Num() == 1 && Row[0].TrimStartAndEnd().IsEmpty()))
 		{
 			continue;
@@ -734,7 +722,7 @@ void ImportCsv(UWorld* World, const FString& FilePath, FResult& OutResult)
 		UPlaceRegionComponent* Region = FindByRegionId(Existing, Id);
 		if (!Region)
 		{
-			// Deliberately not spawned.
+			// CSV import edits existing regions only.
 			OutResult.Problems.Add(FString::Printf(
 				TEXT("Row %d: no region in this level with id %s."), RowNumber, *Id.ToString()));
 			++OutResult.Skipped;
@@ -777,7 +765,6 @@ void ImportCsv(UWorld* World, const FString& FilePath, FResult& OutResult)
 			Owner->SetActorLabel(Owner->GetDefaultActorLabel());
 		}
 
-		// Type drives parenting and outline colour.
 		Region->MarkRenderStateDirty();
 		++OutResult.Updated;
 	}

@@ -103,14 +103,12 @@ namespace PlaceLabelsGeo
 			return TNumericLimits<double>::Max();
 		}
 
-		// Bounds reject before any edge work.
 		const FBox2D BoundsA = ComputeBounds2D(A).ExpandBy(MaxDistance);
 		if (!BoundsA.Intersect(ComputeBounds2D(B)))
 		{
 			return TNumericLimits<double>::Max();
 		}
 
-		// Containment either way counts as touching.
 		if (PointInPolygon2D(B, A[0]) || PointInPolygon2D(A, B[0]))
 		{
 			return 0.0;
@@ -147,7 +145,6 @@ namespace PlaceLabelsGeo
 			return Poly[0];
 		}
 
-		// Area-weighted centroid. Degenerate (zero-area) polygons fall back to the vertex mean.
 		const double Area = SignedArea2D(Poly);
 		FVector2D Centroid = FVector2D::ZeroVector;
 		if (!FMath::IsNearlyZero(Area))
@@ -173,7 +170,6 @@ namespace PlaceLabelsGeo
 			return Centroid;
 		}
 
-		// Concave shape whose centroid escaped it.
 		int32 NearestIndex = 0;
 		double NearestDistSq = TNumericLimits<double>::Max();
 		for (int32 i = 0; i < N; ++i)
@@ -205,7 +201,6 @@ namespace PlaceLabelsGeo
 			return false;
 		}
 
-		// Work on a CCW copy of the index list; a clockwise polygon is just walked backwards.
 		TArray<int32> Remaining;
 		Remaining.Reserve(N);
 		if (SignedArea2D(Poly) >= 0.0)
@@ -234,7 +229,7 @@ namespace PlaceLabelsGeo
 			const double D1 = Cross(A, B, P);
 			const double D2 = Cross(B, C, P);
 			const double D3 = Cross(C, A, P);
-			// Strictly inside; touching an edge is not an obstruction to clipping the ear.
+			// Strictly inside; a point on an edge leaves the ear clippable.
 			return (D1 > 0.0 && D2 > 0.0 && D3 > 0.0) || (D1 < 0.0 && D2 < 0.0 && D3 < 0.0);
 		};
 
@@ -256,7 +251,6 @@ namespace PlaceLabelsGeo
 				const FVector2D& B = Poly[IndexCur];
 				const FVector2D& C = Poly[IndexNext];
 
-				// Reflex corners are not ears.
 				if (Cross(A, B, C) <= 0.0)
 				{
 					continue;
@@ -315,10 +309,9 @@ namespace PlaceLabelsGeo
 			return;
 		}
 
-		// SegmentIntersection2D is declared on FVector, not FVector2D.
+		// SegmentIntersection2D takes FVector.
 		auto Lift = [](const FVector2D& V) { return FVector(V.X, V.Y, 0.0); };
 
-		// O(n^2) over edges.
 		for (int32 i = 0; i < N; ++i)
 		{
 			const FVector A0 = Lift(Poly[i]);

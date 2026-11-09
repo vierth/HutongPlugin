@@ -19,14 +19,12 @@ namespace HutongGen
 		const double W = FMath::Max(P.Width, 1.0);
 		const double D = FMath::Max(P.Depth, 1.0);
 		const double Eave = FMath::Max(P.GetEaveHeight(), 20.0);
-		// Roof on the frame's line; walls to the ceiling under it; columns and 額枋 at the column top.
 		const double RoofZ = Eave + P.GetRoofLift();
 		const double CeilZ = RoofZ + P.GetUndersideRise();
 		const double T = FMath::Clamp(P.WallThickness, 1.0, FMath::Min(W, D) * 0.25);
 		const double Floor = FMath::Clamp(P.FloorHeight, 0.0, Eave * 0.4);
 		const double ColR = FMath::Max(0.5 * P.GetColumnDiameter(), 1.0);
 
-		// One bay (一間). Wall frame: the columns stand proud of the side walls' passage faces.
 		const double ColX = P.HasWallFrame()
 			? FMath::Max(T - (1.0 - 2.0 * HutongCanon::Gate::ColumnProudShare) * ColR, ColR) : ColR;
 		auto BoundaryX = [&](int32 i) { return (i <= 0) ? ColX : (W - ColX); };
@@ -41,12 +39,10 @@ namespace HutongGen
 		if (DoorY < T) DoorY = 0.0;
 		const bool bRecessed = (DoorY > 0.0);
 
-		// Roof, eave course, 正脊, built last; the shell helper tags the roof slot. Set up first: the door plane
-		// rises to its underside.
+		// Set up first: the door plane rises to the roof's underside.
 		Shell::FRoofParams Roof;
 		Roof.FrontOverhang = P.GetRoofOverhang();
 		Roof.UndersideRise = P.GetUndersideRise();
-		// Symmetric: a gate's back is the courtyard, not a lane.
 		Roof.RearOverhang = P.GetRoofOverhang();
 		Roof.Rise = P.GetRoofRise(D);
 		Roof.Section = Jiajia::MakeSection(P.GetPurlins(), 0.5 * D, Roof.FrontOverhang, P.RoofApexRoll);
@@ -65,18 +61,14 @@ namespace HutongGen
 		Roof.RafterEndInset = P.bHasChitou ? T : 0.0;
 		Roof.GableWallThickness = T;
 		if (P.bExposedFrame) Roof.ShellCover = HutongCanon::Frame::RoofCover * P.GetColumnDiameter();
-		// The door plane to the underside: level to its lower face, sloped over the thickness above that.
 		const double DoorTop = FMath::Min(Shell::UndersideAt(Roof, D, RoofZ, DoorY), Shell::UndersideAt(Roof, D, RoofZ, DoorY + T));
 
-		// 1) 臺基, 踏跺 under the doorway.
 		const double PlatO = FMath::Max(P.PlatformOverhang, ColR);
-		// Flush on the flanks; the 下鹼 runs down past it.
 		const double PlatSide = 0.0;
 		// 踏跺 between the piers (圖5-1-4.2).
 		Shell::AppendPlatform(Mesh, W, D, Floor, PlatO, PlatSide,
 			P.StepCount, P.StepTread, T, W - T);
 
-		// 2) 下鹼 on the side walls only; no back wall.
 		{
 			FSlotScope BaseTag(Mesh, MatSlot_BaseCourse);
 			Shell::AppendBaseCourseU(Mesh, W, D, T, Floor, BaseH, BaseP,
@@ -87,24 +79,19 @@ namespace HutongGen
 		AppendBox(Mesh, FVector3d(0.0, 0.0, WallBottom), FVector3d(T, D, CeilZ));
 		AppendBox(Mesh, FVector3d(W - T, 0.0, WallBottom), FVector3d(W, D, CeilZ));
 
-		// 踏跺 on the courtyard side too.
 		Shell::AppendSteps(Mesh, T, W - T, D + PlatSide, 1.0,
 			P.StepCount, P.StepTread, Floor);
 
 		FSlotScope WoodTag(Mesh, MatSlot_Wood);
 		const double ColOvershoot = 1.0;
-		// Resolved before the frame.
 		const double DoorHead = FMath::Clamp(P.GetDoorHeadHeight(), Floor + 60.0, Eave - 10.0);
 		const double ColTopR = Frame::TaperedTopRadius(ColR, P.GetColumnHeight(), P.ColumnTaperRatio);
 
-		// 檐柱 on the front edge.
 		Frame::AppendColumnRow(Mesh, BoundaryX, 1, 0.0, ColR, ColTopR, 0.0, Eave, ColOvershoot);
-		// Wall frame: the rear 檐柱 show on the passage walls too.
 		if (P.HasWallFrame())
 		{
 			Frame::AppendColumnRow(Mesh, BoundaryX, 1, D, ColR, ColTopR, 0.0, Eave, ColOvershoot);
 		}
-		// 額枋 at the column top; the 檻框 fills the bay under it. 如意門: it stands inside the brick screen.
 		// 清式營造則例 表四: 檐枋 one 柱徑 high, ⅘ thick.
 		const double ArchitraveH = FMath::Min(FMath::Max(HutongCanon::Frame::EaveTieHeight * 2.0 * ColR, 8.0), Eave - DoorHead);
 		const double LintelZ = Eave - ArchitraveH;
@@ -114,7 +101,6 @@ namespace HutongGen
 				FMath::Max(HutongCanon::Frame::EaveTieThickness * 2.0 * ColR, 6.0), LintelZ, Eave);
 		}
 
-		// Wall frame shown: its 中柱 or 金柱 and beams come with the cross frames below.
 		if (bRecessed && !(P.HasWallFrame() && P.bExposedFrame))
 		{
 			Frame::AppendColumnRow(Mesh, BoundaryX, 1, DoorY, ColR, ColTopR, 0.0, Eave, ColOvershoot);
@@ -122,8 +108,7 @@ namespace HutongGen
 				DoorHead, Eave, ColOvershoot);
 		}
 
-		// 雀替 under the front 額枋 of a recessed gate (圖5-1-3; "as on the 廣亮大門"): a board in the column
-		// plane, root buried in the column, underside sagging from the tip down to it.
+		// 雀替 under the front 額枋 of a recessed gate (圖5-1-3).
 		if (bRecessed && !P.HasBrickScreen())
 		{
 			namespace G = HutongCanon::Gate;
@@ -135,7 +120,6 @@ namespace HutongGen
 			const double HalfT = 0.5 * G::QuetiThicknessInD * 2.0 * ColR;
 			if (Reach > 5.0 && Drop > 3.0)
 			{
-				// Along the beam from the column axis (s), height above the 額枋's underside.
 				TArray<FVector2d> Profile = { { Root, 1.0 }, { ColR + Reach, 1.0 } };
 				const int32 Steps = 8;
 				for (int32 k = 0; k <= Steps; ++k)
@@ -148,7 +132,6 @@ namespace HutongGen
 				{
 					const int32 First = Mesh.MaxVertexID();
 					AppendYZPrism(Mesh, Profile, -HalfT, HalfT);
-					// Profile's s onto +X from the left column, -X from the right; no mirroring.
 					TransformVerticesFrom(Mesh, First, FTransform(FQuat(FVector::ZAxisVector, Side == 0 ? -HALF_PI : HALF_PI),
 						FVector(BoundaryX(Side), 0.0, LintelZ)));
 				}
@@ -156,11 +139,9 @@ namespace HutongGen
 			QuetiTag.Close();
 		}
 
-		// Doorway, centred in the bay.
 		const double BayW = BoundaryX(1) - BoundaryX(0);
 		const double FrameT = FMath::Clamp(P.DoorFrameThickness, 2.0, T);
 		const double StoneShare = P.GetDoorStones().bEnabled ? 1.0 : 0.0;
-		// The doorway of a given clear width, centred in the bay, leaves square to the plane.
 		auto MakeDoor = [&](double OpenW)
 		{
 			FHutongDoorAssembly D;
@@ -194,8 +175,7 @@ namespace HutongGen
 			return Best;
 		};
 
-		// 如意門: the figure's share of the span between the piers, widened (within the bay) until its leaves,
-		// swung their widest, leave Min Clear Width to walk through. The mesh is the collision.
+		// The mesh is the collision, so the doorway widens until the swung leaves leave Min Clear Width.
 		double DoorW = FMath::Clamp(P.DoorWidthFraction, 0.1, 1.0) * BayW;
 		if (P.HasBrickScreen())
 		{
@@ -210,15 +190,16 @@ namespace HutongGen
 		const double ClearX1 = ClearX0 + DoorW;
 
 		FHutongDoorAssembly Door = MakeDoor(DoorW);
-		// Leaves swing inward, each by its own angle from the seed; too little way left, both take the widest swing.
 		if (P.bLeavesOpen)
 		{
-			FRandomStream Rand(P.RandomSeed);
+			// Few variants: every gate of a size and style then shares a library mesh.
+			constexpr int32 LeafAngleVariants = 4;
+			FRandomStream Rand(FMath::Abs(P.RandomSeed % LeafAngleVariants));
 			const double LoDeg = FMath::Min(P.AjarAngleMin, P.AjarAngleMax);
 			const double HiDeg = FMath::Max(P.AjarAngleMin, P.AjarAngleMax);
 			double LeftDeg = FMath::Lerp(LoDeg, HiDeg, static_cast<double>(Rand.FRand()));
 			double RightDeg = FMath::Lerp(LoDeg, HiDeg, static_cast<double>(Rand.FRand()));
-			// Negative = inward, into the passage, not over the lane.
+			// Negative = inward, into the passage.
 			auto Swing = [&]() { Door.LeftLeafAngleDeg = -LeftDeg; Door.RightLeafAngleDeg = -RightDeg; };
 			Swing();
 			if (P.MinClearWidth > 0.0 && LeafClearWidth(Door) < P.MinClearWidth)
@@ -233,7 +214,6 @@ namespace HutongGen
 
 		WoodTag.Close();
 
-		// 門墩 at the jamb feet in the door plane (inside the recess on a recessed gate).
 		{
 			FSlotScope StoneTag(Mesh, MatSlot_Stone);
 			AppendDoorStonePair(Mesh, P.GetDoorStones(), ClearX0, ClearX1,
@@ -242,7 +222,6 @@ namespace HutongGen
 			StoneTag.Close();
 		}
 
-		// 餘塞板 and 走馬板 fill the door plane round the doorway.
 		const double FlankX0 = T;
 		const double FlankX1 = W - T;
 		const double JambOuterX0 = ClearX0 - FrameT;
@@ -250,8 +229,6 @@ namespace HutongGen
 
 		if (P.HasBrickScreen())
 		{
-			// 如意門: brick bay with a doorway cut in it; masonry fill full height either side, on a 下鹼
-			// proud of it like the side walls'.
 			if (JambOuterX0 > FlankX0)
 			{
 				AppendBox(Mesh, FVector3d(FlankX0, DoorY, WallBottom),
@@ -286,8 +263,7 @@ namespace HutongGen
 		}
 		else
 		{
-			// Timber gates, 檻框 (圖5-1-4.2): 抱框 at the piers, 中檻 across the bay at the door head, 走馬板
-			// above it, 上檻 under the 額枋; 餘塞板 split by two 腰枋. Members full depth, panels set back.
+			// 檻框 per 圖5-1-4.2.
 			namespace G = HutongCanon::Gate;
 			FSlotScope InfillTag(Mesh, MatSlot_Wood);
 			const double PanelY = DoorY + FMath::Min(G::PanelRecessCm, 0.25 * T);
@@ -329,9 +305,7 @@ namespace HutongGen
 			InfillTag.Close();
 		}
 
-		// 門頭 (圖5-1-6, text with 圖5-1-5): a brick frieze across the bay from the door surround to the roof's
-		// base — 掛落, 頭層檐, 連珠混, 半混, 蓋板, 欄板望柱 standing on it, dentils, top course. Ends buried
-		// 1 cm in the piers, backs in the screen. Plain (素活): the same courses, the carving left off.
+		// 門頭 per 圖5-1-6 and the text with 圖5-1-5; ends buried 1 cm in the piers.
 		const double HeadP = FMath::Max(P.DoorHeadProjection, 0.0);
 		const double FriezeH = RoofZ - Door.JambTopZ;
 		if (P.HasBrickScreen() && HeadP > 0.0 && FriezeH > 10.0)
@@ -357,7 +331,6 @@ namespace HutongGen
 			};
 			const double PostW = G::RuyiFriezePostShare * Span;
 			const double PanelW = (Span - (G::RuyiFriezePanelCount + 1) * PostW) / G::RuyiFriezePanelCount;
-			// Posts over the bay at the panels' spacing, the end ones buried in the piers.
 			auto Posts = [&](double Proud, double Z0, double Z1)
 			{
 				for (int32 i = 0; i <= G::RuyiFriezePanelCount && PanelW > 0.0; ++i)
@@ -367,7 +340,6 @@ namespace HutongGen
 				}
 			};
 
-			// 掛落: carved, a sunk field framed top, bottom and at the posts.
 			{
 				const double Z0 = Z;
 				Course(G::RuyiFriezeHanging, bCarved ? 0.5 * G::RuyiHangingProud : G::RuyiHangingProud);
@@ -382,7 +354,6 @@ namespace HutongGen
 
 			Course(G::RuyiFriezeFirstEave, G::RuyiFirstEaveProud);
 
-			// 連珠混: a string of beads on a course set back to the 頭層檐.
 			{
 				const double Z0 = Z;
 				Course(G::RuyiFriezeBead, bCarved ? G::RuyiFirstEaveProud : G::RuyiBeadProud);
@@ -399,7 +370,6 @@ namespace HutongGen
 				}
 			}
 
-			// 半混: a half round swept across the bay.
 			{
 				const double Z0 = Z;
 				const double Z1 = Z + G::RuyiFriezeHalfRound * FriezeH;
@@ -412,7 +382,7 @@ namespace HutongGen
 					Profile.Add(FVector2d(Face(Proud), Z0 + 0.5 * (Z1 - Z0) * (1.0 - FMath::Cos(A))));
 				}
 				Profile.Add(FVector2d(Back, Z1));
-				// (Y, Z) → world, swept along X: a rotation, never a mirror.
+				// (Y, Z) → world, swept along X: a rotation.
 				const FMatrix Basis(FVector(0, 1, 0), FVector(0, 0, 1), FVector(1, 0, 0), FVector::ZeroVector);
 				FTransform A(Basis), B(Basis);
 				A.SetTranslation(FVector(X0, 0, 0));
@@ -423,7 +393,6 @@ namespace HutongGen
 
 			Course(G::RuyiFriezeCover, G::RuyiCoverProud);
 
-			// 欄板望柱 standing back on the 蓋板: panels between posts, the 望柱 heads clear of the panels' top.
 			{
 				const double Z0 = Z;
 				if (bCarved)
@@ -452,7 +421,6 @@ namespace HutongGen
 			FriezeTag.Close();
 		}
 
-		// 墀頭 at the corners; reach the eave, so need the roof's figures.
 		if (P.bHasChitou)
 		{
 			FSlotScope PierTag(Mesh, MatSlot_Body);
@@ -461,18 +429,14 @@ namespace HutongGen
 			PierTag.Close();
 		}
 
-		// 墊板 and 檐檁 on the columns front and back, under the lifted roof; ends buried in the side walls.
 		if (RoofZ > Eave)
 		{
-			// 如意門: the front pair stands inside the screen, under the 門頭.
 			if (!P.HasBrickScreen())
 			{
 				Frame::AppendEaveStack(Mesh, 0.5 * T, W - 0.5 * T, 0.0, P.GetColumnDiameter(), Eave);
 			}
 			Frame::AppendEaveStack(Mesh, 0.5 * T, W - 0.5 * T, D, P.GetColumnDiameter(), Eave);
 		}
-		// 徹上明造: the 檁 of every purlin line between the side walls, under the shell; 中柱式, the cross frames
-		// on the side walls too.
 		if (P.bExposedFrame)
 		{
 			FRoofFrameOptions Options;
@@ -488,8 +452,7 @@ namespace HutongGen
 				P.HasFrontVeranda(), false), FrameX, 0.5 * T, W - 0.5 * T, Options);
 		}
 
-		// 廊心 (圖5-1-4.2, 圖5-1-3 sections) on each passage wall between the columns: a brick frame proud of the
-		// wall round a field of 方磚 laid on the diagonal (UVs turned 45°).
+		// 廊心 per the 圖5-1-4.2 and 圖5-1-3 sections; 方磚 UVs turned 45°.
 		if (P.HasWallFrame())
 		{
 			namespace G = HutongCanon::Gate;
@@ -499,13 +462,11 @@ namespace HutongGen
 			const double Z1 = Eave - G::LangxinTopGap * Clear;
 			const double Border = G::LangxinBorderCm;
 			const double Margin = ColR + G::LangxinColumnMargin * ColD;
-			// The middle column (中柱 or 前金柱), with the door plane behind it on a recessed gate.
 			const double MidY = bRecessed ? DoorY : 0.5 * D;
 			const double MidBack = bRecessed ? FMath::Max(T, ColR) + G::LangxinColumnMargin * ColD : Margin;
 			const double SpanY[2][2] = { { Margin, MidY - Margin }, { MidY + MidBack, D - Margin } };
 			for (const double Face : { T, W - T })
 			{
-				// Out of the wall into the passage.
 				const double In = (Face < 0.5 * W) ? 1.0 : -1.0;
 				auto Slab = [&](double Y0, double Y1, double ZA, double ZB, double Proud)
 				{
@@ -533,10 +494,7 @@ namespace HutongGen
 			}
 		}
 
-		// 反八字影壁 (圖5-1-2): a wing from each pier's front outer corner, splayed 45° out to the street. Each is
-		// built along +X with its show face at Y = 0 (the cap's AppendGableRoof wants the wall on Y = 0..t), then
-		// turned into place: the left one runs toward its corner, the right one away from its own, so both show
-		// face toward the approach without a mirror.
+		// 反八字影壁 (圖5-1-2): each wing built along +X, show face at Y = 0 for AppendGableRoof, then turned into place.
 		if (P.HasSplayedScreens())
 		{
 			namespace G = HutongCanon::Gate;
@@ -550,7 +508,6 @@ namespace HutongGen
 			const double Step = G::WingCorbelStepCm;
 			const double Post = G::WingPostProudCm;
 			const double PierY = P.bHasChitou ? P.GetChitouProjection() : 0.0;
-			// Buried past the corner into the pier.
 			const double Bury = Thick;
 
 			for (const bool bLeft : { true, false })
@@ -558,7 +515,6 @@ namespace HutongGen
 				const int32 FirstVert = Mesh.MaxVertexID();
 				const double RunX0 = bLeft ? 0.0 : -Bury;
 				const double RunX1 = bLeft ? Len + Bury : Len;
-				// Local x of a share measured from the gate end.
 				auto At = [&](double Share) { return bLeft ? Len * (1.0 - Share) : Len * Share; };
 				auto Span = [&](double A, double B, double Y0, double Y1, double Z0, double Z1)
 				{
@@ -572,12 +528,10 @@ namespace HutongGen
 				}
 				FSlotScope BrickTag(Mesh, MatSlot_Body);
 				AppendBox(Mesh, FVector3d(RunX0, 0.0, BaseZ), FVector3d(RunX1, Thick, BodyZ));
-				// Posts round the field, a band over it, the 盤頭 pier at the outer end: brick proud of the face.
 				Span(G::WingPostInner[0], G::WingPostInner[1], -Post, 1.0, BaseZ, BodyZ);
 				Span(G::WingPostOuter[0], G::WingPostOuter[1], -Post, 1.0, BaseZ, BodyZ);
 				Span(G::WingPostInner[1], G::WingPostOuter[0], -Post, 1.0, FieldTop, BodyZ);
 				Span(G::WingPierFrom, 1.0, -Post, 1.0, BaseZ, BodyZ);
-				// Cornice: two courses stepping out both faces; the pier's head (盤頭) steps once more.
 				for (int32 k = 0; k < 2; ++k)
 				{
 					const double Out = Step * (k + 1);
@@ -595,7 +549,6 @@ namespace HutongGen
 				SetDiagonalPaverUVs(Mesh, FieldTri, FVector3d::XAxisVector, FVector3d::ZAxisVector,
 					FVector3d(0.5 * (At(G::WingPostInner[1]) + At(G::WingPostOuter[0])), 0.0, 0.5 * (BaseZ + FieldTop)));
 
-				// Tiled cap over the cornice, 硬山 at the pier.
 				Shell::FRoofParams Cap;
 				Cap.FrontOverhang = Cap.RearOverhang = 2.0 * Step + 4.0;
 				Cap.Rise = FMath::Max((G::WingRidgeShare - G::WingBodyShare - G::WingCorniceShare) * RoofZ, 5.0);
@@ -607,7 +560,6 @@ namespace HutongGen
 				Cap.RidgeCourseHeight = 0.6 * P.RidgeCourseHeight;
 				Cap.RidgeCourseWidth = 0.6 * P.RidgeCourseWidth;
 				Cap.bTileRuns = P.bHasTileRuns;
-				// On brick corbels: no 椽頭, a thin eave course, a 博縫 to the cap's scale.
 				Cap.RafterSection = 0.0;
 				Cap.FasciaDepth = 4.0;
 				Cap.FasciaWidth = 6.0;
@@ -617,7 +569,6 @@ namespace HutongGen
 				Shell::AppendGableRoof(Mesh, RunX1 - RunX0, Thick, CapEave, Cap);
 				TransformVerticesFrom(Mesh, CapVert, FTransform(FVector(RunX0, 0.0, 0.0)));
 
-				// Left: its x = Len on the corner at (0, -PierY), turned +45°. Right: x = 0 on (W, -PierY), turned -45°.
 				const double Yaw = FMath::DegreesToRadians(bLeft ? G::WingAngleDeg : -G::WingAngleDeg);
 				const FQuat Turn(FVector::ZAxisVector, Yaw);
 				const FVector Corner(bLeft ? 0.0 : W, -PierY, 0.0);

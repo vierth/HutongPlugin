@@ -30,7 +30,6 @@ struct PLACELABELS_API FPlaceName
 		return Chinese.IsEmpty() && Pinyin.IsEmpty() && English.IsEmpty();
 	}
 
-	// First non-empty of Chinese, Pinyin, English. For log lines and actor labels.
 	FText GetDisplayText() const
 	{
 		if (!Chinese.IsEmpty()) { return Chinese; }

@@ -58,7 +58,7 @@ namespace
 
 	const FString AllTypesLabel(TEXT("All types"));
 
-	// The Place Labels tools, if that mode is up. Here because the inline editor needs it early.
+	// Defined here: the inline editor needs it early.
 	UInteractiveTool* GetActivePlaceLabelsTool()
 	{
 		UEdMode* Mode = GLevelEditorModeTools().GetActiveScriptableMode(
@@ -71,8 +71,7 @@ namespace
 		return ToolManager ? ToolManager->GetActiveTool(EToolSide::Left) : nullptr;
 	}
 
-	// HutongLayout's plan outlines cover the ground regions are traced on. Toggled via its console
-	// variable (the plugins share no code); without HutongLayout the checkbox is not offered.
+	// Toggled through HutongLayout's console variable: the plugins share no code.
 	const TCHAR* HutongPlansVarName = TEXT("hutong.ShowPlanOutlines");
 
 	IConsoleVariable* FindHutongPlansVar()
@@ -84,11 +83,9 @@ namespace
 	constexpr float RegionListMaxHeight = 260.0f;
 	constexpr float ProblemListMaxHeight = 170.0f;
 
-	// Cheap enough per second: walks loaded actors, reads cached data.
 	constexpr float RefreshIntervalSeconds = 1.0f;
 }
 
-// A region row. Multi-column so the colour swatch and the warning badge line up down the list.
 class SPlaceRegionTableRow : public SMultiColumnTableRow<TSharedPtr<FPlaceRegionRow>>
 {
 public:
@@ -103,7 +100,6 @@ public:
 			OwnerTable);
 	}
 
-	// Every cell is bound, not baked.
 	virtual TSharedRef<SWidget> GenerateWidgetForColumn(const FName& ColumnName) override
 	{
 		if (!Item.IsValid())
@@ -114,7 +110,6 @@ public:
 
 		if (ColumnName == ColIdColour)
 		{
-			// The type's own editor colour.
 			return SNew(SBox)
 				.WidthOverride(10.0f)
 				.HeightOverride(10.0f)
@@ -159,7 +154,6 @@ public:
 
 		if (ColumnName == ColIdIssues)
 		{
-			// Always a text block, empty when there is nothing to report.
 			return SNew(STextBlock)
 				.Text_Lambda([Row]()
 				{
@@ -201,7 +195,6 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 	[
 		SNew(SVerticalBox)
 
-		// ---- Stage prompt.
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(FMargin(8.0f, 6.0f, 8.0f, 4.0f))
@@ -212,7 +205,6 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 			.AutoWrapText(true)
 		]
 
-		// ---- The two halves: drawing and naming, and the set-once tools kept out of its way.
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(FMargin(8.0f, 2.0f, 8.0f, 4.0f))
@@ -233,14 +225,12 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 				"viewport draws. Set once and left alone."))
 		]
 
-		// ---- Regions.
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		[
 			SNew(SVerticalBox)
 			.Visibility(this, &SPlaceLabelsPanel::GetRegionsTabVisibility)
 
-			// ---- Help, collapsed.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(FMargin(4.0f, 0.0f, 4.0f, 4.0f))
@@ -333,7 +323,6 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 				SNew(SSeparator).Thickness(1.0f)
 			]
 
-			// ---- The browser.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(FMargin(8.0f, 2.0f, 8.0f, 2.0f))
@@ -446,7 +435,6 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 				.Text(this, &SPlaceLabelsPanel::GetSummaryText)
 			]
 
-			// ---- The inline editor, under the list.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(FMargin(8.0f, 0.0f, 8.0f, 4.0f))
@@ -454,7 +442,6 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 				BuildRegionEditor()
 			]
 
-			// ---- Problems, collapsed until asked for.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(FMargin(4.0f, 0.0f, 4.0f, 4.0f))
@@ -499,14 +486,12 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 			]
 		]
 
-		// ---- Tools.
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		[
 			SNew(SVerticalBox)
 			.Visibility(this, &SPlaceLabelsPanel::GetToolsTabVisibility)
 
-			// ---- Actions, wrapped rather than stacked.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(FMargin(8.0f, 0.0f, 4.0f, 2.0f))
@@ -589,7 +574,6 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 				]
 			]
 
-			// ---- HutongLayout's plans, drawn on the same ground.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(FMargin(8.0f, 2.0f, 8.0f, 0.0f))
@@ -692,7 +676,6 @@ void SPlaceLabelsPanel::Construct(const FArguments& InArgs)
 
 TSharedRef<SWidget> SPlaceLabelsPanel::BuildRegionEditor()
 {
-	// Editor row: fixed-width label so the fields line up, widget beside it.
 	auto MakeField = [](const FText& Label, TSharedRef<SWidget> Field)
 	{
 		return SNew(SHorizontalBox)
@@ -724,7 +707,6 @@ TSharedRef<SWidget> SPlaceLabelsPanel::BuildRegionEditor()
 	{
 		return SNew(SEditableTextBox)
 			.HintText(Hint)
-			// Bound, so a new selection refills the form.
 			.Text(this, &SPlaceLabelsPanel::GetEditorName, Field)
 			.OnTextCommitted(this, &SPlaceLabelsPanel::CommitEditorName, Field);
 	};
@@ -762,7 +744,7 @@ TSharedRef<SWidget> SPlaceLabelsPanel::BuildRegionEditor()
 
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 1.0f)
 			[
-				// 大柵欄, not 大柵欄胡同 — the type supplies the 胡同.
+				// The type supplies the 胡同: 大柵欄 names 大柵欄胡同.
 				MakeField(LOCTEXT("FieldChinese", "Chinese (中文)"),
 					MakeNameBox(ENameField::Chinese, LOCTEXT("HintChinese", "the name as written")))
 			]
@@ -788,7 +770,6 @@ TSharedRef<SWidget> SPlaceLabelsPanel::BuildRegionEditor()
 					.OnTextCommitted(this, &SPlaceLabelsPanel::CommitEditorNote))
 			]
 
-			// Metadata.
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 1.0f)
 			[
 				MakeField(LOCTEXT("FieldSource", "Source"),
@@ -818,7 +799,6 @@ TSharedRef<SWidget> SPlaceLabelsPanel::BuildRegionEditor()
 					])
 			]
 
-			// Pending region: same form, plus the finishing buttons.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0.0f, 6.0f, 0.0f, 0.0f)
@@ -885,7 +865,6 @@ TSharedRef<SWidget> SPlaceLabelsPanel::BuildRegionEditor()
 
 EVisibility SPlaceLabelsPanel::GetEditorVisibility() const
 {
-	// Collapsed with nothing selected, rather than an empty form.
 	return (SelectedRegion.IsValid() || IsAuthoringNewRegion())
 		? EVisibility::Visible : EVisibility::Collapsed;
 }
@@ -961,7 +940,6 @@ void SPlaceLabelsPanel::SetSelectedRegion(UPlaceRegionComponent* Region)
 	}
 	SelectedRegion = Region;
 
-	// Selection change only: loads every type asset.
 	RebuildTypeOptions();
 	SyncConfidenceSelection();
 }
@@ -1014,7 +992,6 @@ TSharedRef<SWidget> SPlaceLabelsPanel::MakeTypeOptionEntry(TSharedPtr<FPlaceType
 		return SNullWidget::NullWidget;
 	}
 
-	// A swatch beside each entry.
 	const UPlaceLabelTypeAsset* Type = Item->Type.Get();
 	const FLinearColor Swatch = Type ? Type->EditorOutlineColor : FLinearColor(1.0f, 0.55f, 0.1f);
 
@@ -1051,7 +1028,7 @@ FText SPlaceLabelsPanel::GetEditorTypeLabel() const
 void SPlaceLabelsPanel::OnEditorTypeChanged(TSharedPtr<FPlaceTypeOption> NewValue,
 	ESelectInfo::Type SelectInfo)
 {
-	// Direct = SetSelectedItem in RebuildTypeOptions loading the form, not an edit.
+	// Direct = SetSelectedItem in RebuildTypeOptions loading the form.
 	if (SelectInfo == ESelectInfo::Direct || !NewValue.IsValid())
 	{
 		return;
@@ -1089,21 +1066,18 @@ void SPlaceLabelsPanel::OnEditorTypeChanged(TSharedPtr<FPlaceTypeOption> NewValu
 			Owner->SetActorLabel(Owner->GetDefaultActorLabel());
 		}
 
-		// Type drives parenting and colour.
 		if (Region->bAutoParent && !Region->ExplicitParent)
 		{
 			Region->RecomputeDerivedParent();
 		}
 	}
 
-	// Outline colour follows type.
 	Region->MarkRenderStateDirty();
 	GEditor->RedrawLevelEditingViewports(true);
 
 	RefreshNow();
 }
 
-// One accessor for the name fields, pending or placed, so the two cannot disagree.
 FText& SPlaceLabelsPanel::NameFieldOf(FPlaceName& Name, ENameField Field)
 {
 	return Field == ENameField::Chinese ? Name.Chinese
@@ -1135,7 +1109,7 @@ FText SPlaceLabelsPanel::GetEditorName(ENameField Field) const
 void SPlaceLabelsPanel::CommitEditorName(const FText& NewText, ETextCommit::Type CommitType,
 	ENameField Field)
 {
-	// Nothing placed, no transaction: the tool holds the name until Create Region.
+	// Pending: the tool holds the name until Create Region, outside any transaction.
 	if (UPlaceRegionPenToolProperties* Pending = GetAuthoringSettings())
 	{
 		FText& PendingTarget = NameFieldOf(Pending->Name, Field);
@@ -1167,7 +1141,6 @@ void SPlaceLabelsPanel::CommitEditorName(const FText& NewText, ETextCommit::Type
 		Region->Modify();
 		Target = NewText;
 
-		// Actor label follows the name, keeping outliner and browser in sync.
 		if (AActor* Owner = Region->GetOwner())
 		{
 			Owner->Modify();
@@ -1180,7 +1153,6 @@ void SPlaceLabelsPanel::CommitEditorName(const FText& NewText, ETextCommit::Type
 
 FText SPlaceLabelsPanel::GetEditorNote() const
 {
-	// No note on a pending region; written once it exists.
 	if (IsAuthoringNewRegion())
 	{
 		return FText::GetEmpty();
@@ -1245,7 +1217,6 @@ void SPlaceLabelsPanel::BuildConfidenceOptions()
 		return;
 	}
 
-	// Highest first: the common answer on top.
 	for (int32 i = Enum->NumEnums() - 1; i >= 0; --i)
 	{
 		const int64 Value = Enum->GetValueByIndex(i);
@@ -1307,7 +1278,7 @@ FText SPlaceLabelsPanel::GetEditorConfidenceLabel() const
 void SPlaceLabelsPanel::OnEditorConfidenceChanged(TSharedPtr<FPlaceConfidenceOption> NewValue,
 	ESelectInfo::Type SelectInfo)
 {
-	// Direct = SetSelectedItem loading the form, not a user choice.
+	// Direct = SetSelectedItem loading the form.
 	if (SelectInfo == ESelectInfo::Direct || !NewValue.IsValid())
 	{
 		return;
@@ -1414,7 +1385,6 @@ FText SPlaceLabelsPanel::GetPromptText() const
 
 FSlateColor SPlaceLabelsPanel::GetPromptColour() const
 {
-	// Warm yellow only while something is in hand.
 	UInteractiveTool* Tool = GetActivePlaceLabelsTool();
 	const UPlaceRegionPenTool* Pen = Cast<UPlaceRegionPenTool>(Tool);
 	const UPlaceRegionEditTool* Edit = Cast<UPlaceRegionEditTool>(Tool);
@@ -1432,7 +1402,6 @@ EActiveTimerReturnType SPlaceLabelsPanel::OnRefreshTimer(double, float)
 	}
 	SyncSelectionFromEditor();
 
-	// Dropdowns reload once per change of subject (pending vs selected), not per tick.
 	const bool bAuthoring = IsAuthoringNewRegion();
 	if (bAuthoring != bWasAuthoring)
 	{
@@ -1446,25 +1415,23 @@ EActiveTimerReturnType SPlaceLabelsPanel::OnRefreshTimer(double, float)
 
 void SPlaceLabelsPanel::SyncSelectionFromEditor()
 {
-	// A viewport click on a region fills the form.
 	if (!GEditor)
 	{
 		return;
 	}
 
-	// Never while the form has focus.
 	if (HasFocusedDescendants())
 	{
 		return;
 	}
 
-	// Nor while the pen holds an outline: the form is the drawing's, and the selection is the last region.
+	// Skipped while the pen holds an outline: the form is the drawing's.
 	if (IsAuthoringNewRegion())
 	{
 		return;
 	}
 
-	// The Edit tool's pick never reaches the editor selection; follow it here.
+	// The Edit tool's pick stays outside the editor selection; follow it here.
 	if (const UPlaceRegionEditTool* Edit = Cast<UPlaceRegionEditTool>(GetActivePlaceLabelsTool()))
 	{
 		if (UPlaceRegionComponent* Target = Edit->GetTargetRegion())
@@ -1503,7 +1470,7 @@ void SPlaceLabelsPanel::SyncSelectionFromEditor()
 		}
 	}
 
-	// Exactly one, and only to *change* the selection — never to clear it.
+	// Exactly one, and only to change the selection; an empty editor selection keeps the form.
 	if (Count == 1 && Only != SelectedRegion.Get())
 	{
 		SetSelectedRegion(Only);
@@ -1534,7 +1501,6 @@ void SPlaceLabelsPanel::RebuildRegionRows()
 
 	TSet<FString> TypesPresent;
 
-	// Rows are reused across refreshes, keyed by the component.
 	TMap<TWeakObjectPtr<UPlaceRegionComponent>, TSharedPtr<FPlaceRegionRow>> NextRowByRegion;
 	NextRowByRegion.Reserve(Regions.Num());
 
@@ -1554,7 +1520,6 @@ void SPlaceLabelsPanel::RebuildRegionRows()
 		Row->Region = Weak;
 		Row->bHasSevereIssue = false;
 
-		// Unnamed regions still need a clickable label.
 		Row->DisplayName = Region->Name.IsEmpty()
 			? FText::Format(LOCTEXT("UnnamedRegion", "(unnamed) {0}"),
 				FText::FromString(Region->GetOwner() ? Region->GetOwner()->GetActorLabel()
@@ -1584,7 +1549,6 @@ void SPlaceLabelsPanel::RebuildRegionRows()
 		AllRegionRows.Add(Row);
 	}
 
-	// Rows for regions that have gone are dropped here.
 	RowByRegion = MoveTemp(NextRowByRegion);
 
 	for (const PlaceLabelsValidation::FRegionIssue& Issue : Report.Issues)
@@ -1603,7 +1567,6 @@ void SPlaceLabelsPanel::RebuildRegionRows()
 		}
 	}
 
-	// Coarse types first, then alphabetical.
 	AllRegionRows.Sort([](const TSharedPtr<FPlaceRegionRow>& A, const TSharedPtr<FPlaceRegionRow>& B)
 	{
 		const UPlaceRegionComponent* RA = A->Region.Get();
@@ -1617,7 +1580,7 @@ void SPlaceLabelsPanel::RebuildRegionRows()
 		return A->DisplayName.CompareTo(B->DisplayName) < 0;
 	});
 
-	// Only when the type set changes, or the combo drops its selection every second.
+	// Rebuilt only when the type set changes: a rebuild drops the combo's selection.
 	TArray<FString> SortedTypes = TypesPresent.Array();
 	SortedTypes.Sort();
 
@@ -1709,7 +1672,6 @@ void SPlaceLabelsPanel::RebuildProblemRows()
 {
 	PlaceLabelsValidation::ValidateWorld(GetEditorWorld(), WeldTolerance, Report);
 
-	// Fresh array, swapped in only if it differs (as the region list).
 	TArray<TSharedPtr<FPlaceLabelsProblemRow>> NextProblemRows;
 
 	TArray<TSharedPtr<FPlaceLabelsProblemRow>>& ProblemRowsBuilder = NextProblemRows;
@@ -1762,7 +1724,6 @@ void SPlaceLabelsPanel::RebuildProblemRows()
 		ProblemRowsBuilder.Add(Row);
 	}
 
-	// Unchanged problems: rows already right.
 	bool bProblemsChanged = (NextProblemRows.Num() != ProblemRows.Num());
 	if (!bProblemsChanged)
 	{
@@ -1786,7 +1747,6 @@ void SPlaceLabelsPanel::RebuildProblemRows()
 		}
 	}
 
-	// Browser badges come from this report.
 	for (TSharedPtr<FPlaceRegionRow>& Row : AllRegionRows)
 	{
 		Row->IssueCount = Report.IssueCountFor(Row->Region.Get());
@@ -1833,7 +1793,6 @@ TSharedRef<ITableRow> SPlaceLabelsPanel::MakeProblemRow(TSharedPtr<FPlaceLabelsP
 			.AutoWrapText(true)
 		];
 
-	// The repair sits on the problem.
 	if (Item.IsValid() && Item->bIsSeam)
 	{
 		const TWeakObjectPtr<UPlaceRegionComponent> A = Item->Region;
@@ -1897,7 +1856,6 @@ void SPlaceLabelsPanel::OnRegionDoubleClicked(TSharedPtr<FPlaceRegionRow> Item)
 
 void SPlaceLabelsPanel::OnProblemClicked(TSharedPtr<FPlaceLabelsProblemRow> Item)
 {
-	// Fly to the region and load it into the editor.
 	if (!Item.IsValid())
 	{
 		return;
@@ -1907,7 +1865,6 @@ void SPlaceLabelsPanel::OnProblemClicked(TSharedPtr<FPlaceLabelsProblemRow> Item
 	SetSelectedRegion(Region);
 	SelectRegion(Region, /*bFocusViewport*/ true);
 
-	// Highlight it in the browser too.
 	if (RegionListView.IsValid())
 	{
 		if (TSharedPtr<FPlaceRegionRow>* Row = RowByRegion.Find(Region))
@@ -2033,7 +1990,6 @@ FReply SPlaceLabelsPanel::OnCreateStarterTypes()
 FReply SPlaceLabelsPanel::OnWeldAll()
 {
 	TArray<TWeakObjectPtr<UPlaceRegionComponent>> Weak;
-	// The weld takes only usable outlines.
 	PlaceLabelsEdit::GatherRegions(GetEditorWorld(), Weak, /*bOnlyWithUsableOutline*/ true);
 
 	TArray<UPlaceRegionComponent*> Regions;
@@ -2057,7 +2013,6 @@ FReply SPlaceLabelsPanel::OnWeldAll()
 			WeldReport.RegionsChanged, WeldReport.CornersMoved, WeldReport.CornersInserted,
 			WeldReport.CornersRemoved);
 
-	// Report refusals.
 	if (WeldReport.ClustersRefused > 0)
 	{
 		Message += FString::Printf(
@@ -2193,7 +2148,6 @@ FReply SPlaceLabelsPanel::OnImport()
 
 	PlaceLabelsExchange::FResult Result;
 	{
-		// One transaction over the whole file.
 		const FScopedTransaction Transaction(bIsCsv
 			? LOCTEXT("ImportCsvTx", "Import Place Label Names")
 			: LOCTEXT("ImportGeoJsonTx", "Import Place Regions"));

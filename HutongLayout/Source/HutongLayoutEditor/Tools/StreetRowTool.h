@@ -89,7 +89,6 @@ protected:
 	virtual bool OnExtraStageClicked(const FVector& HitWorld) override;
 	virtual void OnPlacementHover(const FVector& HitWorld) override;
 
-	// Clicks after the rectangle, in order.
 	enum class EExtra : uint8 { BuildingsFace, GateBays };
 	EExtra Extra = EExtra::BuildingsFace;
 
@@ -98,11 +97,9 @@ protected:
 	double RunLength() const;
 	double RowDepth() const;
 	int32 GetBayCount() const;
-	// Bay a world point lands in, measured along the run from its start.
 	int32 BayUnder(const FVector& World) const;
 	HutongGen::EBaySide SideUnder(const FVector& World) const;
 
-	// One piece as a local-rect footprint.
 	void PieceRect(double From, double To, double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const;
 
 	UPROPERTY()

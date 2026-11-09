@@ -24,21 +24,18 @@ namespace HutongGen
 			return;
 		}
 
-		// Drum overhangs its plinth along both face directions.
 		double R = 0.5 * FMath::Clamp(DrumFraction, 0.2, 0.9) * Height;
 		R = FMath::Min(R, 0.42 * Height);
 
-		// Drum top = stone top; plinth rises past the drum's underside.
 		const double DrumCz = Height - R;
 		const double PlinthH = FMath::Max(Height - 1.75 * R, 0.1 * Height);
 
-		// A deep drum grows forward only; centred, it poked through the 餘塞板 behind.
+		// Grows forward only, clear of the 餘塞板 behind.
 		const double DrumY = FMath::Min(0.5 * (Y0 + Y1), Y1 - R);
 		const double FrontY = FMath::Min(Y0, DrumY - R);
 
 		AppendBox(Mesh, FVector3d(X0, FrontY, BaseZ), FVector3d(X1, Y1, BaseZ + PlinthH));
 
-		// Inset in X, not flush with the plinth.
 		const double Inset = 0.06 * W;
 		const FQuat LayAcross = FQuat::FindBetweenNormals(FVector::UpVector, FVector::XAxisVector);
 		const FVector Centre(0.0, DrumY, BaseZ + DrumCz);
@@ -73,12 +70,10 @@ namespace HutongGen
 		if (!Stones.bEnabled || H <= 0.0 || DoorW <= 1.0) return;
 
 		const double JambT = FMath::Max(JambThickness, 1.0);
-		// Clamped to the caller's room.
 		const double W = FMath::Clamp(FMath::Max(JambT * 2.0, 26.0), 4.0, FMath::Max(MaxOutward, 4.0));
 		const double Reveal = DoorStoneReveal(JambT, DoorW);
 		const double Proj = FMath::Max(Stones.Projection, MinProjection);
 
-		// 門枕石 = a small 枕 under the leaf (pivot socket) + the visible 門墩 wholly in front of the doors.
 		const double PlaneFront = FMath::Min(FrontY, BackY);
 		const double PlaneBack = FMath::Max(FrontY, BackY);
 		const double Y0 = PlaneFront - Proj;
@@ -100,7 +95,6 @@ namespace HutongGen
 
 	double LeafClearWidth(const FHutongDoorAssembly& D)
 	{
-		// The same figures AppendDoorAssembly lays its hinged leaves out with.
 		const double X0 = FMath::Min(D.OpeningX0, D.OpeningX1);
 		const double X1 = FMath::Max(D.OpeningX0, D.OpeningX1);
 		const double DoorW = X1 - X0;
@@ -118,7 +112,6 @@ namespace HutongGen
 		const double LeafY1 = FMath::Min(Y1, LeafY0 + LeafThick);
 		const double PivotY = 0.5 * (LeafY0 + LeafY1);
 
-		// How far into the opening a leaf's footprint (rails included) reaches, swung as YawVerticesFrom swings it.
 		auto Reach = [&](double HingeX, double Direction, double AngleDeg)
 		{
 			const double Rad = FMath::DegreesToRadians(-Direction * AngleDeg);
@@ -159,7 +152,6 @@ namespace HutongGen
 		const double FrameT = FMath::Clamp(D.FrameThickness, 1.0, FMath::Max(Depth, 1.0));
 		const double Thresh = D.BottomZ + FMath::Clamp(D.ThresholdHeight, 0.0, 40.0);
 
-		// Lift the head to clear height first; jambs follow.
 		double LeafTop = FMath::Clamp(D.LeafTopZ, D.BottomZ + 10.0,
 			FMath::Max(D.BottomZ + 20.0, D.JambTopZ));
 		LeafTop = FMath::Max(LeafTop, Thresh + FMath::Max(D.MinClearHeight, 0.0));
@@ -169,16 +161,14 @@ namespace HutongGen
 		AppendBox(Mesh, FVector3d(X1, Y0, D.BottomZ), FVector3d(X1 + FrameT, Y1, JambTop));
 		AppendBox(Mesh, FVector3d(X0, Y0, LeafTop), FVector3d(X1, Y1, LeafTop + FrameT));
 
-		// 門檻: stepped over, not walked through.
 		if (Thresh > D.BottomZ)
 		{
 			AppendBox(Mesh, FVector3d(X0, Y0, D.BottomZ), FVector3d(X1, Y1, Thresh));
 		}
 
-		// 門簪 centred on the head.
 		if (D.PegCount > 0)
 		{
-			// 表十三: a ninth of the 門口 across (no deeper than the head it goes through), a seventh long.
+			// 表十三: a ninth of the 門口 across (at most the head's depth), a seventh long.
 			namespace J = HutongCanon::Joinery;
 			const double PegR = FMath::Max(FMath::Min(0.5 * J::PegDiameterOfDoorway * DoorW, 0.55 * FrameT), 4.0);
 			const double PegZ = LeafTop + 0.5 * FrameT;
@@ -197,7 +187,6 @@ namespace HutongGen
 			}
 		}
 
-		// Leaves from here, in 門漆 whatever the frame is.
 		FSlotScope LeafTag(Mesh, HutongGen::MatSlot_DoorPaint);
 
 		if (LeafTop <= Thresh)
@@ -205,7 +194,7 @@ namespace HutongGen
 			return;
 		}
 
-		// Rails and stiles stop short of the leaf's far face (no coplanar faces).
+		// Rails and stiles stop short of the leaf's far face, avoiding coplanar faces.
 		const double LeafThick = FMath::Max(0.25 * Depth, 3.0);
 		const double Inset = FMath::Min(1.0, 0.25 * LeafThick);
 		const double LeafW = 0.5 * DoorW;
@@ -215,7 +204,6 @@ namespace HutongGen
 
 		if (D.bUseLeafAngles)
 		{
-			// Build shut, then swing about its jamb.
 			const double LeafY0 = Y0 + 0.3 * Depth;
 			const double LeafY1 = FMath::Min(Y1, LeafY0 + LeafThick);
 			const double PivotY = 0.5 * (LeafY0 + LeafY1);
@@ -230,7 +218,7 @@ namespace HutongGen
 				AppendBox(Mesh, FVector3d(LX0, LeafY0, Thresh),
 					FVector3d(LX1, LeafY1, LeafTop));
 
-				// Rails proud of the outer face, short of the inner: no coplanar faces.
+				// Rails proud of the outer face, short of the inner, avoiding coplanar faces.
 				for (int32 j = 1; j <= 2; ++j)
 				{
 					const double CZ = Thresh + (LeafTop - Thresh) * j / 3.0;
@@ -251,19 +239,16 @@ namespace HutongGen
 
 		if (D.bLeavesOpen)
 		{
-			// Standoff keeps the leaf's back off the wall.
 			const double Standoff = 2.0;
 			const double LeafBackY = Y0 - Standoff;
 			const double LeafFrontY = LeafBackY - LeafThick;
 
-			// Hinge at the jamb; flat leaf's free edge limited by SwingClearance.
 			const double Clear = FMath::Max(D.SwingClearance, 0.0);
 			const double SwingDeg = FMath::RadiansToDegrees(
 				FMath::Acos(FMath::Clamp(Clear / LeafW, 0.0, 1.0)));
 
 			auto AppendLeaf = [&](double HingeX, double Direction)
 			{
-				// Boxes are axis-aligned: build, then yaw about the hinge.
 				const int32 LeafFirstVert = Mesh.MaxVertexID();
 
 				const double LX0 = FMath::Min(HingeX, HingeX + Direction * LeafW);
@@ -290,13 +275,12 @@ namespace HutongGen
 			return;
 		}
 
-		// Shut: recessed behind the frame plane so the jambs read as a surround.
 		const double LeafY0 = Y0 + 0.3 * Depth;
 		const double LeafY1 = FMath::Min(Y1, LeafY0 + LeafThick);
 
 		AppendBox(Mesh, FVector3d(X0, LeafY0, Thresh), FVector3d(X1, LeafY1, LeafTop));
 
-		// Centre stile and rails at different projections: nothing flush where they cross.
+		// Centre stile and rails at different projections where they cross, avoiding coplanar faces.
 		const double MidX = 0.5 * (X0 + X1);
 		AppendBox(Mesh,
 			FVector3d(MidX - 0.5 * FrameT, LeafY0 - 0.4 * FrameT, Thresh),

@@ -71,9 +71,7 @@ void UHutongShopfrontTool::AttachBuildingComponent(AStaticMeshActor* Actor, doub
 	if (!Building) return;
 
 	if (Settings) Building->Params = Settings->Params;
-	// Previewed count copied to the component.
 	if (Settings) Building->BayCountOverride = Settings->Params.BayCountOverride;
-	// Component stores rect extents and side, not frontage/depth.
 	Building->FootprintX = SizeX;
 	Building->FootprintY = SizeY;
 	Building->BaySide = BaySide;
@@ -83,7 +81,7 @@ void UHutongShopfrontTool::AttachBuildingComponent(AStaticMeshActor* Actor, doub
 
 	Actor->AddInstanceComponent(Building);
 	Building->RegisterComponent();
-	// After registration: plan outline and lights attach to the actor root, which needs the component live.
+	// After registration: attachments need the component live.
 	Building->ApplyPlacementAttachments();
 }
 
@@ -136,7 +134,6 @@ void UHutongShopfrontTool::Render(IToolsContextRenderAPI* RenderAPI)
 	GetEffectiveRectBounds(MinX, MinY, MaxX, MaxY);
 	if (MaxX - MinX < 1.0 || MaxY - MinY < 1.0) return;
 
-	// Bays as the generator spaces them.
 	const bool bAlongX = HutongGen::BaySide::IsAlongX(BaySide);
 	const double Span = bAlongX ? MaxX - MinX : MaxY - MinY;
 	const double Across = bAlongX ? MaxY - MinY : MaxX - MinX;
@@ -178,7 +175,6 @@ int32 UHutongShopfrontTool::ComputeBayCountForSide() const
 void UHutongShopfrontTool::AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse)
 {
 	if (!Settings || Delta == 0) return;
-	// Seeded from the count on screen.
 	const int32 Current = ComputeBayCountForSide();
 	Settings->Params.BayCountOverride = FMath::Clamp(Current + Delta, 1, 24);
 }

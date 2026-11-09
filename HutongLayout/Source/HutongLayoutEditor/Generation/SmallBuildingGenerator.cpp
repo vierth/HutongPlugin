@@ -22,19 +22,15 @@ namespace HutongGen
 		const double Rise = P.GetRoofRise();
 		const double Ov = P.GetRoofOverhang();
 		const bool bLeanTo = P.Roof == EHutongSmallRoof::LeanTo;
-		// A lean-to's underside: the eave at the front wall, rising to the back.
 		const double Slope = Rise / D;
 		auto Under = [&](double Y) { return Eave + Slope * Y; };
-		// Top of the front wall: the eave, or under a lean-to the underside at the wall's back face.
 		const double FrontTop = bLeanTo ? Under(T) : Eave;
 
-		// 臺基, low and plain.
 		if (Floor > 1.0)
 		{
 			Shell::AppendPlatform(Mesh, W, D, Floor, 20.0, 0.0, 0, 30.0, 0.0, 0.0, bDetail);
 		}
 
-		// Side and back walls: to the eave, or under a lean-to, following the slope.
 		{
 			FSlotScope Tag(Mesh, MatSlot_Body);
 			auto Block = [&](double X0, double X1, double Y0, double Y1)
@@ -54,7 +50,6 @@ namespace HutongGen
 			Block(T, W - T, D - T, D);
 		}
 
-		// The front, bay by bay inside the side walls.
 		const int32 N = FMath::Max(P.GetBayCount(), 1);
 		auto Bound = [&](int32 i) { return FMath::Clamp(P.GetBayBoundary(i, N), T, W - T); };
 		if (!bDetail)
@@ -64,7 +59,6 @@ namespace HutongGen
 		}
 		else if (P.Front == EHutongSmallFront::Open)
 		{
-			// Posts at the bay lines and a beam under the eave.
 			FSlotScope Tag(Mesh, MatSlot_Wood);
 			const double Post = 14.0;
 			for (int32 i = 0; i <= N; ++i)
@@ -76,7 +70,6 @@ namespace HutongGen
 		}
 		else if (P.Front == EHutongSmallFront::Boarded)
 		{
-			// Loose boards between the bay lines, as a shop's 排板門.
 			FSlotScope Tag(Mesh, MatSlot_Wood);
 			ShopBay::FFront F;
 			F.FaceY = 0.5 * T - 2.5;
@@ -89,7 +82,6 @@ namespace HutongGen
 		}
 		else
 		{
-			// Brick front: a door in the door bay, a window in each other.
 			const int32 DoorBay = P.GetDoorBay(N);
 			for (int32 i = 0; i < N; ++i)
 			{
@@ -100,7 +92,7 @@ namespace HutongGen
 				{
 					const double Ow = FMath::Clamp(P.DoorWidth, 40.0, X1 - X0 - 40.0);
 					const double Threshold = 10.0;
-					// Two metres where the wall allows, lower under a low eave (a shrine's), never under the crouch floor.
+					// Two metres where the wall allows, lower under a low eave (a shrine's), at least the crouch floor.
 					const double LeafTop = FMath::Max(FMath::Min(Floor + 200.0, FrontTop - 25.0), Passage::MinHeadZ(Floor, Threshold));
 					const double JambTop = FMath::Min(LeafTop + 15.0, FrontTop - 10.0);
 					if (Ow < 40.0 || JambTop <= LeafTop)
@@ -139,8 +131,7 @@ namespace HutongGen
 				AppendBox(Mesh, FVector3d(WX0, 0.0, Floor), FVector3d(WX1, T, Sill));
 				AppendBox(Mesh, FVector3d(WX0, 0.0, Head), FVector3d(WX1, T, FrontTop));
 				Tag.Close();
-				// Lattice of two bars each way over a paper pane, mid-wall; the cross bars stand back
-				// so their front face is buried in the uprights where they cross.
+				// Cross bars stand back so their front face is buried in the uprights.
 				const double Y = 0.5 * T;
 				{
 					FSlotScope LatticeTag(Mesh, MatSlot_Lattice);
@@ -156,10 +147,8 @@ namespace HutongGen
 			}
 		}
 
-		// Roof.
 		if (bLeanTo)
 		{
-			// One slab, its underside on the walls' slope, out past the front and a little past the back and sides.
 			const double Slab = FHutongSmallBuildingParams::LeanToSlab;
 			const double Ro = FHutongSmallBuildingParams::LeanToRearOverhang;
 			const double Side = 15.0;

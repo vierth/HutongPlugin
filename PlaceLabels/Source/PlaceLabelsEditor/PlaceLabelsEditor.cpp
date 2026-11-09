@@ -58,11 +58,10 @@ void FPlaceLabelsEditorModule::StartupModule()
 			MakeShared<FPlaceRegionComponentVisualizer>();
 		GUnrealEd->RegisterComponentVisualizer(RegionComponentClassName, Visualizer);
 
-		// After registration, not in the constructor: OnRegister maps the command list.
+		// After registration: OnRegister maps the command list.
 		Visualizer->OnRegister();
 	}
 
-	// A nomad tab rather than one owned by the level editor.
 	if (FSlateApplication::IsInitialized())
 	{
 		FGlobalTabmanager::Get()

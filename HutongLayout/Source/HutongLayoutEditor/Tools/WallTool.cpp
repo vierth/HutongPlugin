@@ -18,7 +18,6 @@ FText SnapKeyName();
 UHutongLaneWallToolProperties::UHutongLaneWallToolProperties()
 {
 	Params.Role = EHutongWallRole::Perimeter;
-	// A privacy wall has neither; the generator refuses them under this role anyway.
 	Params.bHasWindows = false;
 	Params.Doorway = EHutongWallDoorway::None;
 }
@@ -27,9 +26,22 @@ UHutongCourtWallToolProperties::UHutongCourtWallToolProperties()
 {
 	Params.Role = EHutongWallRole::Courtyard;
 	Params.bHasWindows = true;
-	// No opening by default: a doorway cuts the mesh (its own collision), so an unasked cut reads as a placed gate.
+	// A doorway cuts the mesh and its collision, so it would read as a placed gate.
 	Params.Doorway = EHutongWallDoorway::None;
 	Params.bHasGate = false;
+}
+
+UHutongImperialWallToolProperties::UHutongImperialWallToolProperties()
+{
+	Params.Role = EHutongWallRole::ImperialCity;
+	Params.bHasWindows = false;
+	Params.Doorway = EHutongWallDoorway::None;
+	Params.bHasGate = false;
+}
+
+UInteractiveTool* UHutongImperialWallToolBuilder::BuildTool(const FToolBuilderState& SceneState) const
+{
+	return NewObject<UHutongImperialWallTool>(SceneState.ToolManager);
 }
 
 UInteractiveTool* UHutongLaneWallToolBuilder::BuildTool(const FToolBuilderState& SceneState) const
@@ -46,7 +58,7 @@ void UHutongWallTool::RegisterToolSettings()
 {
 	Settings = NewWallSettings();
 
-	// One preset key for both walls. Role belongs to the tool: a loaded 隔牆 preset becomes this tool's wall.
+	// Role belongs to the tool: a loaded 隔牆 preset becomes this tool's wall.
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("Wall"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongWallToolProperties, Params));
@@ -68,19 +80,16 @@ void UHutongWallTool::AdjustHeight(double DeltaCm)
 	if (!Settings) return;
 	FHutongWallParams& P = Settings->Params;
 
-	// Keys turn off role derivation.
 	if (P.bDeriveFromRole)
 	{
 		P.Height = P.GetHeight();
 		P.bDeriveFromRole = false;
 	}
-	// A wall with a gate cannot drop below the gate's opening height.
 	P.Height = FMath::Clamp(P.Height + DeltaCm, FMath::Max(10.0, P.GetMinHeight()), 5000.0);
 }
 
 double UHutongWallTool::GetPreviewHeight() const
 {
-	// Body height only; the cap sits above it.
 	return Settings ? Settings->Params.GetHeight() : 0.0;
 }
 
@@ -91,7 +100,6 @@ double UHutongWallTool::GetLaneFaceOffset() const
 
 void UHutongWallTool::GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const
 {
-	// Current segment in its own frame: length along X, thickness across on the drawn line's side. Readout only.
 	const double T = Settings ? Settings->Params.GetThickness() : 30.0;
 	const double DrawnY = GetDrawnY();
 	OutMinX = 0.0;
@@ -120,8 +128,7 @@ void UHutongWallTool::EndsOnNeighbours(bool bWithCursor, double& OutDrawnY, Huto
 	TArray<double> Yaw = ChainSnapYawDeg, Yaw2 = ChainSnapYaw2Deg;
 	TArray<FVector2D> Inward = ChainSnapInward;
 	for (const FVector& P : ChainPoints) Points.Add(FVector2D(P.X, P.Y));
-	// The cursor on the vertex just added (the closing click, or hover pinned to the end) is no segment:
-	// Build drops it, and here it made the end's segment zero length.
+	// A cursor within 10 cm of the vertex just added adds no segment, matching Build.
 	if (bWithCursor && FVector::Dist2D(CurrentWorld, ChainPoints.Last()) >= 10.0)
 	{
 		Points.Add(FVector2D(CurrentWorld.X, CurrentWorld.Y));
@@ -132,9 +139,6 @@ void UHutongWallTool::EndsOnNeighbours(bool bWithCursor, double& OutDrawnY, Huto
 	const int32 Last = Points.Num() - 1;
 	if (Last < 1 || Yaw.Num() <= Last) return;
 
-	// A run's ends snap to neighbours' corners and faces, nothing else. On a corner the run's outside
-	// corner is the neighbour's and its short face lies along it; the start's corner decides the side.
-	// On a face the short face is cut flush along it and the line stays the centre line.
 	auto EdgeFace = [](double YawDeg, const FVector2D& At)
 	{
 		HutongWallChain::FEndFace Face;
@@ -180,8 +184,9 @@ void UHutongWallTool::OnPlacementStarted(const FVector& HitWorld)
 	ChainSnapYawDeg = { AnchorSnapYawDeg };
 	ChainSnapYaw2Deg = { AnchorSnapYaw2Deg };
 	ChainSnapInward = { AnchorSnapInward };
-	ChainGateFlags.Reset();
+	ChainGateCounts.Reset();
 	ChainEndBuilding.Reset();
+	CursorGateCount = 0;
 	bOpeningMarked = false;
 }
 
@@ -189,42 +194,36 @@ bool UHutongWallTool::OnRectCommitted(const FVector& HitWorld)
 {
 	// Multi-click: undo the base's bRectCommitted so every click lands here; a zero-length segment ends the run.
 	bRectCommitted = false;
-	// The click re-read the cursor: step it as the hover did (off the run's end only; there it is pinned).
 	if (!IsOnRunEnd(HitWorld)) StepCursorBearing(PlacementYawDeg);
 	const FVector P = CurrentWorld;
 	// Also test the raw cursor: an abutting end pulls the snapped cursor along the neighbour's face, missing the close click.
 	if (IsOnRunEnd(HitWorld) || FVector::Dist2D(P, ChainPoints.Last()) <= FMath::Max(10.0, 8.0 * WorldPerPixelAt(P)))
 	{
-		// Anchor alone: nothing to build yet.
 		return ChainPoints.Num() >= 2;
 	}
 	ChainPoints.Add(P);
 	ChainSnapYawDeg.Add(CursorSnapYawDeg);
 	ChainSnapYaw2Deg.Add(CursorSnapYaw2Deg);
 	ChainSnapInward.Add(CursorSnapInward);
-	ChainGateFlags.Add(bOpeningMarked);
+	ChainGateCounts.Add(CursorGateCount);
+	CursorGateCount = 0;
 	bOpeningMarked = false;
 	ChainEndBuilding = CursorSnapBuilding;
-	// A vertex on a placed building's outline joins the run to it: nothing left to draw.
 	if (IsOnOutline(P, CursorSnapBuilding.Get())) return true;
-	// Next segment starts here; the base's rotate/measure frame moves with it.
 	StartWorld = P;
 	return false;
 }
-
-
 
 bool UHutongWallTool::IsOnRunEnd(const FVector& RawCursor) const
 {
 	if (ChainPoints.Num() < 2) return false;
 	const FVector& End = ChainPoints.Last();
-	// A few pixels, not the snap radius, so a short return leg can still start.
+	// A few pixels, so a short return leg can still start.
 	return FVector::Dist2D(RawCursor, End) <= FMath::Max(10.0, 8.0 * WorldPerPixelAt(End));
 }
 
 void UHutongWallTool::OnPlacementHover(const FVector& HitWorld)
 {
-	// Over the run's own end the cursor stays on it: the closing click must not be snapped away.
 	if (!bRotateModeActive && IsOnRunEnd(HitWorld))
 	{
 		// Replace the base's neighbour snap with the end's bearing and marker, so preview and placed end cut match.
@@ -238,8 +237,12 @@ void UHutongWallTool::OnPlacementHover(const FVector& HitWorld)
 		CursorSnapBuilding = ChainEndBuilding;
 		return;
 	}
-	// Free: a run snaps its ends to corners, never its angle. Shift steps 15° off the frame.
 	StepCursorBearing(PlacementYawDeg);
+}
+
+bool UHutongWallTool::CanFinishPlacement() const
+{
+	return ChainPoints.Num() >= 2;
 }
 
 void UHutongWallTool::CancelPlacement()
@@ -249,8 +252,9 @@ void UHutongWallTool::CancelPlacement()
 	ChainSnapYawDeg.Reset();
 	ChainSnapYaw2Deg.Reset();
 	ChainSnapInward.Reset();
-	ChainGateFlags.Reset();
+	ChainGateCounts.Reset();
 	ChainEndBuilding.Reset();
+	CursorGateCount = 0;
 	bOpeningMarked = false;
 	Super::CancelPlacement();
 }
@@ -259,7 +263,7 @@ FText UHutongWallTool::GetStagePromptText() const
 {
 	if (!bIsDragging || bRotateModeActive) return Super::GetStagePromptText();
 	return FText::Format(NSLOCTEXT("WallTool", "PromptSegment",
-		"Click to end this segment; click the last end again or a building's outline to finish. G toggles a gate, Shift snaps to 15°, - and = change height, Esc drops the run.{0}"),
+		"Click to end this segment; click the last end again, a building's outline, or press Enter to finish. G adds a gate (again for more), Shift snaps to 15°, - and = change height, Esc drops the run.{0}"),
 		SnapKeyClause());
 }
 
@@ -270,6 +274,9 @@ TArray<FText> UHutongWallTool::GetStageNames() const
 
 void UHutongWallTool::SpawnFinalActor()
 {
+	// Only committed legs are built; clearing the cursor leg's G marks keeps their gates.
+	CursorGateCount = 0;
+	bOpeningMarked = false;
 	TArray<HutongWallChain::FSegment> Segments;
 	const bool bBuilt = BuildChain(false, Segments);
 	UWorld* World = GetToolManager()->GetContextQueriesAPI()->GetCurrentEditingWorld();
@@ -299,7 +306,6 @@ void UHutongWallTool::SpawnFinalActor()
 		Building->Length = S.Length;
 		Building->bLengthAlongY = false;
 		Building->FootprintThickness = 0.0;
-		// Joins and flush ends are footprint corner offsets; the square miter extension is the alternative, never stacked.
 		Building->FootprintSkew = S.Skew;
 		Building->StartExtend = 0.0;
 		Building->EndExtend = 0.0;
@@ -307,7 +313,6 @@ void UHutongWallTool::SpawnFinalActor()
 		StampDetail(Building);
 		Actor->AddInstanceComponent(Building);
 		Building->RegisterComponent();
-		// Same seam as any rebuild: plan outline or baked mesh, warped to the corners.
 		Building->Rebuild();
 		Building->ApplyPlacementAttachments();
 
@@ -320,21 +325,21 @@ void UHutongWallTool::SpawnFinalActor()
 	ChainSnapYawDeg.Reset();
 	ChainSnapYaw2Deg.Reset();
 	ChainSnapInward.Reset();
-	ChainGateFlags.Reset();
+	ChainGateCounts.Reset();
 	ChainEndBuilding.Reset();
 }
 
 FHutongWallParams UHutongWallTool::SegmentParams(int32 Index, int32 NumSegments, bool bCursorLeg) const
 {
 	FHutongWallParams P = Settings ? Settings->Params : FHutongWallParams();
-	const bool bMarked = bCursorLeg ? bOpeningMarked : (ChainGateFlags.IsValidIndex(Index) && ChainGateFlags[Index]);
-	bool bAnyMarked = bOpeningMarked && bIsDragging;
-	for (int32 i = 0; i < NumSegments && i < ChainGateFlags.Num(); ++i) bAnyMarked = bAnyMarked || ChainGateFlags[i];
+	const int32 Marks = bCursorLeg ? CursorGateCount : (ChainGateCounts.IsValidIndex(Index) ? ChainGateCounts[Index] : 0);
+	const bool bMarked = Marks > 0;
+	bool bAnyMarked = CursorGateCount > 0 && bIsDragging;
+	for (int32 i = 0; i < NumSegments && i < ChainGateCounts.Num(); ++i) bAnyMarked = bAnyMarked || ChainGateCounts[i] > 0;
 
 	bool bCarries = bMarked;
 	if (!bAnyMarked && (P.bHasGate || P.Doorway != EHutongWallDoorway::None))
 	{
-		// Unplaced: the opening goes on the longest leg.
 		int32 Longest = 0;
 		double Best = -1.0;
 		for (int32 i = 0; i < NumSegments; ++i)
@@ -355,7 +360,24 @@ FHutongWallParams UHutongWallTool::SegmentParams(int32 Index, int32 NumSegments,
 	{
 		P.bHasGate = true;
 	}
+	if (bCarries && P.bHasGate && Marks >= 2)
+	{
+		const double Offset = P.GatePosition - 0.5;
+		P.MoreGatePositions.Reset();
+		for (int32 i = 0; i < Marks; ++i)
+		{
+			const double At = FMath::Clamp((i + 1.0) / (Marks + 1.0) + Offset, 0.0, 1.0);
+			if (i == 0) P.GatePosition = At;
+			else P.MoreGatePositions.Add(At);
+		}
+	}
 	return P;
+}
+
+void UHutongWallTool::ToggleOpeningMark()
+{
+	CursorGateCount = (CursorGateCount + 1) % (MaxGatesPerLeg + 1);
+	bOpeningMarked = CursorGateCount > 0;
 }
 
 void UHutongWallTool::AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse)
@@ -365,10 +387,10 @@ void UHutongWallTool::AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse)
 
 	// Fraction of the run, so the step feels the same on any length.
 	const double Step = bFine ? 0.01 : (bCoarse ? 0.10 : 0.03);
-	// Gate on a lane wall, garden doorway on a court wall.
 	if (P.bHasGate)
 	{
 		P.GatePosition = FMath::Clamp(P.GatePosition + Delta * Step, 0.0, 1.0);
+		for (double& Position : P.MoreGatePositions) Position = FMath::Clamp(Position + Delta * Step, 0.0, 1.0);
 	}
 	else if (P.Doorway != EHutongWallDoorway::None)
 	{
@@ -384,14 +406,18 @@ FString UHutongWallTool::GetPlacementDetail() const
 	TArray<FString> Parts;
 	if (P.bHasGate)
 	{
-		Parts.Add(FString::Printf(TEXT("gate at %.0f%%"), 100.0 * P.GatePosition));
+		Parts.Add(P.MoreGatePositions.IsEmpty() ? FString::Printf(TEXT("gate at %.0f%%"), 100.0 * P.GatePosition)
+			: FString::Printf(TEXT("%d gates"), 1 + P.MoreGatePositions.Num()));
 	}
 	else if (P.Doorway != EHutongWallDoorway::None)
 	{
 		Parts.Add(FString::Printf(TEXT("doorway at %.0f%%"), 100.0 * P.DoorwayPosition));
 	}
+	if (bIsDragging && CursorGateCount > 0)
+	{
+		Parts.Add(FString::Printf(TEXT("%d gate%s on this segment"), CursorGateCount, CursorGateCount > 1 ? TEXT("s") : TEXT("")));
+	}
 
-	// Lane formed with the opposite run, as the width snap asks; walls inside a compound skip it.
 	if (bIsDragging && WantsLaneWidthSnap())
 	{
 		const double Half = GetLaneFaceOffset();
@@ -416,8 +442,7 @@ FText UHutongWallTool::GetKeyHintText() const
 	const FText What = bGate
 		? NSLOCTEXT("WallTool", "KeyHintGate", "[ ] gate position")
 		: NSLOCTEXT("WallTool", "KeyHintDoorway", "[ ] doorway position");
-	// No R key: segments follow the cursor, the frame needs no key.
-	return FText::Format(NSLOCTEXT("WallTool", "KeyHint", "{0} · G gate on this segment · Shift 15° · - = height · {1} {2} · Esc cancel · Ctrl+Z undo"),
+	return FText::Format(NSLOCTEXT("WallTool", "KeyHint", "{0} · G gates on this segment · Enter finish · Shift 15° · - = height · {1} {2} · Esc cancel · Ctrl+Z undo"),
 		What, SnapKeyName(),
 		SnappingActive() ? NSLOCTEXT("WallTool", "KeyHintNoSnap", "no snap") : NSLOCTEXT("WallTool", "KeyHintSnap", "snap"));
 }
@@ -426,9 +451,9 @@ TArray<FText> UHutongWallTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines[0] = NSLOCTEXT("HutongWallTool", "HelpRun",
-		"Click to start the wall, click to end each segment, click the last end again or a building's outline to finish. G toggles a gate on the current segment.");
+		"Click to start the wall, click to end each segment, click the last end again, a building's outline, or press Enter to finish. G puts a gate on the current segment; press again for another, up to four, then none.");
 	Lines.Insert(NSLOCTEXT("HutongWallTool", "HelpOpening",
-		"[ and ] slide the gate or doorway along the wall (Shift nudges, Ctrl jumps)."), 1);
+		"[ and ] slide the gates or doorway along the wall (Shift nudges, Ctrl jumps)."), 1);
 	return Lines;
 }
 
@@ -445,6 +470,14 @@ TArray<FText> UHutongCourtWallTool::GetToolHelpLines() const
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines.Insert(NSLOCTEXT("HutongWallTool", "HelpCourt",
 		"A dividing wall (隔牆) inside the compound: lower, and can take doorways and decorative windows (什錦窗)."), 1);
+	return Lines;
+}
+
+TArray<FText> UHutongImperialWallTool::GetToolHelpLines() const
+{
+	TArray<FText> Lines = Super::GetToolHelpLines();
+	Lines.Insert(NSLOCTEXT("HutongWallTool", "HelpImperial",
+		"The imperial city wall (皇城牆): red plaster, battered, under a yellow glazed tile cap."), 1);
 	return Lines;
 }
 
@@ -467,7 +500,6 @@ void UHutongWallTool::Render(IToolsContextRenderAPI* RenderAPI)
 	const FLinearColor HeightColor(0.45f, 0.8f, 1.0f, 1.0f);
 	const double PreviewHeight = GetPreviewHeight();
 
-	// Every segment as built, joins and flush ends included; height posts on the current one.
 	for (int32 i = 0; i < Segments.Num(); ++i)
 	{
 		FVector2D C[4];
@@ -495,14 +527,12 @@ void UHutongWallTool::Render(IToolsContextRenderAPI* RenderAPI)
 		DrawPreviewLine(PDI, SnapPoint, SnapPoint + FVector(0, 0, 1.6 * Arm), SnapColor, 3.0f);
 	}
 
-	// Opening brackets on every leg with one; G held shows it on the current leg.
 	for (int32 i = 0; i < Segments.Num(); ++i)
 	{
 		const HutongWallChain::FSegment& Seg = Segments[i];
 		const bool bCursorLeg = (i == Segments.Num() - 1);
-		double Along = 0.0, Width = 0.0, Head = 0.0;
-		bool bIsGate = false;
-		if (!GetPreviewOpening(SegmentParams(i, Segments.Num(), bCursorLeg), Seg.Length, Along, Width, Head, bIsGate)) continue;
+		const TArray<FVector> Openings = GetPreviewOpenings(SegmentParams(i, Segments.Num(), bCursorLeg), Seg.Length);
+		if (Openings.IsEmpty()) continue;
 
 		const double Yaw = FMath::DegreesToRadians(Seg.YawDeg);
 		const FVector D(FMath::Cos(Yaw), FMath::Sin(Yaw), 0.0);
@@ -510,52 +540,38 @@ void UHutongWallTool::Render(IToolsContextRenderAPI* RenderAPI)
 		const FVector O(Seg.Origin.X, Seg.Origin.Y, Z);
 		auto At = [&](double A, double Cross, double Up) { return O + D * A + L * Cross + FVector(0.0, 0.0, Up); };
 
-		// Orange, against footprint yellow and height-preview blue.
 		const FLinearColor Gate(1.0f, 0.45f, 0.1f);
-		const double HalfW = 0.5 * Width;
-		const double Edges[2] = { Along - HalfW, Along + HalfW };
-		for (double E : Edges)
+		for (const FVector& Opening : Openings)
 		{
-			// Up both faces so the opening reads from either side.
-			DrawPreviewLine(PDI, At(E, 0.0, 0.0), At(E, 0.0, Head), Gate, 5.0f);
-			DrawPreviewLine(PDI, At(E, T, 0.0), At(E, T, Head), Gate, 5.0f);
-			DrawPreviewLine(PDI, At(E, 0.0, Head), At(E, T, Head), Gate, 5.0f);
+			const double Along = Opening.X, Head = Opening.Z;
+			const double HalfW = 0.5 * Opening.Y;
+			const double Edges[2] = { Along - HalfW, Along + HalfW };
+			for (double E : Edges)
+			{
+				DrawPreviewLine(PDI, At(E, 0.0, 0.0), At(E, 0.0, Head), Gate, 5.0f);
+				DrawPreviewLine(PDI, At(E, T, 0.0), At(E, T, Head), Gate, 5.0f);
+				DrawPreviewLine(PDI, At(E, 0.0, Head), At(E, T, Head), Gate, 5.0f);
+			}
+			DrawPreviewLine(PDI, At(Edges[0], 0.0, Head), At(Edges[1], 0.0, Head), Gate, 5.0f);
+			DrawPreviewLine(PDI, At(Edges[0], T, Head), At(Edges[1], T, Head), Gate, 5.0f);
 		}
-		DrawPreviewLine(PDI, At(Edges[0], 0.0, Head), At(Edges[1], 0.0, Head), Gate, 5.0f);
-		DrawPreviewLine(PDI, At(Edges[0], T, Head), At(Edges[1], T, Head), Gate, 5.0f);
 	}
 }
 
-// Must match BuildWall or the bracket shows an opening the run lacks: the generator clamps the centre inward
-// by half the opening plus margin, then refuses it if no masonry remains either side (key repeat reaches 0 or 1).
-// Heads via accessors so the clearance floor lifts the preview too.
-bool UHutongWallTool::GetPreviewOpening(const FHutongWallParams& P, double Run, double& OutCentreAlong, double& OutWidth,
-	double& OutHead, bool& bOutIsGate) const
+// Mirrors BuildWall's clamp (centre inward by half the opening plus margin), so the bracket matches the built opening.
+TArray<FVector> UHutongWallTool::GetPreviewOpenings(const FHutongWallParams& P, double Run) const
 {
-	if (Run < 1.0) return false;
+	TArray<FVector> Out;
+	if (Run < 1.0) return Out;
 	const double H = FMath::Max(P.GetHeight(), 30.0);
-	const double T = FMath::Max(P.GetThickness(), 2.0);
 
 	if (P.bHasGate)
 	{
-		const double FrameT = FMath::Clamp(P.GateFrameThickness, 2.0, T);
-		const double W = FMath::Clamp(P.GateWidth, 40.0, FMath::Max(Run - 4.0 * FrameT, 40.0));
-		const double Along = FMath::Clamp(P.GatePosition * Run, 0.5 * W + FrameT, Run - 0.5 * W - FrameT);
-		// Generator would refuse this gate: no preview.
-		if (Along - 0.5 * W - FrameT <= 0.0 || Along + 0.5 * W + FrameT >= Run) return false;
-
-		OutCentreAlong = Along;
-		OutWidth = W;
-		OutHead = FMath::Clamp(P.GetGateHeadHeight(), 80.0, H - 10.0);
-		bOutIsGate = true;
-		return true;
+		const double Head = FMath::Clamp(P.GetGateHeadHeight(), 80.0, H - 10.0);
+		for (const FHutongWallGateSpan& G : P.GetGateSpans(Run)) Out.Emplace(G.Centre, G.ClearX1 - G.ClearX0, Head);
+		return Out;
 	}
-
-	if (P.Doorway == EHutongWallDoorway::None || !P.HasDecorativeDoorway(Run)) return false;
-
-	OutCentreAlong = P.GetDoorwayCentre(Run);
-	OutWidth = P.GetDoorwayWidth();
-	OutHead = FMath::Min(P.GetDoorwayHeight(), H);
-	bOutIsGate = false;
-	return true;
+	if (P.Doorway == EHutongWallDoorway::None || !P.HasDecorativeDoorway(Run)) return Out;
+	Out.Emplace(P.GetDoorwayCentre(Run), P.GetDoorwayWidth(), FMath::Min(P.GetDoorwayHeight(), H));
+	return Out;
 }

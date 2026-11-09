@@ -6,10 +6,8 @@ class FPrimitiveDrawInterface;
 class UPlaceRegionComponent;
 class UWorld;
 
-// The parts of polygon authoring the pen tool and the edit tool both need.
 namespace PlaceLabelsEdit
 {
-	// One palette for both tools.
 	inline const FLinearColor SettledColor(1.0f, 0.9f, 0.15f);
 	inline const FLinearColor PendingColor(0.45f, 0.8f, 1.0f);
 	inline const FLinearColor CloseColor(0.3f, 1.0f, 0.4f);
@@ -24,36 +22,31 @@ namespace PlaceLabelsEdit
 	// Two clicks closer together than this are the same click.
 	inline constexpr double DuplicatePointToleranceCm = 1.0;
 
-	// Below this a polygon is a line with rounding error, not a place.
+	// Below this a polygon is a line with rounding error.
 	inline constexpr double MinPolygonAreaCmSq = 100.0;
 
-	// A press that travels less than this before release was a click, not a drag.
+	// A press that travels less than this before release is a click.
 	inline constexpr double ClickSlopPixels = 4.0;
 
-	// Two passes: a wide near-black backing line, then the coloured line on top.
 	void DrawLine(FPrimitiveDrawInterface* PDI, const FVector& A, const FVector& B,
 		const FLinearColor& Color, float Thickness);
 
 	void DrawDashedLine(FPrimitiveDrawInterface* PDI, const FVector& A, const FVector& B,
 		const FLinearColor& Color, float Thickness, double DashLength = 30.0);
 
-	// A corner.
 	void DrawCrossHandle(FPrimitiveDrawInterface* PDI, const FVector& P, const FLinearColor& Color,
 		double Size, float Thickness);
 
-	// An insertion point.
 	void DrawDiamondHandle(FPrimitiveDrawInterface* PDI, const FVector& P, const FLinearColor& Color,
 		double Size, float Thickness);
 
-	// A removal: the corner cross rotated 45 degrees.
 	void DrawCrossOutHandle(FPrimitiveDrawInterface* PDI, const FVector& P, const FLinearColor& Color,
 		double Size, float Thickness);
 
-	// Where a screen ray meets the ground.
 	bool TraceGround(UWorld* World, const FVector& RayOrigin, const FVector& RayDirection,
 		double FallbackPlaneZ, FVector& OutHit);
 
-	// Nearest vertex to P. Returns INDEX_NONE on an empty polygon; OutDistSq is squared XY.
+	// OutDistSq is squared XY.
 	int32 ClosestVertex(const TArray<FVector2D>& Poly, const FVector2D& P, double& OutDistSq);
 
 	struct FEdgeHit
@@ -64,7 +57,6 @@ namespace PlaceLabelsEdit
 		double DistSq = TNumericLimits<double>::Max();
 	};
 
-	// Nearest point on the boundary.
 	FEdgeHit ClosestEdge(const TArray<FVector2D>& Poly, const FVector2D& P, bool bClosed);
 
 	struct FSnapSettings
@@ -76,16 +68,12 @@ namespace PlaceLabelsEdit
 
 	struct FSnapQuery
 	{
-		// Regions already in the level, cached by the caller rather than walked per hover tick.
 		const TArray<TWeakObjectPtr<UPlaceRegionComponent>>* Regions = nullptr;
 
-		// The region being edited, so it never snaps to itself.
 		const UPlaceRegionComponent* Exclude = nullptr;
 
-		// Points of the polygon under construction or under edit, in world space.
 		const TArray<FVector>* OwnPoints = nullptr;
 
-		// OwnPoints index being dragged; not a snap target.
 		int32 IgnoreOwnIndex = INDEX_NONE;
 	};
 
@@ -100,11 +88,10 @@ namespace PlaceLabelsEdit
 	FSnapResult ResolveSnap(const FVector& TracedHit, const FSnapSettings& Settings,
 		const FSnapQuery& Query);
 
-	// Every region in the world. Snapping and welding pass true; browser, validation and exchange
-	// must also see broken regions (under three corners) to surface them.
+	// Snapping and welding pass true; browser, validation and exchange pass false to surface broken regions.
 	void GatherRegions(UWorld* World, TArray<TWeakObjectPtr<UPlaceRegionComponent>>& OutRegions,
 		bool bOnlyWithUsableOutline = false);
 
-	// World-space points of a region, at the component's own Z so handles sit on its plane.
+	// At the component's own Z so handles sit on its plane.
 	void GetRegionWorldPoints3D(const UPlaceRegionComponent* Region, TArray<FVector>& OutPoints);
 }

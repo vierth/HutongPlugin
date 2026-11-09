@@ -30,7 +30,6 @@ namespace HutongGen
 			RearTag.Close();
 		}
 
-		// 徹上明造: a 三架梁 and 脊瓜柱 on each post line and the 脊檁 over them, under the shell; Span deep.
 		void AppendGateFrame(FDynamicMesh3& Mesh, const FHutongInnerGateParams& P, double Span, double Eave, double Floor,
 			const TArray<double>& FrameX, double W, const Shell::FRoofParams& Roof, double RoofZ)
 		{
@@ -42,16 +41,12 @@ namespace HutongGen
 				FrameX, 0.0, W, Options);
 		}
 
-		// 一殿一卷式: two column rows. Front row in the wall line carries the 攢邊門; 麻葉抱頭梁 run from the
-		// rear row over it to the 垂蓮柱, whose cross beam, 花板 and 雀替 form the face. Rear row carries a
-		// 屏門, turning the way in aside onto the covered walk. Two roofs, 殿 (gable, 清水脊) front and 卷
-		// (rolled) back, meet eave to eave at the 天溝: each an ordinary gable ending on that line, no cutting.
+		// 一殿一卷式: the two roofs meet eave to eave at the 天溝, each an ordinary gable ending on that line.
 		void BuildHallAndRoll(FDynamicMesh3& Mesh, const FHutongInnerGateParams& P)
 		{
 			const double W = FMath::Max(P.Width, 1.0);
 			const double D = FMath::Max(P.Depth, 1.0);
 			const double Eave = P.GetEaveHeight();
-			// Roofs on the frame's line; posts and beams at the column top, 花板 up to the ceiling.
 			const double RoofZ = Eave + P.GetRoofLift();
 			const double CeilZ = RoofZ + P.GetUndersideRise();
 			const double ColR = FMath::Min(P.GetColumnRadius(), 0.2 * FMath::Min(W, D));
@@ -62,12 +57,11 @@ namespace HutongGen
 			// 懸山: each 檁 out to the 博縫板 (1 cm into it), a 燕尾枋 under the overhang.
 			const double GableReach = ColR + FMath::Max(P.GableOverhang - 0.5, 0.0);
 			const double BoardH = HutongCanon::Frame::BoardHeight, PurlinD = HutongCanon::Frame::PurlinDiameter;
-			const double HangY = 0.0;                 // 垂蓮柱, at the beams' front ends
-			const double FrontY = P.GetWallLineY();  // 前簷柱, in the wall line
-			const double RearY = P.GetRearColumnY(); // 後簷柱
+			const double HangY = 0.0;
+			const double FrontY = P.GetWallLineY();
+			const double RearY = P.GetRearColumnY();
 			const double ValleyY = P.GetValleyY();
 
-			// 臺基 over the whole depth, a flight down each face.
 			AppendGatePlatform(Mesh, P, W, D, Floor, PlatO, BoundaryX(0), BoundaryX(1));
 			Shell::AppendSteps(Mesh, BoundaryX(0), BoundaryX(1), D + PlatO, 1.0,
 				P.GetStepCount(), P.StepTread, Floor);
@@ -81,7 +75,6 @@ namespace HutongGen
 				Floor + 60.0, Eave - 1.2 * PT);
 			const double BeamTop = FMath::Min(BeamBottom + PT, Eave);
 
-			// Both rows, an 額枋 each, 麻葉抱頭梁 from the rear row to the hanging posts.
 			for (int32 i = 0; i <= 1; ++i)
 			{
 				Frame::AppendSquareColumn(Mesh, BoundaryX(i), FrontY, Frame::SquareHalfWidth(ColR), Frame::SquareHalfWidth(ColTopR), Floor, Eave);
@@ -91,7 +84,6 @@ namespace HutongGen
 			Frame::AppendArchitrave(Mesh, BoundaryX(0), BoundaryX(1), RearY, PT, BeamBottom, Eave);
 			Frame::AppendTieBeams(Mesh, BoundaryX, 1, HangY, RearY, PT, BeamBottom, Eave, 1.0);
 
-			// Face: deep cross beam, 花板 above to the eave, 雀替 in the corners.
 			AppendBox(Mesh,
 				FVector3d(BoundaryX(0), HangY - 0.6 * PT, BeamBottom),
 				FVector3d(BoundaryX(1), HangY + 0.6 * PT, BeamTop));
@@ -117,7 +109,6 @@ namespace HutongGen
 				}
 			}
 
-			// 垂蓮柱 at the front only; beam rear ends sit on the rear columns.
 			if (P.bHasHangingPosts)
 			{
 				const double PostR = FMath::Max(0.5 * P.HangingPostDiameter, 3.0);
@@ -131,8 +122,7 @@ namespace HutongGen
 				}
 			}
 
-			// Sides between rows (Fig 5-2-2): a 罩面枋 each above head height (the walk passes under), lattice
-			// band from it up to the 麻葉抱頭梁.
+			// Sides between rows (Fig 5-2-2): a 罩面枋 above head height, lattice up to the 麻葉抱頭梁.
 			{
 				const double RailH = FMath::Max(0.45 * PT, 6.0);
 				const double RailZ = Floor + HutongCanon::Openings::WalkerHeightCm + 15.0;
@@ -147,7 +137,6 @@ namespace HutongGen
 						const double BandZ0 = RailZ + RailH, BandZ1 = BeamBottom;
 						if (BandZ1 - BandZ0 >= 12.0)
 						{
-							// 步步錦 as a grid: uprights at a hand's spacing, one mid rail.
 							const int32 N = FMath::Max(FMath::RoundToInt32((Y1 - Y0) / 14.0), 2);
 							for (int32 k = 1; k < N; ++k)
 							{
@@ -161,7 +150,6 @@ namespace HutongGen
 				}
 			}
 
-			// 攢邊門 in the wall line, 餘塞板 either side.
 			const double BayW = BoundaryX(1) - BoundaryX(0);
 			const double DoorW = BayW * FMath::Clamp(P.DoorWidthFraction, 0.2, 1.0);
 			const double JambL = BoundaryX(0) + 0.5 * (BayW - DoorW);
@@ -179,7 +167,6 @@ namespace HutongGen
 				Door.FrameThickness = FrameT;
 				Door.ThresholdHeight = P.ThresholdHeight;
 				Door.PegCount = P.DoorPegCount;
-				// Opens inward, between the rows.
 				Door.bUseLeafAngles = true;
 				Door.LeftLeafAngleDeg = P.bDoorLeavesOpen ? 90.0 : 0.0;
 				Door.RightLeafAngleDeg = P.bDoorLeavesOpen ? 90.0 : 0.0;
@@ -197,10 +184,8 @@ namespace HutongGen
 				AppendBox(Mesh, FVector3d(JambR + FrameT, PlaneY0, Floor), FVector3d(BoundaryX(1), PlaneY1, BeamBottom));
 			}
 
-			// 屏門 across the rear row, column to column (背立面, Fig 5-2-1): four leaves under a head rail. Shut,
-			// it turns the way aside onto the walk; open, each outer leaf folds flat on its neighbour against the column.
+			// 屏門 across the rear row (背立面, Fig 5-2-1); open, each outer leaf folds flat on its neighbour.
 			const int32 ScreenFirstTri = Mesh.MaxTriangleID();
-			// Open, the middle two leaves' width is the way through.
 			{
 				const double X0 = BoundaryX(0) + ColR;
 				const double X1 = BoundaryX(1) - ColR;
@@ -210,7 +195,6 @@ namespace HutongGen
 				AppendBox(Mesh, FVector3d(X0, RearY - 0.5 * ColR, LeafTop), FVector3d(X1, RearY + 0.5 * ColR, BeamBottom));
 				if (P.bScreenDoorOpen)
 				{
-					// Two leaves stacked flat per jamb, a leaf's thickness either side of the plane.
 					for (int32 k = 0; k < 2; ++k)
 					{
 						const double Y0 = RearY - (1 - k) * LeafT, Y1 = Y0 + LeafT;
@@ -220,7 +204,6 @@ namespace HutongGen
 				}
 				else
 				{
-					// Shut: each leaf its own panel, hairline between.
 					for (int32 k = 0; k < 4; ++k)
 					{
 						AppendBox(Mesh, FVector3d(X0 + k * LeafW + 0.3, RearY - 0.5 * LeafT, Floor),
@@ -241,14 +224,12 @@ namespace HutongGen
 				StoneTag.Close();
 			}
 
-			// 墊板 and 檐檁 over the hanging posts' beam and the rear row, under the lifted roofs.
 			if (RoofZ > Eave)
 			{
 				Frame::AppendEaveStack(Mesh, BoundaryX(0), BoundaryX(1), HangY, 2.0 * ColR, Eave, BoardH, PurlinD, GableReach, true);
 				Frame::AppendEaveStack(Mesh, BoundaryX(0), BoundaryX(1), RearY, 2.0 * ColR, Eave, BoardH, PurlinD, GableReach, true);
 			}
 
-			// 殿: gable over the front, hanging posts to 天溝, with 清水脊 and 蠍子尾.
 			const double O = FMath::Max(P.RoofOverhang, 0.0);
 			{
 				const double Span = ValleyY - HangY;
@@ -280,8 +261,7 @@ namespace HutongGen
 				TransformVerticesFrom(Mesh, V0, FTransform(FVector(0.0, HangY, 0.0)));
 			}
 
-			// 卷: rolled roof from 天溝 over the rear row, crown level with the 殿's fold. Built eave-front and
-			// turned end for end so the eave course and 椽頭 face the court.
+			// Built eave-front and turned end for end so the eave course and 椽頭 face the court.
 			{
 				const double Span = RearY - ValleyY;
 				Shell::FRoofParams Roof;
@@ -325,25 +305,21 @@ namespace HutongGen
 		const double W = FMath::Max(P.Width, 1.0);
 		const double D = FMath::Max(P.Depth, 1.0);
 		const double Eave = P.GetEaveHeight();
-		// Roof on the frame's line; posts and beams at the column top, 花板 up to the ceiling.
 		const double RoofZ = Eave + P.GetRoofLift();
 		const double CeilZ = RoofZ + P.GetUndersideRise();
 		const double ColR = FMath::Min(P.GetColumnRadius(), 0.2 * FMath::Min(W, D));
 		const double Floor = FMath::Clamp(P.FloorHeight, 0.0, Eave * 0.3);
 		const double PlatO = FMath::Max(P.PlatformOverhang, ColR);
 
-		// One bay: boundaries at the ends, inset so posts sit on the platform.
 		auto BoundaryX = [&](int32 i) { return (i <= 0) ? ColR : (W - ColR); };
 		// 懸山: each 檁 out to the 博縫板 (1 cm into it), a 燕尾枋 under the overhang.
 		const double GableReach = ColR + FMath::Max(P.GableOverhang - 0.5, 0.0);
 		const double BoardH = HutongCanon::Frame::BoardHeight, PurlinD = HutongCanon::Frame::PurlinDiameter;
 
-		// 獨立柱擔梁式.
 		const double FrontY = 0.0;
 		const double BackY = D;
 		const double MidY = 0.5 * D;
 
-		// 1) 臺基, 踏跺 down both sides.
 		AppendGatePlatform(Mesh, P, W, D, Floor, PlatO, BoundaryX(0), BoundaryX(1));
 		Shell::AppendSteps(Mesh, BoundaryX(0), BoundaryX(1), D + PlatO, 1.0,
 			P.GetStepCount(), P.StepTread, Floor);
@@ -357,29 +333,24 @@ namespace HutongGen
 			P.GetDoorHeadHeight() + FMath::Max(0.4 * PT, FrameT),
 			Floor + 60.0, Eave - 1.2 * PT);
 
-		// 2) One column pair on the centre line, 額枋 across.
 		for (int32 i = 0; i <= 1; ++i)
 		{
 			Frame::AppendSquareColumn(Mesh, BoundaryX(i), MidY, Frame::SquareHalfWidth(ColR), Frame::SquareHalfWidth(ColTopR), Floor, Eave);
 		}
 		Frame::AppendArchitrave(Mesh, BoundaryX(0), BoundaryX(1), MidY, PT, BeamBottom, Eave);
 
-		// 擔梁 over each column, full depth.
 		Frame::AppendTieBeams(Mesh, BoundaryX, 1, FrontY, BackY, PT, BeamBottom, Eave, 1.0);
 
-		// Cross stack, identical on both faces.
 		const double BeamTop = FMath::Min(BeamBottom + PT, Eave);
 		const double BracketReach = FMath::Clamp(P.BracketReach, 4.0,
 			0.4 * (BoundaryX(1) - BoundaryX(0)));
 
 		auto AppendCrossFace = [&](double FaceY)
 		{
-			// Deeper in Y than the 擔梁 it laps.
 			AppendBox(Mesh,
 				FVector3d(BoundaryX(0), FaceY - 0.6 * PT, BeamBottom),
 				FVector3d(BoundaryX(1), FaceY + 0.6 * PT, BeamTop));
 
-			// 花板 narrower than the beam, recessed on both faces.
 			if (P.bHasFriezePanel && CeilZ > BeamTop)
 			{
 				AppendBox(Mesh,
@@ -387,7 +358,6 @@ namespace HutongGen
 					FVector3d(BoundaryX(1), FaceY + 0.34 * PT, CeilZ));
 			}
 
-			// 雀替 stepped, not scrolled (as the shopfront's 花牙子).
 			if (P.bHasBrackets)
 			{
 				const int32 Steps = 3;
@@ -408,12 +378,10 @@ namespace HutongGen
 		AppendCrossFace(FrontY);
 		AppendCrossFace(BackY);
 
-		// 3) 垂蓮柱 at the 擔梁's four ends.
 		if (P.bHasHangingPosts)
 		{
 			const double PostR = FMath::Max(0.5 * P.HangingPostDiameter, 3.0);
 			const double Drop = FMath::Max(P.HangingPostDrop, 4.0 * PostR);
-			// Only with air under the beam; a bud resting on the platform is not hanging.
 			if (BeamBottom - Drop > Floor + 40.0)
 			{
 				for (int32 i = 0; i <= 1; ++i)
@@ -424,7 +392,6 @@ namespace HutongGen
 			}
 		}
 
-		// 4) Doors on the centre column line, mid-gate.
 		const double BayW = BoundaryX(1) - BoundaryX(0);
 		const double DoorW = BayW * FMath::Clamp(P.DoorWidthFraction, 0.2, 1.0);
 		const double JambL = BoundaryX(0) + 0.5 * (BayW - DoorW);
@@ -443,7 +410,6 @@ namespace HutongGen
 			Door.FrameThickness = FrameT;
 			Door.ThresholdHeight = P.ThresholdHeight;
 			Door.PegCount = P.DoorPegCount;
-			// Driven by angle, not clearance.
 			Door.bUseLeafAngles = true;
 			Door.LeftLeafAngleDeg = P.bDoorLeavesOpen ? -90.0 : 0.0;
 			Door.RightLeafAngleDeg = P.bDoorLeavesOpen ? -90.0 : 0.0;
@@ -453,7 +419,6 @@ namespace HutongGen
 			AppendDoorAssembly(Mesh, Door);
 		}
 
-		// 餘塞板 from each jamb to the column centre; 走馬板 across the plane above the head.
 		const double PlaneY0 = MidY - 0.35 * ColR;
 		const double PlaneY1 = MidY + 0.35 * ColR;
 		if (JambL - FrameT > BoundaryX(0))
@@ -470,7 +435,6 @@ namespace HutongGen
 		WoodTag.Close();
 		// Bounded: the 餘塞板 above are appended later and stay joinery.
 
-		// 門枕石 at the jamb feet, in the door plane on the centre line.
 		{
 			FSlotScope StoneTag(Mesh, MatSlot_Stone);
 			AppendDoorStonePair(Mesh, P.DoorStones, JambL, JambR,
@@ -479,7 +443,6 @@ namespace HutongGen
 			StoneTag.Close();
 		}
 
-		// 5) Roof.
 		Shell::FRoofParams Roof;
 		Roof.FrontOverhang = FMath::Max(P.RoofOverhang, 0.0);
 		Roof.RearOverhang = FMath::Max(P.RoofOverhang, 0.0);
@@ -495,13 +458,11 @@ namespace HutongGen
 		Roof.FasciaWidth = P.EaveFasciaWidth;
 		Roof.RafterSection = P.RafterEndSection;
 		Roof.RafterSpacing = P.RafterEndSpacing;
-		// 正脊 with 蠍子尾, as a gate house, unlike a dwelling.
 		Roof.bHasRidgeCourse = P.bHasRidgeCourse;
 		Roof.RidgeCourseHeight = P.RidgeCourseHeight;
 		Roof.RidgeCourseWidth = P.RidgeCourseWidth;
 		Roof.RidgeEndKick = P.RidgeEndKick;
 
-		// Spans front beam line to back; the ends are wooden 博風板, not a brick rake.
 		Roof.RakeDepth = 0.0;
 		Roof.bWoodenGable = true;
 		Roof.BargeboardDepth = HutongCanon::Roof::BargeboardInD * FMath::Max(P.ColumnDiameter, 2.0);

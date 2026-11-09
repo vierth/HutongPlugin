@@ -41,18 +41,15 @@ public:
 
 	void OpenWindow();
 
-	// The window's model.
 	const TArray<HutongCourts::FSummary>& GetCourts() const { return Courts; }
 	int32 GetCourtsRevision() const { return CourtsRevision; }
 	FString GetSelectionText() const { return SelectionText; }
 	int32 GetSelectedCount() const { return SeenSelection.Num(); }
-	// Whether a selected building is in that court.
 	bool IsSelectionIn(const FString& Court) const { return SelectedCourts.Contains(Court); }
 	FString GetCourtName() const { return CourtName; }
 	void SetCourtName(const FString& Name) { CourtName = Name; bNameSuggested = false; }
 
 	void SuggestName();
-	// The selection into the court named in the box: a new court, or an existing one by name.
 	void AssignNew();
 	void SelectCourt(const FString& Court);
 	void AddSelectedTo(const FString& Court);
@@ -66,7 +63,6 @@ protected:
 	virtual void SpawnFinalActor() override {}
 
 	UWorld* EditingWorld() const;
-	// The readout and, unless typed, the suggested name, when the selection changed.
 	void RefreshFromSelection(bool bForce);
 	void RefreshCourts();
 
@@ -80,7 +76,6 @@ protected:
 	FString SelectionText;
 	FString CourtName;
 	bool bNameSuggested = true;
-	// Set by an undo or a building's property edit; the list is rebuilt next tick.
 	bool bCourtsDirty = false;
 	FDelegateHandle UndoHandle;
 	FDelegateHandle PropertyHandle;

@@ -13,8 +13,7 @@ void OpenBayRange(int32 BayCount, int32 OpenBayCount, int32& OutLo, int32& OutHi
 {
 	const int32 Open = FMath::Clamp(OpenBayCount, 0, BayCount);
 	const int32 Mid = BayCount / 2;
-	// Outward from the middle, so a half-open shop opens at its centre; held inside the frontage (an even
-	// count centred on the upper middle bay ran one bay off the end and left bay 0 boarded).
+	// Outward from the middle, so a half-open shop opens at its centre; held inside the frontage.
 	OutLo = FMath::Clamp(Mid - (Open - 1) / 2, 0, FMath::Max(BayCount - Open, 0));
 	OutHi = OutLo + Open - 1;
 }
@@ -40,8 +39,7 @@ void AppendFront(FDynamicMesh3& Mesh, const TFunctionRef<double(int32)>& Boundar
 
 		if (bAnyOpen && i >= OpenLo && i <= OpenHi) continue;
 
-		// 排板門: loose boards in a grooved sill, every second set deeper; the stagger reads as boards, not a panel.
-		// Lacquered like door leaves, not the columns' wood.
+		// Every second board set deeper so the stagger reads as boards.
 		FSlotScope BoardTag(Mesh, MatSlot_DoorPaint);
 		const double Span = X1 - X0;
 		const int32 Boards = FMath::Max(FMath::RoundToInt32(Span / BoardW), 2);
@@ -56,7 +54,6 @@ void AppendFront(FDynamicMesh3& Mesh, const TFunctionRef<double(int32)>& Boundar
 		}
 	}
 
-	// 櫃檯 over the open bays as one run, the way in left at the low-X end.
 	if (!bAnyOpen || F.Counter == FFront::ECounter::None) return;
 	const double OX0 = BoundaryX(OpenLo) + 0.5 * ColumnRadius;
 	const double OX1 = BoundaryX(OpenHi + 1) - 0.5 * ColumnRadius;
@@ -74,8 +71,6 @@ void AppendFront(FDynamicMesh3& Mesh, const TFunctionRef<double(int32)>& Boundar
 		return;
 	}
 
-	// 曲尺櫃台: an arm parallel to the front behind the customers' floor, a return running back along the
-	// high-X side, the shopkeeper's side behind both, reached past the arm's open end.
 	const double Y0 = F.FaceY + InsideSetbackCm;
 	const double Back = F.FaceY + F.InsideDepth - WalkGapCm;
 	if (Y0 + CD > Back) return;
@@ -87,5 +82,5 @@ void AppendFront(FDynamicMesh3& Mesh, const TFunctionRef<double(int32)>& Boundar
 	}
 }
 
-} // namespace ShopBay
-} // namespace HutongGen
+}
+}

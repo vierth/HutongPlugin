@@ -14,7 +14,6 @@
 
 namespace
 {
-	// Is the user typing into a text field right now?
 	bool IsTypingIntoTextField()
 	{
 		if (!FSlateApplication::IsInitialized())
@@ -35,7 +34,6 @@ namespace
 	}
 }
 
-// Global key handling for the Place Labels tools.
 class FPlaceLabelsInputProcessor : public IInputProcessor
 {
 public:
@@ -68,7 +66,6 @@ public:
 
 	virtual bool HandleKeyDownEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
 	{
-		// Before anything else.
 		if (IsTypingIntoTextField())
 		{
 			return false;
@@ -86,7 +83,7 @@ public:
 			if (Key == EKeys::Escape)
 			{
 				Pen->CancelDrawing();
-				// Deliberately not consumed, so the tool system sees the Escape too.
+				// Left unconsumed so the tool system sees the Escape too.
 				return false;
 			}
 			if (Key == EKeys::BackSpace)
@@ -96,13 +93,11 @@ public:
 			}
 			if (Key == EKeys::Delete)
 			{
-				// Removes whichever corner is under the cursor.
 				Pen->DeleteHoveredPoint();
 				return true;
 			}
 			if (Key == EKeys::Enter)
 			{
-				// Enter finishes the stage: closes the outline, then commits the region.
 				if (Pen->IsAwaitingConfirm())
 				{
 					Pen->ConfirmRegion();
@@ -118,7 +113,6 @@ public:
 
 		if (UPlaceRegionEditTool* Edit = GetActiveEditTool())
 		{
-			// Everything below is conditional on the edit tool actually holding a region.
 			if (!Edit->HasTarget())
 			{
 				return false;
@@ -168,7 +162,6 @@ void UPlaceLabelsEdMode::Enter()
 {
 	Super::Enter();
 
-	// Regions draw, filled, only while the mode is up.
 	UPlaceRegionComponent::SetEditorDrawingVisible(true);
 
 	const FPlaceLabelsCommands& Commands = FPlaceLabelsCommands::Get();
@@ -180,11 +173,9 @@ void UPlaceLabelsEdMode::Enter()
 	RegisterTool(Commands.BeginEditTool, TEXT("PlaceRegionEditTool"),
 		NewObject<UPlaceRegionEditToolBuilder>(this));
 
-	// Opens on Select, not Pen.
 	GetToolManager()->SelectActiveToolType(EToolSide::Left, TEXT("PlaceRegionSelectTool"));
 
-	// The editor's context ends every tool before a save; ours hold no preview actors, so a save
-	// (autosave included) leaves a polygon being drawn alone.
+	// Ours hold no preview actors, so a save (autosave included) leaves a polygon being drawn alone.
 	if (UEditorInteractiveToolsContext* Context = GetInteractiveToolsContext(EToolsContextScope::Editor))
 	{
 		bContextEndedToolsOnSave = Context->GetDeactivateToolsOnSaveWorld();

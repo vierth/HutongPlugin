@@ -18,7 +18,6 @@ namespace HutongImportTypes
 
 namespace
 {
-	// One row of the dialog: a type the file names, and what to build for it.
 	struct FRow
 	{
 		FName Unknown;
@@ -50,12 +49,10 @@ bool ResolveUnknownTypes(HutongExchange::FSceneFile& File)
 {
 	TMap<FName, int32> Unknown;
 	HutongExchange::FindUnknownTypes(File, Unknown);
-	// A type the caller has already answered for is not asked about again.
 	for (auto It = Unknown.CreateIterator(); It; ++It)
 	{
 		if (File.TypeRemap.Contains(It.Key())) It.RemoveCurrent();
 	}
-	// Usually nothing to ask; that must not cost a dialog.
 	if (Unknown.Num() == 0) return true;
 
 	if (!FSlateApplication::IsInitialized() || GEditor == nullptr)
@@ -66,7 +63,6 @@ bool ResolveUnknownTypes(HutongExchange::FSceneFile& File)
 	TMap<FName, UClass*> Classes;
 	HutongExchange::GatherBuildingComponentClasses(Classes);
 
-	// "Skip these" first, then every type this build has, by name.
 	TArray<FName> Known;
 	Classes.GenerateKeyArray(Known);
 	Known.Sort(FNameLexicalLess());

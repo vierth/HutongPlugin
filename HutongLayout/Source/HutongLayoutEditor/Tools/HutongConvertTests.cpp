@@ -25,7 +25,6 @@ using UE::Geometry::FDynamicMesh3;
 
 namespace
 {
-	// A placement of this type, as a drag would leave it.
 	UHutongBuildingComponent* PlaceNamed(UWorld* World, UClass* Class, const FVector2D& Footprint,
 		const FTransform& Xform, const TCHAR* NameBase)
 	{
@@ -50,13 +49,12 @@ namespace
 	}
 }
 
-// Conversion keeps placement decisions (position, footprint, facing, id); everything else comes from the new type.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongConvertAcrossTypesTest, "HutongLayout.Convert.AcrossTypes",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FHutongConvertAcrossTypesTest::RunTest(const FString& Parameters)
 {
-	// Every type offered, and both kinds of a two-kind class (the wall): a class-only list would miss one.
+	// Both kinds of a two-kind class (the wall): a class-only list would miss one.
 	const TArray<HutongDetailOps::FConvertTarget>& Targets = HutongDetailOps::ConvertTargets();
 	TestTrue(TEXT("every building type is offered"), Targets.Num() >= 15);
 
@@ -73,7 +71,6 @@ bool FHutongConvertAcrossTypesTest::RunTest(const FString& Parameters)
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
-	// 鋪面房 → 房: different generator and params struct.
 	{
 		const FVector2D Footprint(1120.0, 640.0);
 		const FTransform Xform(FRotator(0.0, 23.0, 0.0), FVector(800.0, -200.0, 0.0));
@@ -106,13 +103,11 @@ bool FHutongConvertAcrossTypesTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the label names what it is now"),
 			Actor->GetActorLabel().Contains(TEXT("Siheyuan")));
 
-		// Mesh is the new type's, not the old one left standing.
 		const AStaticMeshActor* SMA = Cast<AStaticMeshActor>(Actor);
 		TestTrue(TEXT("it is built again"),
-			SMA && SMA->GetStaticMeshComponent() && SMA->GetStaticMeshComponent()->GetStaticMesh() != nullptr);
+			SMA && HutongGen::GetBuiltMeshComponent(SMA) && HutongGen::GetBuiltMeshComponent(SMA)->GetStaticMesh() != nullptr);
 	}
 
-	// 院牆 → 隔牆: one class, two kinds; conversion must pick.
 	{
 		UHutongBuildingComponent* Wall = PlaceNamed(World, LaneWall.Class, FVector2D(1400.0, 37.0),
 			FTransform::Identity, TEXT("ConvertWall"));
@@ -130,8 +125,7 @@ bool FHutongConvertAcrossTypesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// Undoing a conversion baked a default house onto a plan-only actor: the undone component reverts to
-// defaults (bPlanOnly false) and rebuilt on its way out. One Ctrl+Z must restore the original building.
+// An undone component reverts to defaults (bPlanOnly false) and rebuilds on its way out.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongConvertUndoTest, "HutongLayout.Convert.Undo",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -176,8 +170,8 @@ bool FHutongConvertUndoTest::RunTest(const FString& Parameters)
 				Buildings[0]->IsA(UHutongShopfrontBuildingComponent::StaticClass()));
 		}
 
-		const bool bHasMesh = SMA && SMA->GetStaticMeshComponent()
-			&& SMA->GetStaticMeshComponent()->GetStaticMesh() != nullptr;
+		const bool bHasMesh = SMA && HutongGen::GetBuiltMeshComponent(SMA)
+			&& HutongGen::GetBuiltMeshComponent(SMA)->GetStaticMesh() != nullptr;
 		if (bPlanOnly)
 		{
 			TestFalse(TEXT("a laid-out plan comes back with no geometry"), bHasMesh);
@@ -192,8 +186,6 @@ bool FHutongConvertUndoTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// A plan-only building has one outline and resize moves it. An undo can leave a second; only the first
-// was updated, the stray kept drawing the old footprint. Every outline must follow the resize.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanOutlineUniqueTest, "HutongLayout.Detail.PlanOutlineUnique",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -226,7 +218,6 @@ bool FHutongPlanOutlineUniqueTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("it carries the footprint"), Outlines[0]->Footprint.X, Footprint.X);
 
-	// Stray second outline, as an undo leaves it, at its original size.
 	UHutongPlanOutlineComponent* Stray = NewObject<UHutongPlanOutlineComponent>(
 		Actor, NAME_None, RF_Transactional);
 	Stray->SetupAttachment(Actor->GetRootComponent());
@@ -237,7 +228,6 @@ bool FHutongPlanOutlineUniqueTest::RunTest(const FString& Parameters)
 		FLinearColor::White);
 	TestEqual(TEXT("two outlines to start from"), OutlinesOn(Actor).Num(), 2);
 
-	// Resize through the drag's accessor.
 	const FVector2D Resized(400.0, 300.0);
 	B->SetFootprintSize(Resized);
 	B->ApplyPlanOutline();
@@ -252,7 +242,6 @@ bool FHutongPlanOutlineUniqueTest::RunTest(const FString& Parameters)
 		B->GetFootprintSize().X);
 	TestTrue(TEXT("and it is not the stray"), Outlines[0] != Stray);
 
-	// Built again, outline removed: geometry shows the footprint.
 	B->bPlanOnly = false;
 	B->ApplyPlanOutline();
 	TestEqual(TEXT("no outline on a built building"), OutlinesOn(Actor).Num(), 0);
@@ -261,8 +250,6 @@ bool FHutongPlanOutlineUniqueTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// Revert to plan: mesh off, outline on, params kept so regenerating gives the same building. Already
-// plan-only buildings are skipped and not counted.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRevertToPlanTest, "HutongLayout.Detail.RevertToPlan",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -288,7 +275,7 @@ bool FHutongRevertToPlanTest::RunTest(const FString& Parameters)
 	auto HasMesh = [](const UHutongBuildingComponent* B)
 	{
 		const AStaticMeshActor* SMA = Cast<AStaticMeshActor>(B->GetOwner());
-		return SMA && SMA->GetStaticMeshComponent() && SMA->GetStaticMeshComponent()->GetStaticMesh() != nullptr;
+		return SMA && HutongGen::GetBuiltMeshComponent(SMA) && HutongGen::GetBuiltMeshComponent(SMA)->GetStaticMesh() != nullptr;
 	};
 	auto OutlineCount = [](const UHutongBuildingComponent* B)
 	{
@@ -307,7 +294,7 @@ bool FHutongRevertToPlanTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("it draws one outline"), OutlineCount(Built), 1);
 	TestEqual(TEXT("the footprint is kept"), Built->GetFootprintSize().X, Footprint.X);
 
-	const int32 Generated = HutongDetailOps::GeneratePlanned({ Built });
+	const int32 Generated = HutongDetailOps::GeneratePlanned({ Built }, /*bAsk*/ false);
 	TestEqual(TEXT("generating brings it back"), Generated, 1);
 	TestTrue(TEXT("with a mesh"), HasMesh(Built));
 	TestEqual(TEXT("and no outline"), OutlineCount(Built), 0);
@@ -316,8 +303,6 @@ bool FHutongRevertToPlanTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// What P / T would throw away: nothing on a building as its preset laid it, the field a student
-// moved once they move it, and every type found again by its own label.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongConvertCustomizedTest,
 	"HutongLayout.Convert.Customized",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -325,7 +310,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongConvertCustomizedTest,
 bool FHutongConvertCustomizedTest::RunTest(const FString& Parameters)
 {
 	const TArray<HutongDetailOps::FConvertTarget>& Targets = HutongDetailOps::ConvertTargets();
-	// Kin side by side for T: house, ear room, shop in a row at the head.
 	auto At = [&](UClass* C) { return Targets.IndexOfByPredicate([C](const HutongDetailOps::FConvertTarget& T) { return T.Class == C; }); };
 	TestEqual(TEXT("the house heads the types"), At(UHutongSiheyuanBuildingComponent::StaticClass()), 0);
 	TestEqual(TEXT("the ear room next"), At(UHutongEarPassageBuildingComponent::StaticClass()), 1);
@@ -360,7 +344,6 @@ bool FHutongConvertCustomizedTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// A moved field is named, inside nested params too.
 	{
 		UHutongSiheyuanBuildingComponent* House = NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
 		House->Preset = TEXT("Main Hall (正房)");
@@ -368,7 +351,6 @@ bool FHutongConvertCustomizedTest::RunTest(const FString& Parameters)
 		House->Params.bHasFrontDoorCenter = !House->Params.bHasFrontDoorCenter;
 		TestEqual(TEXT("one field moved, one named"), HutongDetailOps::CustomizedFields(House),
 			TArray<FString>{ TEXT("Has Front Door") });
-		// A preset that no longer exists measures against the type's defaults.
 		House->Preset = TEXT("No Such Preset");
 		TestTrue(TEXT("a vanished preset leaves the values standing as customized"), HutongDetailOps::CustomizedFields(House).Num() > 1);
 	}
@@ -379,7 +361,6 @@ bool FHutongConvertCustomizedTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("a nested field is named under its group"), Fields.Num() == 1 && Fields[0].Contains(TEXT(" › ")));
 	}
 
-	// What the drag wrote is not a customization: a corridor's walk, a jar's belly, a snapped 下鹼.
 	{
 		UHutongCorridorBuildingComponent* Corridor = NewObject<UHutongCorridorBuildingComponent>(GetTransientPackage());
 		Corridor->Params.Width = Corridor->Params.WalkWidthFromFootprint(190.0);
@@ -395,14 +376,12 @@ bool FHutongConvertCustomizedTest::RunTest(const FString& Parameters)
 		House->SetBaseCourseTop(House->GetBaseCourseTop() + 12.0);
 		TestEqual(TEXT("a neighbour's base course line is not customized"), HutongDetailOps::CustomizedFields(House).Num(), 0);
 
-		// Another preset lands as if drawn: the line kept, nothing reads as customized after.
 		const double Top = House->GetBaseCourseTop();
 		TestTrue(TEXT("the side house preset applies"), HutongDetailOps::ApplyPresetAsDrawn(House, TEXT("Side House (廂房)")));
 		TestEqual(TEXT("the building now names it"), House->Preset, FString(TEXT("Side House (廂房)")));
 		TestNearlyEqual(TEXT("the base course line stays"), House->GetBaseCourseTop(), Top, 0.5);
 		TestEqual(TEXT("as drawn, nothing customized"), HutongDetailOps::CustomizedFields(House).Num(), 0);
 
-		// A house turned corridor takes the walk its footprint leaves, as the tool would.
 		House->FootprintX = 900.0;
 		House->FootprintY = 230.0;
 		const UHutongBuildingComponent* AsCorridor = HutongDetailOps::MakeAsDrawn(*House, UHutongCorridorBuildingComponent::StaticClass(), NAME_None, FString());
@@ -412,7 +391,6 @@ bool FHutongConvertCustomizedTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// The bays are what the map attests: P and T keep the count drawn, forced or not.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongConvertBayCountTest, "HutongLayout.Convert.BayCount",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -425,7 +403,6 @@ bool FHutongConvertBayCountTest::RunTest(const FString& Parameters)
 		return Bays.Boundaries.Num() - 1;
 	};
 
-	// Another preset: a forced count stays forced; a derived one is held where the new limits differ.
 	for (const int32 Forced : { 0, 5 })
 	{
 		UHutongSiheyuanBuildingComponent* House = NewObject<UHutongSiheyuanBuildingComponent>(GetTransientPackage());
@@ -442,7 +419,6 @@ bool FHutongConvertBayCountTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// Another type: the count carries across generators.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 	{
@@ -464,8 +440,6 @@ bool FHutongConvertBayCountTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// A locked building is kept as it is: every automatic or bulk change leaves its mesh, type, size and
-// facing alone, and unlocking does not rebuild over the finished work.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongLockTest, "HutongLayout.Detail.Lock",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -482,7 +456,7 @@ bool FHutongLockTest::RunTest(const FString& Parameters)
 	if (!TestNotNull(TEXT("placed"), Locked) || !TestNotNull(TEXT("placed"), Free)) { World->DestroyWorld(false); return false; }
 
 	AStaticMeshActor* LockedActor = Cast<AStaticMeshActor>(Locked->GetOwner());
-	UStaticMeshComponent* SMC = LockedActor->GetStaticMeshComponent();
+	UStaticMeshComponent* SMC = HutongGen::GetBuiltMeshComponent(LockedActor);
 	const UStaticMesh* Mesh = SMC->GetStaticMesh();
 	// The student's own material on the mesh: a rebuild would put the palette's back.
 	UMaterialInterface* Theirs = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineMaterials/WorldGridMaterial.WorldGridMaterial"));
@@ -508,7 +482,6 @@ bool FHutongLockTest::RunTest(const FString& Parameters)
 	TestNull(TEXT("not converted"), HutongDetailOps::ConvertBuilding(Locked, House, FString()));
 	TestTrue(TEXT("still a shop"), Locked->IsA<UHutongShopfrontBuildingComponent>() && IsValid(Locked));
 
-	// Its own parameters edited in Details: nothing rebuilds while locked.
 	Locked->Modify();
 	Locked->SetFootprintSize(FVector2D(800.0, 600.0));
 	FPropertyChangedEvent Edit(nullptr);
@@ -516,7 +489,6 @@ bool FHutongLockTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the mesh is the one it had"), SMC->GetStaticMesh() == Mesh);
 	TestTrue(TEXT("its own material stays"), SMC->GetMaterial(0) == Theirs);
 
-	// Unlocking rebuilds nothing by itself.
 	Locked->bLocked = false;
 	FProperty* LockProp = FindFProperty<FProperty>(UHutongBuildingComponent::StaticClass(), GET_MEMBER_NAME_CHECKED(UHutongBuildingComponent, bLocked));
 	FPropertyChangedEvent Unlock(LockProp, EPropertyChangeType::ValueSet);
@@ -527,8 +499,6 @@ bool FHutongLockTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// Make Mesh Unique, and locking: the building gets a copy of its mesh of its own (outered to it), the shared
-// mesh untouched, the student's materials kept.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongMakeMeshUniqueTest, "HutongLayout.Detail.MakeMeshUnique",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -540,8 +510,8 @@ bool FHutongMakeMeshUniqueTest::RunTest(const FString& Parameters)
 	UHutongBuildingComponent* A = PlaceNamed(World, UHutongShopfrontBuildingComponent::StaticClass(), Footprint, FTransform::Identity, TEXT("UniqueA"));
 	UHutongBuildingComponent* B = PlaceNamed(World, UHutongShopfrontBuildingComponent::StaticClass(), Footprint, FTransform(FVector(3000.0, 0.0, 0.0)), TEXT("UniqueB"));
 	if (!TestNotNull(TEXT("placed"), A) || !TestNotNull(TEXT("placed"), B)) { World->DestroyWorld(false); return false; }
-	UStaticMeshComponent* SA = Cast<AStaticMeshActor>(A->GetOwner())->GetStaticMeshComponent();
-	UStaticMeshComponent* SB = Cast<AStaticMeshActor>(B->GetOwner())->GetStaticMeshComponent();
+	UStaticMeshComponent* SA = HutongGen::GetBuiltMeshComponent(Cast<AStaticMeshActor>(A->GetOwner()));
+	UStaticMeshComponent* SB = HutongGen::GetBuiltMeshComponent(Cast<AStaticMeshActor>(B->GetOwner()));
 	TestTrue(TEXT("identical buildings share one mesh"), SA->GetStaticMesh() == SB->GetStaticMesh());
 	UStaticMesh* Shared = SA->GetStaticMesh();
 	UMaterialInterface* Theirs = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineMaterials/WorldGridMaterial.WorldGridMaterial"));
@@ -553,7 +523,6 @@ bool FHutongMakeMeshUniqueTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("A's material kept"), SA->GetMaterial(0) == Theirs);
 	TestTrue(TEXT("A rebuilds its own from now on"), A->bBespokeMesh);
 
-	// Locking B makes it unique too.
 	B->bLocked = true;
 	FProperty* LockProp = FindFProperty<FProperty>(UHutongBuildingComponent::StaticClass(), GET_MEMBER_NAME_CHECKED(UHutongBuildingComponent, bLocked));
 	FPropertyChangedEvent Lock(LockProp, EPropertyChangeType::ValueSet);
@@ -571,7 +540,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanSharedEdgeTest, "HutongLayout.Detail
 
 bool FHutongPlanSharedEdgeTest::RunTest(const FString& Parameters)
 {
-	// A gate flush with its house: one edge, drawn by the gate alone.
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false);
 	if (!TestNotNull(TEXT("a world to place into"), World)) return false;
 
@@ -653,8 +621,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanMaterialTest, "HutongLayout.Detail.P
 
 bool FHutongPlanMaterialTest::RunTest(const FString& Parameters)
 {
-	// The plan layer's material is made in code, its line widening a custom HLSL node: a compile error
-	// shows only with shaders, so under -nullrhi this says so and passes. Waits for the background compile.
+	// A custom HLSL node's compile error shows only with shaders; under -nullrhi this passes.
 	UMaterial* Material = HutongPlanOutline::GetPlanMaterial();
 	if (!Material)
 	{
@@ -682,7 +649,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongPlanLayerDrawsTest, "HutongLayout.Detail
 
 bool FHutongPlanLayerDrawsTest::RunTest(const FString& Parameters)
 {
-	// Two plans seen from above by a scene capture: the layer's fills and lines must reach the picture.
 	// Needs shaders: under -nullrhi this says so and passes.
 	if (!HutongPlanOutline::GetPlanMaterial())
 	{
@@ -696,7 +662,6 @@ bool FHutongPlanLayerDrawsTest::RunTest(const FString& Parameters)
 		UHutongBuildingComponent* B = PlaceNamed(World, UHutongSiheyuanBuildingComponent::StaticClass(),
 			FVector2D(900.0, 600.0), FTransform(At), At.IsZero() ? TEXT("DrawnHouseA") : TEXT("DrawnHouseB"));
 		if (!TestNotNull(TEXT("a house places"), B)) { World->DestroyWorld(false); return false; }
-		// Laid out: no mesh over the plan (the house would hide it).
 		B->bPlanOnly = true;
 		B->Rebuild();
 		B->ApplyPlacementAttachments();
@@ -767,7 +732,6 @@ bool FHutongPlanLayerDrawsTest::RunTest(const FString& Parameters)
 			Capture->OrthoWidth = 1200.0f;
 			Save(TEXT("plan_ortho_zoomed.png"));
 		}
-		// The house colour is dark blue: blue well over red, and over the black of the empty world.
 		const int32 Blue = Algo::CountIf(Pixels, [](const FLinearColor& P) { return P.B > 0.01f && P.B > 2.0f * P.R; });
 		const int32 Lit = Algo::CountIf(Pixels, [](const FLinearColor& P) { return P.R + P.G + P.B > 0.001f; });
 		float MaxBlue = 0.0f;

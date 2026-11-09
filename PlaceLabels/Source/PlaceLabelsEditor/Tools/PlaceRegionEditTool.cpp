@@ -20,12 +20,10 @@
 
 namespace
 {
-	// Handles are sized and picked in pixels, then converted to world units per point.
 	constexpr double HandlePickPixels = 13.0;
 	constexpr double HandleDrawPixels = 12.0;
 	constexpr double InsertDrawPixels = 9.0;
 
-	// Below this the polygon stops being one.
 	constexpr int32 MinCorners = 3;
 }
 
@@ -78,7 +76,6 @@ void UPlaceRegionEditTool::Setup()
 	ClickDragBehavior = NewObject<UClickDragInputBehavior>(this);
 	ClickDragBehavior->Initialize(this);
 
-	// Track modifiers through the drag, not just at press.
 	ClickDragBehavior->bUpdateModifiersDuringDrag = true;
 	AddInputBehavior(ClickDragBehavior);
 
@@ -90,7 +87,6 @@ void UPlaceRegionEditTool::Setup()
 	RegisterSettings(Settings);
 	Settings->OwningTool = this;
 
-	// Mirrors the region being edited.
 	TargetPanel = NewObject<UPlaceRegionEditTargetProperties>(this);
 	RegisterSettings(TargetPanel, /*bPersist*/ false);
 	TargetPanel->OwningTool = this;
@@ -141,7 +137,7 @@ void UPlaceRegionEditTool::OnTick(float DeltaTime)
 	}
 	TimeSinceCacheRefresh = 0.0;
 
-	// Not mid-drag: the dragged corner's snap targets would change under it.
+	// Mid-drag the cache holds still: the dragged corner's snap targets would change under it.
 	if (bDragging)
 	{
 		return;
@@ -156,7 +152,6 @@ void UPlaceRegionEditTool::OnTick(float DeltaTime)
 		PushTargetToPanel();
 	}
 
-	// The target can be deleted under the tool; drop it so the panel does not describe a dead region.
 	if (!TargetRegion.IsValid() && TargetPanel && TargetPanel->CornerCount > 0)
 	{
 		ClearTarget();
@@ -166,7 +161,6 @@ void UPlaceRegionEditTool::OnTick(float DeltaTime)
 
 void UPlaceRegionEditTool::RefreshCachedRegions()
 {
-	// Snapping wants something to snap to.
 	PlaceLabelsEdit::GatherRegions(GetTargetWorld(), CachedRegions, /*bOnlyWithUsableOutline*/ true);
 }
 
@@ -208,7 +202,6 @@ UPlaceRegionComponent* UPlaceRegionEditTool::PickRegionAt(const FVector& WorldPo
 {
 	const FVector2D XY(WorldPoint.X, WorldPoint.Y);
 
-	// Containment first, smallest wins.
 	UPlaceRegionComponent* BestContaining = nullptr;
 	double BestArea = TNumericLimits<double>::Max();
 
@@ -230,7 +223,7 @@ UPlaceRegionComponent* UPlaceRegionEditTool::PickRegionAt(const FVector& WorldPo
 			BestContaining = Region;
 		}
 
-		// Near the edge but outside still counts, or a ring around a courtyard is unselectable from inside it.
+		// Near the edge outside still counts, so a ring around a courtyard is selectable from inside it.
 		const PlaceLabelsEdit::FEdgeHit Hit =
 			PlaceLabelsEdit::ClosestEdge(Region->GetWorldPoints2D(), XY, /*bClosed*/ true);
 		if (Hit.EdgeIndex != INDEX_NONE && Hit.DistSq < BestNearDistSq
@@ -310,13 +303,12 @@ void UPlaceRegionEditTool::ApplyTargetProperties(FName ChangedProperty)
 		return;
 	}
 
-	// NAME_None: everything.
 	auto Wants = [&ChangedProperty](const TCHAR* Field)
 	{
 		return ChangedProperty.IsNone() || ChangedProperty == FName(Field);
 	};
 
-	// FPlaceName's three FTexts arrive as the inner property's name, not as "Name".
+	// FPlaceName's three FTexts arrive under the inner property's name.
 	const bool bNameChanged = Wants(TEXT("Name")) || ChangedProperty == FName(TEXT("Chinese"))
 		|| ChangedProperty == FName(TEXT("Pinyin")) || ChangedProperty == FName(TEXT("English"));
 
@@ -335,13 +327,11 @@ void UPlaceRegionEditTool::ApplyTargetProperties(FName ChangedProperty)
 		Owner->SetActorLabel(Owner->GetDefaultActorLabel());
 	}
 
-	// Type drives the parenting rule.
 	if (bTypeChanged && Region->bAutoParent && !Region->ExplicitParent)
 	{
 		Region->RecomputeDerivedParent();
 	}
 
-	// Outline colour depends on type and completeness.
 	Region->MarkRenderStateDirty();
 
 	ToolManager->EndUndoTransaction();
@@ -365,7 +355,6 @@ void UPlaceRegionEditTool::CommitPointEdit(const FText& TransactionName)
 		return;
 	}
 
-	// Already applied to LocalPoints for live preview.
 	TArray<FVector2D> Final = Region->LocalPoints;
 	if (Final == PreEditLocalPoints)
 	{
@@ -411,7 +400,6 @@ void UPlaceRegionEditTool::DeleteSelectedCorners()
 		return;
 	}
 
-	// Refuse rather than repair a degenerate polygon; the selection stays visible.
 	if (Region->LocalPoints.Num() - SelectedCorners.Num() < MinCorners)
 	{
 		GetToolManager()->DisplayMessage(
@@ -424,7 +412,7 @@ void UPlaceRegionEditTool::DeleteSelectedCorners()
 	BeginPointEdit();
 
 	TArray<int32> Indices = SelectedCorners.Array();
-	// Descending, so removals do not shift pending indices.
+	// Descending, so removals keep pending indices valid.
 	Indices.Sort([](int32 A, int32 B) { return A > B; });
 	for (int32 Index : Indices)
 	{
@@ -466,7 +454,6 @@ void UPlaceRegionEditTool::WeldTargetToNeighbours()
 		return;
 	}
 
-	// Only the neighbours whose bounds come within tolerance.
 	TArray<UPlaceRegionComponent*> Group;
 	Group.Add(Region);
 
@@ -540,7 +527,6 @@ void UPlaceRegionEditTool::UpdateHoverState(const FVector& WorldHit)
 	const double PickRadius = PickRadiusAt(WorldHit);
 	const double PickRadiusSq = PickRadius * PickRadius;
 
-	// Corner beats edge: at a corner both handles overlap.
 	double CornerDistSq = TNumericLimits<double>::Max();
 	const int32 NearestCorner = PlaceLabelsEdit::ClosestVertex(World, XY, CornerDistSq);
 	if (NearestCorner != INDEX_NONE && CornerDistSq <= PickRadiusSq)
@@ -561,7 +547,6 @@ void UPlaceRegionEditTool::UpdateHoverState(const FVector& WorldHit)
 		return;
 	}
 
-	// Not near this boundary: try switching to another region under the cursor.
 	if (UPlaceRegionComponent* Under = PickRegionAt(WorldHit))
 	{
 		if (Under != Region)
@@ -613,7 +598,6 @@ void UPlaceRegionEditTool::OnClickPress(const FInputDeviceRay& PressPos)
 		return;
 	}
 
-	// Ctrl extends the selection; a plain press on an unselected corner replaces it.
 	if (Mods.IsControlDown())
 	{
 		if (SelectedCorners.Contains(HoverCorner))
@@ -670,7 +654,6 @@ void UPlaceRegionEditTool::OnClickDrag(const FInputDeviceRay& DragPos)
 	FVector Target = Hit;
 	SnapDetail.Reset();
 
-	// Snapping applies to the corner actually under the cursor.
 	if (!Mods.IsAltDown() && Settings)
 	{
 		TArray<FVector> OwnWorld;
@@ -717,7 +700,6 @@ void UPlaceRegionEditTool::OnClickDrag(const FInputDeviceRay& DragPos)
 			Region->LocalPoints[Index] = DragStartLocalPoints[Index] + Delta;
 		}
 	}
-	// The dragged corner itself lands exactly on the snap target.
 	Region->LocalPoints[HoverCorner] = NewPoint;
 
 	Region->RebuildCache();
@@ -760,7 +742,6 @@ void UPlaceRegionEditTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 
 	UPlaceRegionComponent* Region = TargetRegion.Get();
 
-	// No region in hand: this click picks one.
 	if (!Region)
 	{
 		if (UPlaceRegionComponent* Picked = PickRegionAt(Hit))
@@ -774,7 +755,6 @@ void UPlaceRegionEditTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 	{
 	case EHover::Corner:
 	{
-		// Alt-click removes.
 		if (Mods.IsAltDown())
 		{
 			SelectedCorners.Reset();
@@ -796,7 +776,6 @@ void UPlaceRegionEditTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 		const FTransform& Xf = Region->GetComponentTransform();
 		const FVector Local = Xf.InverseTransformPosition(HoverPoint);
 
-		// At the click position, not at the midpoint.
 		const int32 NewIndex = HoverEdge + 1;
 		Region->LocalPoints.Insert(FVector2D(Local.X, Local.Y), NewIndex);
 		Region->RebuildCache();
@@ -817,7 +796,6 @@ void UPlaceRegionEditTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 
 	case EHover::None:
 	default:
-		// Clear ground drops the region: out is the same gesture as in.
 		SelectedCorners.Reset();
 		ClearTarget();
 		break;
@@ -826,7 +804,6 @@ void UPlaceRegionEditTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 
 void UPlaceRegionEditTool::OnTerminateDragSequence()
 {
-	// Aborted mid-drag: restore the geometry.
 	if (bDragging && bDragMoved)
 	{
 		if (UPlaceRegionComponent* Region = TargetRegion.Get())
@@ -896,7 +873,6 @@ void UPlaceRegionEditTool::Render(IToolsContextRenderAPI* RenderAPI)
 		return;
 	}
 
-	// Cache the camera so hover picking sizes handles as drawn.
 	{
 		const FViewCameraState Camera = RenderAPI->GetCameraState();
 		CameraPosition = Camera.Position;
@@ -922,7 +898,6 @@ void UPlaceRegionEditTool::Render(IToolsContextRenderAPI* RenderAPI)
 
 	const UPlaceRegionComponent* Target = TargetRegion.Get();
 
-	// Every other region, dimmed.
 	if (Settings && Settings->bShowOtherRegions)
 	{
 		for (const TWeakObjectPtr<UPlaceRegionComponent>& Weak : CachedRegions)
@@ -955,7 +930,6 @@ void UPlaceRegionEditTool::Render(IToolsContextRenderAPI* RenderAPI)
 		}
 	}
 
-	// Seams: every boundary pair that nearly meets.
 	if (Settings && Settings->bHighlightSeams)
 	{
 		for (const PlaceLabelsTopology::FSeamIssue& Seam : CachedSeams)
@@ -969,7 +943,6 @@ void UPlaceRegionEditTool::Render(IToolsContextRenderAPI* RenderAPI)
 
 			const double Z = A->GetComponentLocation().Z;
 
-			// The same call the report came from.
 			TArray<PlaceLabelsTopology::FSeamMark> Marks;
 			PlaceLabelsTopology::FindSeamMarks(A->GetWorldPoints2D(), B->GetWorldPoints2D(),
 				Settings->WeldTolerance, Marks);
@@ -979,7 +952,6 @@ void UPlaceRegionEditTool::Render(IToolsContextRenderAPI* RenderAPI)
 				const FVector From(Mark.From.X, Mark.From.Y, Z);
 				const FVector To(Mark.To.X, Mark.To.Y, Z);
 
-				// Gap too small to see from map height.
 				PlaceLabelsEdit::DrawCrossOutHandle(PDI, From, PlaceLabelsEdit::WarningColor,
 					HandleSizeAt(From) * 1.2, 3.0f);
 				PlaceLabelsEdit::DrawCrossOutHandle(PDI, To, PlaceLabelsEdit::WarningColor,
@@ -994,7 +966,6 @@ void UPlaceRegionEditTool::Render(IToolsContextRenderAPI* RenderAPI)
 		return;
 	}
 
-	// The region in hand, at full strength with its corners exposed.
 	const TArray<FVector2D>& Points = Target->GetWorldPoints2D();
 	const int32 N = Points.Num();
 	if (N < 2)
@@ -1021,7 +992,6 @@ void UPlaceRegionEditTool::Render(IToolsContextRenderAPI* RenderAPI)
 			? FSlateApplication::Get().GetModifierKeys()
 			: FModifierKeysState();
 
-		// Hovering a corner with Alt held shows the removal cross.
 		if (bHovered && Mods.IsAltDown())
 		{
 			PlaceLabelsEdit::DrawCrossOutHandle(PDI, P, PlaceLabelsEdit::DeleteColor,
@@ -1035,7 +1005,6 @@ void UPlaceRegionEditTool::Render(IToolsContextRenderAPI* RenderAPI)
 		PlaceLabelsEdit::DrawCrossHandle(PDI, P, Color, Size, bHovered ? 5.0f : 3.0f);
 	}
 
-	// Where a corner would be inserted.
 	if (HoverKind == EHover::Edge && !bDragging)
 	{
 		PlaceLabelsEdit::DrawDiamondHandle(PDI, HoverPoint, PlaceLabelsEdit::InsertColor,
@@ -1065,7 +1034,6 @@ void UPlaceRegionEditTool::DrawHUD(FCanvas* Canvas, IToolsContextRenderAPI* Rend
 	const float DPIScale = FMath::Max(Canvas->GetDPIScale(), UE_KINDA_SMALL_NUMBER);
 	Pixel /= DPIScale;
 
-	// The Slate font rather than UEngine::GetMediumFont().
 	const FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle("Regular", 10);
 
 	FCanvasTextItem Prompt(FVector2D(Pixel.X + 16.0, Pixel.Y - 40.0), GetStagePromptText(), Font,

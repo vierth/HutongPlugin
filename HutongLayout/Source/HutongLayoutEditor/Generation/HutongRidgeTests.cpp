@@ -7,8 +7,6 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// Each roofed type's ridge estimate vs its built roof and massing block: the block (no ridge course)
-// lands on the estimate; the building stands on it by the course height.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHutongRidgeEstimatesTest,
 	"HutongLayout.Roofs.RidgeEstimates",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -83,7 +81,6 @@ bool FHutongRidgeEstimatesTest::RunTest(const FString& Parameters)
 	}
 	{
 		FHutongPavilionParams P;
-		// The 寶頂 on the apex is not the ridge.
 		P.bHasFinial = false;
 		Cases.Add({ TEXT("pavilion"), HutongGen::Ridge::Pavilion(P, 300.0, 300.0), 300.0, 300.0,
 			[P](FDynamicMesh3& M, EHutongDetail L) { UHutongPavilionBuildingComponent::BuildPavilionMesh(P, 300.0, 300.0, M, L); } });

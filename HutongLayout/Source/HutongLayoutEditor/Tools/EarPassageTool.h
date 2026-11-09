@@ -16,7 +16,6 @@ public:
 	UPROPERTY(EditAnywhere, Category="Ear Room", meta=(ShowOnlyInnerProperties, ToolTip="Parameters of the ear room (耳房) and any covered passage (過道) beside or through it."))
 	FHutongEarPassageParams Params;
 
-	// Clamps contradictory room values as the house tool does.
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 };
 
@@ -45,7 +44,6 @@ protected:
 	virtual TArray<FText> GetToolHelpLines() const override;
 	virtual FText GetKeyHintText() const override;
 
-	// Settings' params with the drag's footprint filled in.
 	FHutongEarPassageParams GetResolvedParams() const;
 
 	virtual void OnPlacementStarted(const FVector& HitWorld) override;

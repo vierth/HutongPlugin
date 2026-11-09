@@ -93,7 +93,7 @@ struct FHutongSiheyuanParams
 		return bDeriveProportions ? GetCanonicalDepth() : 0.0;
 	}
 
-	// Snaps a dragged extent to the nearest suggestion; FrontageExtra is what a composition adds beside the room.
+	// FrontageExtra: what a composition adds beside the room.
 	double SnapExtent(double Extent, double FrontageExtra = 0.0) const
 	{
 		if (!bSnapToSuggested) return Extent;
@@ -114,8 +114,6 @@ struct FHutongSiheyuanParams
 		return Best;
 	}
 
-	// After a panel edit: resolves contradictions the generator would clamp silently by pushing the
-	// field the user did not touch, so the panel shows what is built.
 	void ClampAfterEdit(FName Changed)
 	{
 		if (Changed == TEXT("MinBayWidth"))      MaxBayWidth = FMath::Max(MaxBayWidth, MinBayWidth);
@@ -128,11 +126,10 @@ struct FHutongSiheyuanParams
 		WindowTopHeight = FMath::Min(WindowTopHeight, DoorTopHeight);
 		FloorHeight = FMath::Min(FloorHeight, EaveHeight * 0.2);
 
-		// Door leaves end below the lintel, or the transom inverts.
+		// Door leaves end below the lintel so the transom stays upright.
 		DoorLeafTopHeight = FMath::Clamp(DoorLeafTopHeight, FloorHeight + 50.0,
 			FMath::Max(FloorHeight + 60.0, DoorTopHeight - DoorFrameThickness));
 
-		// A doorway the player cannot walk through is a bug.
 		if (bHasFrontDoorCenter)
 		{
 			if (!bDeriveProportions)
@@ -360,8 +357,21 @@ struct FHutongSiheyuanParams
 		if (BayCount <= 0) return 0;
 		return (DoorBayIndex < 0) ? BayCount / 2 : FMath::Clamp(DoorBayIndex, 0, BayCount - 1);
 	}
+	// Back on the middle bay it centres again, so a later bay count keeps it there.
+	bool StepDoorBay(int32 Delta, int32 BayCount)
+	{
+		if (!CanStepDoorBay(Delta, BayCount)) return false;
+		const int32 Next = FMath::Clamp(GetDoorBayIndex(BayCount) + Delta, 0, BayCount - 1);
+		DoorBayIndex = Next == BayCount / 2 ? -1 : Next;
+		return true;
+	}
+	bool CanStepDoorBay(int32 Delta, int32 BayCount) const
+	{
+		if (!bHasFrontDoorCenter || BayCount < 2) return false;
+		const int32 Current = GetDoorBayIndex(BayCount);
+		return FMath::Clamp(Current + Delta, 0, BayCount - 1) != Current;
+	}
 
-	// Lowest eave carrying a walkable doorway; zero with no front door.
 	double GetMinEaveHeight() const
 	{
 		if (!bHasFrontDoorCenter)
@@ -371,7 +381,6 @@ struct FHutongSiheyuanParams
 		namespace J = HutongCanon::Joinery;
 		if (!bDeriveProportions)
 		{
-			// No frame: the bay is open to the lintel, so only clearance counts.
 			const double Need = bHasDoorFrame
 				? FMath::Clamp(DoorThresholdHeight, 0.0, 40.0) + HutongGen::Passage::MinClearHeight + FMath::Max(DoorFrameThickness, 2.0)
 				: HutongGen::Passage::MinClearHeight;
@@ -382,7 +391,7 @@ struct FHutongSiheyuanParams
 		const double Need = HutongGen::Passage::MinClearHeight;
 		const double Rail = GetHeadRailInD();
 		const double Sill = bHasDoorFrame ? J::LowerSillInD : 0.0;
-		// A held floor does not scale with the eave: the headroom is bought above it.
+		// A held floor stays put as the eave moves: the headroom is bought above it.
 		if (FloorHeightHeldAt > 0.0)
 		{
 			return HutongGen::Proportions::MinEaveForHeadroomOnFloor(Need, FloorHeightHeldAt,
@@ -437,16 +446,13 @@ struct FHutongSiheyuanParams
 			: HutongGen::ComputeBayCount(Width, MinBayWidth, MaxBayWidth);
 	}
 
-	// 明間面闊, the module for 檐柱高; same arithmetic as BayBoundary.
 	double GetCentralBayWidth() const
 	{
 		return HutongGen::CentralBayWidth(Width, GetBayCount(),
 			bDeriveProportions ? SideBayWidthRatio : 1.0);
 	}
 
-	// 檐柱高 = 8/10 明間面闊, via the same platform-and-column solve as GetFloorHeight, held within
-	// DerivedEaveBandShare of the type's eave (GetTypeEaveHeight): the drawn width sets the bays, the
-	// type sets the height, so near-equal footprints stand near-equal.
+	// 檐柱高 = 8/10 明間面闊, held within DerivedEaveBandShare of the type's eave so near-equal footprints stand near-equal.
 	double GetEaveHeightFromBays() const
 	{
 		const double Drawn = EaveFromCentralBay(GetCentralBayWidth());
@@ -456,7 +462,6 @@ struct FHutongSiheyuanParams
 		return FMath::Clamp(Drawn, Type * (1.0 - Band), Type * (1.0 + Band));
 	}
 
-	// The eave the rule gives at the type's frontage; zero without one.
 	double GetTypeEaveHeight() const
 	{
 		const double Frontage = TypeFrontage > 0.0 ? TypeFrontage : SuggestedFrontage;
@@ -491,16 +496,13 @@ struct FHutongSiheyuanParams
 			ColumnHeightInDiameters, PlatformHeightInDiameters);
 	}
 
-	// 柱高: platform top to eave.
 	double GetColumnHeight() const
 	{
 		return FMath::Max(GetEaveHeight() - GetFloorHeight(), 1.0);
 	}
 
-	// Column radius as the generator floors it.
 	double GetColumnRadius() const { return FMath::Max(0.5 * GetColumnDiameter(), 1.0); }
 
-	// Pier projection: at least covers the corner column.
 	double GetChitouProjection() const
 	{
 		return HutongGen::Proportions::ChitouProjection(ChitouProjection, GetColumnRadius());
@@ -536,7 +538,6 @@ struct FHutongSiheyuanParams
 			: FMath::Max(RearRoofOverhang, 0.0);
 	}
 
-	// 廊步: facade setback from the outer column line.
 	double GetVerandaDepth() const
 	{
 		if (!bHasFrontVeranda) return 0.0;
@@ -544,23 +545,18 @@ struct FHutongSiheyuanParams
 											 : VerandaDepth, 0.0);
 	}
 
-	// 後廊: rear 金柱 one 廊步 in from the back wall (on the 後檐柱 line).
 	double GetRearVerandaDepth() const
 	{
 		return (bHasFrontVeranda && bHasRearVeranda) ? GetVerandaDepth() : 0.0;
 	}
 
-	// 廊步 built on this depth, front and rear: under four column radii two rows' curved faces z-fight,
-	// and verandas never eat the room.
+	// At least four column radii: closer, two rows' curved faces z-fight.
 	void GetBuiltVerandaDepths(double InDepth, double WallT, double& OutFront, double& OutRear) const
 	{
 		const double MinRow = 4.0 * GetColumnRadius();
-		// The facade and back walls (表十二) where derived; else the thickness asked.
 		const double Walls = bDeriveProportions ? GetFacadeWallThickness() + GetRearWallThickness() : 2.0 * WallT;
 		const double Room = FMath::Max(InDepth - Walls - 100.0, 0.0);
-		// 徹上明造: the 廊 on the frame's own lines, evenly spaced across the depth (FrameLayout::Make), which the
-		// shell's creases follow — whole or not at all, so its columns never stand off the frame's beams; the rear
-		// one goes first where the room cannot hold both.
+		// 徹上明造: the 廊 sit on the frame's own lines (FrameLayout::Make), whole or not at all; the rear one goes first.
 		const int32 Lines = HutongGen::Jiajia::PurlinCount(Purlins);
 		if (bExposedFrame && bHasFrontVeranda && Lines >= 5)
 		{
@@ -577,20 +573,17 @@ struct FHutongSiheyuanParams
 		OutRear = FMath::Clamp(OutRear, 0.0, Room - OutFront);
 	}
 
-	// 舉架: eave overhang, then one segment per 步架.
 	HutongGen::FHutongRoofSection GetRoofSection() const
 	{
 		return HutongGen::Jiajia::MakeSection(
 			Purlins, 0.5 * FMath::Max(Depth, 1.0), GetRoofOverhang(), RoofApexRoll);
 	}
 
-	// Depth from this 檁數 and 步架; the drag snaps to it.
 	double GetCanonicalDepth() const
 	{
 		return HutongGen::Jiajia::DepthFor(Purlins, StepRun);
 	}
 
-	// Roof above the column tops (HutongGen::Proportions::RoofLift) and the roof's base: its eave line.
 	double GetRoofLift() const
 	{
 		const HutongGen::FHutongRoofSection S = GetRoofSection();
@@ -603,7 +596,6 @@ struct FHutongSiheyuanParams
 		return HutongGen::Proportions::UndersideRise(GetColumnDiameter(), GetRoofOverhang(), HutongGen::Jiajia::BuiltEaveJu(S, GetRoofRise()));
 	}
 
-	// Derived: the sum of the 舉 sequence over its runs.
 	double GetRoofRise() const
 	{
 		return bDeriveProportions
@@ -637,7 +629,6 @@ struct FHutongSiheyuanParams
 			ColumnHeightInDiameters, ArchitraveInDiameters);
 	}
 
-	// Door bay head.
 	double GetDoorTopHeight() const
 	{
 		const double Derived = GetArchitraveBottom();
@@ -651,7 +642,6 @@ struct FHutongSiheyuanParams
 		return FMath::Max(Derived, Need);
 	}
 
-	// 隔扇 head: the 中檻, where the windows stop.
 	double GetDoorLeafTopHeight() const
 	{
 		const double Derived = bDeriveProportions ? GetMiddleRailHeight() : DoorLeafTopHeight;
@@ -660,7 +650,7 @@ struct FHutongSiheyuanParams
 			: Derived;
 	}
 
-	// X of bay boundary Index; end boundaries inset by the column radius so corner columns sit in the side walls.
+	// End boundaries inset by the column radius so corner columns sit in the side walls.
 	double GetBayBoundary(int32 Index, int32 BayCount, double FacadeLength, double ColumnRadius) const
 	{
 		return HutongGen::BayBoundary(Index, BayCount, FacadeLength, ColumnRadius,
@@ -668,15 +658,12 @@ struct FHutongSiheyuanParams
 			GetDoorBayIndex(BayCount));
 	}
 
-	// Set by the tool from the drag rect.
 	double Width = 800.0;
 	double Depth = 500.0;
 
-	// Forces the bay count; zero derives. Driven by the bracket keys.
 	int32 BayCountOverride = 0;
 
-	// Set by a composite: the roof continues past that gable onto a stretch roofed by
-	// AppendHouseRoofRun, so the gable gets no rake.
+	// Set by a composite: that gable is roofed on by AppendHouseRoofRun and gets no rake.
 	bool bRoofRunsOnLow = false;
 	bool bRoofRunsOnHigh = false;
 };
@@ -685,8 +672,7 @@ namespace HutongGen
 {
 	void BuildSiheyuan(UE::Geometry::FDynamicMesh3& Mesh, const FHutongSiheyuanParams& P);
 
-	// The house roof (section, eave, tiles) over another stretch [X0, X1] of the same depth, past one
-	// gable. RowPhase is a tile row's X, so rows run through the join.
+	// RowPhase is a tile row's X, so rows run through the join.
 	void AppendHouseRoofRun(UE::Geometry::FDynamicMesh3& Mesh, const FHutongSiheyuanParams& P,
 		double X0, double X1, bool bOpenLow, bool bOpenHigh, double RowPhase);
 }

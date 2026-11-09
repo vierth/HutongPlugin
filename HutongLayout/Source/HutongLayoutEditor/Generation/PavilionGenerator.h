@@ -51,8 +51,6 @@ struct FHutongPavilionParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Pavilion", meta=(DisplayName="Column Taper (收分)", UIMin="0", UIMax="0.02", ClampMin="0", ClampMax="0.05", ToolTip="How much each column narrows toward its top, as a fraction of its height."))
 	double ColumnTaperRatio = HutongCanon::Module::ColumnTaperRatio;
 
-	// --- 楣子 ---
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(DisplayName="Has Hanging Frieze (倒掛楣子)", ToolTip="Builds a hanging frieze (倒掛楣子) below the lintel on each side."))
 	bool bHasFrieze = false;
 
@@ -73,8 +71,6 @@ struct FHutongPavilionParams
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Frieze", meta=(DisplayName="Bench Depth", EditCondition="bHasBench && !bDeriveProportions", UIMin="15", UIMax="55", ClampMin="8", Units="cm", ToolTip="Depth of the bench seat, in cm."))
 	double BenchDepth = 22.4;
-
-	// --- Roof ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(HutongBasic, DisplayName="Roof Type", EditCondition="Plan == EHutongPavilionPlan::Square", EditConditionHides, ToolTip="Roof form of the pavilion."))
 	EHutongRoofType RoofType = EHutongRoofType::Cuanjian;
@@ -152,10 +148,8 @@ struct FHutongPavilionParams
 	double Width = 342.4;
 	double Depth = 342.4;
 
-	// Every dimension through these; the raw fields only when bDeriveProportions is off.
-	// 面闊: column centre to centre over the shorter side, the module the figure scales on.
+	// Every dimension through these; raw fields apply only with bDeriveProportions off.
 	bool IsRound() const { return Plan == EHutongPavilionPlan::Round; }
-	// A round roof is a 攢尖 whatever RoofType says.
 	bool IsCuanjian() const { return IsRound() || RoofType == EHutongRoofType::Cuanjian; }
 
 	double GetBay() const
@@ -168,18 +162,14 @@ struct FHutongPavilionParams
 
 	double GetColumnDiameter() const { return FMath::Max(Derived(HutongCanon::Pavilion::ColumnPerBay, ColumnDiameter), 5.0); }
 	double GetColumnRadius() const { return FMath::Max(0.5 * GetColumnDiameter(), 4.0); }
-	// As planted: never more than a sixth of the plan.
 	double GetPlanColumnRadius() const { return FMath::Min(GetColumnRadius(), 0.15 * FMath::Max(FMath::Min(Width, Depth), 1.0)); }
 	double GetFloorHeight() const { return FMath::Max(Derived(HutongCanon::Pavilion::PlatformHeightPerBay, FloorHeight), 0.0); }
-	// 古鏡 on the 柱頂石: the column's foot.
 	double GetColumnFoot() const { return GetFloorHeight() + (GetFloorHeight() > 0.0 ? HutongCanon::Pavilion::MirrorRise * GetColumnDiameter() : 0.0); }
-	// Column top above the ground.
 	double GetEaveHeight() const
 	{
 		return bDeriveProportions ? GetColumnFoot() + HutongCanon::Pavilion::ColumnHeightPerBay * GetBay() : FMath::Max(EaveHeight, 60.0);
 	}
 	double GetColumnHeight() const { return FMath::Max(GetEaveHeight() - GetColumnFoot(), 1.0); }
-	// Past the columns' outer faces.
 	double GetPlatformOverhang() const
 	{
 		const double Reach = IsRound() ? HutongCanon::Pavilion::RoundPlatformReachPerBay : HutongCanon::Pavilion::PlatformReachPerBay;
@@ -213,9 +203,7 @@ struct FHutongPavilionParams
 	}
 	double GetEaveJu() const { return GetJu().Num() > 0 ? GetJu()[0] : 0.5; }
 
-	// Roof figures shared by generator, massing block, preview and ridge estimate.
-	// Roof above the column tops (墊板, 檐桁, rafter and cover less the overhang's rise), the ceiling at
-	// the column line, and the roof's base (HutongGen::Proportions::RoofLift, on the figure's members).
+	// Roof lift per HutongGen::Proportions::RoofLift, on the figure's members.
 	double GetRoofLift() const
 	{
 		namespace C = HutongCanon::Pavilion;
@@ -228,7 +216,6 @@ struct FHutongPavilionParams
 		return GetEaveJu() * GetRoofOverhang() - HutongCanon::Frame::RoofCover * GetColumnDiameter();
 	}
 	double GetRoofBaseHeight() const { return GetEaveHeight() + GetRoofLift(); }
-	// Column line to column line across Depth, then the overhang on the eave step's 舉.
 	HutongGen::FHutongRoofSection GetRoofSection() const
 	{
 		const double Span = FMath::Max(Depth - 2.0 * GetPlanColumnRadius(), 1.0);
@@ -236,7 +223,7 @@ struct FHutongPavilionParams
 	}
 	double GetRoofRise() const { return RoofRise > 0.0 ? RoofRise : FMath::Max(GetRoofSection().Rise(), 10.0); }
 
-	// Seeds every raw field from what is built now and stops deriving: a hand edit starts from the figure.
+	// Freezing seeds the raw fields from the figure, so a hand edit starts there.
 	void FreezeProportions()
 	{
 		if (!bDeriveProportions) return;

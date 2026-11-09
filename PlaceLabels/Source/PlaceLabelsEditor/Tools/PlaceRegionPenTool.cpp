@@ -24,14 +24,11 @@
 
 namespace
 {
-	// Sized and picked in pixels, then converted per point.
 	constexpr double PenHandlePickPixels = 13.0;
 	constexpr double PenHandleDrawPixels = 12.0;
 
-	// How far the cursor may travel between press and release and still count as a click.
 	constexpr double ClickSlopPixels = PlaceLabelsEdit::ClickSlopPixels;
 
-	// Footprint tracing reach past a building's edge.
 	constexpr double FootprintSearchRadiusCm = 400.0;
 }
 
@@ -121,7 +118,7 @@ void UPlaceRegionPenTool::OnTick(float DeltaTime)
 	}
 	TimeSinceCacheRefresh = 0.0;
 
-	// Not mid-drag: the dragged corner's snap targets would change under it.
+	// Held during a drag so the dragged corner's snap targets stay put.
 	if (!bDraggingPoint)
 	{
 		RefreshCachedRegions();
@@ -130,13 +127,11 @@ void UPlaceRegionPenTool::OnTick(float DeltaTime)
 
 void UPlaceRegionPenTool::RefreshCachedRegions()
 {
-	// Snapping wants something to snap to.
 	PlaceLabelsEdit::GatherRegions(GetTargetWorld(), CachedRegions, /*bOnlyWithUsableOutline*/ true);
 }
 
 bool UPlaceRegionPenTool::TryHitGround(const FInputDeviceRay& Ray, FVector& OutHit) const
 {
-	// Fall back to the height of the last point placed, or Z=0 before there is one.
 	const double FallbackZ = PendingPoints.Num() > 0 ? PendingPoints.Last().Z : 0.0;
 	return PlaceLabelsEdit::TraceGround(GetTargetWorld(), Ray.WorldRay.Origin,
 		Ray.WorldRay.Direction, FallbackZ, OutHit);
@@ -177,7 +172,6 @@ FVector UPlaceRegionPenTool::ResolveCandidatePoint(const FVector& TracedHit, int
 		? FSlateApplication::Get().GetModifierKeys()
 		: FModifierKeysState();
 
-	// Shift constrains the segment being drawn to 15 degree steps off the previous point.
 	if (Mods.IsShiftDown() && PendingPoints.Num() > 0 && IgnorePointIndex == INDEX_NONE)
 	{
 		const FVector& Prev = PendingPoints.Last();
@@ -251,7 +245,6 @@ void UPlaceRegionPenTool::UpdateHoverState(const FVector& TracedHit)
 		const int32 Nearest = PlaceLabelsEdit::ClosestVertex(Flat, XY, CornerDistSq);
 		if (Nearest != INDEX_NONE && CornerDistSq <= PickRadiusSq)
 		{
-			// Only the first corner closes the outline, and only once the polygon would be valid.
 			HoverKind = (!bAwaitingConfirm && Nearest == 0 && PendingPoints.Num() >= 3)
 				? EHover::CloseTarget
 				: EHover::Point;
@@ -261,7 +254,6 @@ void UPlaceRegionPenTool::UpdateHoverState(const FVector& TracedHit)
 		}
 	}
 
-	// Segments.
 	if (Flat.Num() >= 2)
 	{
 		const PlaceLabelsEdit::FEdgeHit Edge =
@@ -275,7 +267,6 @@ void UPlaceRegionPenTool::UpdateHoverState(const FVector& TracedHit)
 		}
 	}
 
-	// A building footprint, but only with nothing drawn yet.
 	if (PendingPoints.Num() == 0 && Settings && Settings->bTraceFootprints)
 	{
 		PlaceLabelsFootprint::FFootprintHit Footprint;
@@ -307,7 +298,6 @@ void UPlaceRegionPenTool::AdoptFootprint()
 	PendingPoints = HoveredFootprint;
 	HoveredFootprint.Reset();
 
-	// Straight to the confirm stage.
 	bAwaitingConfirm = true;
 	bHoverValid = false;
 	UpdateReadout();
@@ -338,7 +328,6 @@ void UPlaceRegionPenTool::OnClickPress(const FInputDeviceRay& PressPos)
 
 	UpdateHoverState(Hit);
 
-	// Pressing a corner starts a potential drag at either stage.
 	if (HoverKind == EHover::Point || HoverKind == EHover::CloseTarget)
 	{
 		bDraggingPoint = true;
@@ -368,7 +357,7 @@ void UPlaceRegionPenTool::OnClickDrag(const FInputDeviceRay& DragPos)
 		return;
 	}
 
-	// Exclude the dragged point from its own snap query, or it sticks in place.
+	// The dragged point is left out of its own snap query so it can move.
 	PendingPoints[DraggedPointIndex] = ResolveCandidatePoint(Hit, DraggedPointIndex);
 	HoverPoint = PendingPoints[DraggedPointIndex];
 	UpdateReadout();
@@ -384,7 +373,6 @@ void UPlaceRegionPenTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 	bDragMoved = false;
 	DraggedPointIndex = INDEX_NONE;
 
-	// A corner that actually moved is finished.
 	if (bWasDragging && bMoved)
 	{
 		UpdateReadout();
@@ -410,7 +398,6 @@ void UPlaceRegionPenTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 		return;
 
 	case EHover::Point:
-		// Alt+click removes a corner.
 		if (Mods.IsAltDown())
 		{
 			DeleteHoveredPoint();
@@ -423,7 +410,6 @@ void UPlaceRegionPenTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 		{
 			return;
 		}
-		// At the click position, not the midpoint.
 		PendingPoints.Insert(HoverPoint, HoverSegmentIndex + 1);
 		HoverKind = EHover::Point;
 		HoverPointIndex = HoverSegmentIndex + 1;
@@ -440,7 +426,6 @@ void UPlaceRegionPenTool::OnClickRelease(const FInputDeviceRay& ReleasePos)
 		break;
 	}
 
-	// Outline closed: open-ground clicks must not extend it.
 	if (bAwaitingConfirm)
 	{
 		return;
@@ -518,7 +503,6 @@ void UPlaceRegionPenTool::UndoLastPoint()
 		return;
 	}
 
-	// Backspace at the confirm stage reopens the outline.
 	if (bAwaitingConfirm)
 	{
 		bAwaitingConfirm = false;
@@ -539,7 +523,6 @@ void UPlaceRegionPenTool::DeleteHoveredPoint()
 		return;
 	}
 
-	// Three corners is the floor while the outline is closed.
 	if (bAwaitingConfirm && PendingPoints.Num() <= 3)
 	{
 		GetToolManager()->DisplayMessage(
@@ -584,7 +567,6 @@ void UPlaceRegionPenTool::UpdateReadout()
 	Readout->Perimeter = PlaceLabelsGeo::Perimeter2D(Flat);
 	Readout->AreaSquareMetres = FMath::Abs(PlaceLabelsGeo::SignedArea2D(Flat)) / 10000.0;
 
-	// No NotifyOfPropertyChangeByTool: rebuilds the details panel, and this runs per hover tick.
 }
 
 void UPlaceRegionPenTool::CloseOutline()
@@ -599,7 +581,6 @@ void UPlaceRegionPenTool::CloseOutline()
 	HoverKind = EHover::Ground;
 	UpdateReadout();
 
-	// Refresh the panel: name and type are now asked for, and the tool may have changed them.
 	if (Settings)
 	{
 		NotifyOfPropertyChangeByTool(Settings);
@@ -620,7 +601,6 @@ void UPlaceRegionPenTool::ConfirmRegion()
 		return;
 	}
 
-	// Drop points that coincide with their predecessor before judging the polygon.
 	TArray<FVector> Points;
 	Points.Reserve(PendingPoints.Num());
 	for (const FVector& P : PendingPoints)
@@ -664,7 +644,6 @@ void UPlaceRegionPenTool::ConfirmRegion()
 
 	ToolManager->BeginUndoTransaction(LOCTEXT("DrawRegion", "Draw Place Region"));
 
-	// Level->Modify() as well as RF_Transactional.
 	Level->Modify();
 
 	FActorSpawnParameters SpawnParams;
@@ -720,7 +699,6 @@ void UPlaceRegionPenTool::ConfirmRegion()
 
 		Actor->SetActorLabel(Actor->GetDefaultActorLabel());
 
-		// Outliner folder, so regions do not bury everything else.
 		if (Settings && !Settings->OutlinerFolder.IsNone())
 		{
 			Actor->SetFolderPath(Settings->OutlinerFolder);
@@ -734,14 +712,12 @@ void UPlaceRegionPenTool::ConfirmRegion()
 	HoverPointIndex = INDEX_NONE;
 	bAwaitingConfirm = false;
 
-	// Clear the name, keep the type.
 	if (Settings)
 	{
 		Settings->Name = FPlaceName();
 		NotifyOfPropertyChangeByTool(Settings);
 	}
 
-	// Select what was just placed.
 	if (GEditor && Actor)
 	{
 		LastPlacedActor = Actor;
@@ -765,7 +741,6 @@ void UPlaceRegionPenTool::Render(IToolsContextRenderAPI* RenderAPI)
 		return;
 	}
 
-	// Cache the camera so hover picking sizes handles as drawn.
 	{
 		const FViewCameraState Camera = RenderAPI->GetCameraState();
 		CameraPosition = Camera.Position;
@@ -789,7 +764,6 @@ void UPlaceRegionPenTool::Render(IToolsContextRenderAPI* RenderAPI)
 		}
 	}
 
-	// Every region already in the level, dimmed.
 	if (Settings && Settings->bShowExistingRegions)
 	{
 		for (const TWeakObjectPtr<UPlaceRegionComponent>& Weak : CachedRegions)
@@ -821,7 +795,6 @@ void UPlaceRegionPenTool::Render(IToolsContextRenderAPI* RenderAPI)
 		}
 	}
 
-	// A building footprint about to be adopted, drawn as the region it would become.
 	if (HoverKind == EHover::Footprint && HoveredFootprint.Num() >= 3)
 	{
 		const int32 N = HoveredFootprint.Num();
@@ -843,7 +816,6 @@ void UPlaceRegionPenTool::Render(IToolsContextRenderAPI* RenderAPI)
 		return;
 	}
 
-	// A confirmed outline reads in green and closed.
 	const FLinearColor OutlineColor = bAwaitingConfirm
 		? PlaceLabelsEdit::CloseColor
 		: PlaceLabelsEdit::SettledColor;
@@ -868,7 +840,6 @@ void UPlaceRegionPenTool::Render(IToolsContextRenderAPI* RenderAPI)
 		const bool bHovered = (HoverPointIndex == i)
 			&& (HoverKind == EHover::Point || HoverKind == EHover::CloseTarget);
 
-		// Alt over a corner shows the removal cross.
 		if (bHovered && HoverKind == EHover::Point && Mods.IsAltDown())
 		{
 			PlaceLabelsEdit::DrawCrossOutHandle(PDI, P, PlaceLabelsEdit::DeleteColor,
@@ -883,7 +854,6 @@ void UPlaceRegionPenTool::Render(IToolsContextRenderAPI* RenderAPI)
 			bHovered ? 5.0f : 3.0f);
 	}
 
-	// Where a corner would be inserted.
 	if (HoverKind == EHover::Segment && !bDraggingPoint)
 	{
 		PlaceLabelsEdit::DrawDiamondHandle(PDI, HoverPoint, PlaceLabelsEdit::InsertColor,
@@ -895,10 +865,8 @@ void UPlaceRegionPenTool::Render(IToolsContextRenderAPI* RenderAPI)
 		return;
 	}
 
-	// Rubber band and closing segment: dashed and thinner, as neither exists yet.
 	if (bHoverValid && HoverKind == EHover::Ground)
 	{
-		// Dashes a handle long on screen, whatever the zoom.
 		const double Dash = HandleSizeAt(HoverPoint);
 		PlaceLabelsEdit::DrawDashedLine(PDI, PendingPoints.Last(), HoverPoint,
 			PlaceLabelsEdit::PendingColor, 3.0f, Dash);
@@ -923,7 +891,6 @@ void UPlaceRegionPenTool::DrawHUD(FCanvas* Canvas, IToolsContextRenderAPI* Rende
 		return;
 	}
 
-	// Cursor while drawing; last corner once the outline is closed.
 	FVector Anchor;
 	if (bHoverValid)
 	{
@@ -948,7 +915,6 @@ void UPlaceRegionPenTool::DrawHUD(FCanvas* Canvas, IToolsContextRenderAPI* Rende
 	const float DPIScale = FMath::Max(Canvas->GetDPIScale(), UE_KINDA_SMALL_NUMBER);
 	Pixel /= DPIScale;
 
-	// The Slate font, not UEngine::GetMediumFont().
 	const FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle("Regular", 10);
 
 	FCanvasTextItem Prompt(FVector2D(Pixel.X + 16.0, Pixel.Y - 46.0),
@@ -985,7 +951,6 @@ FText UPlaceRegionPenTool::GetStagePromptText() const
 
 	if (bAwaitingConfirm)
 	{
-		// Deliberately does not say "press Enter" first.
 		return LOCTEXT("PromptConfirm",
 			"Outline set — corners are still draggable. Fill in the type and name in the New Region "
 			"form, then click Create Region. Backspace reopens the outline; Esc discards it. (Enter "

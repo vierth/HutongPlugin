@@ -37,7 +37,6 @@ namespace
 
 	TArray<UHutongBuildingComponent*> SelectedEaved()
 	{
-		// Paths, beds and jars have no height to set.
 		return HutongDetailOps::CollectSelected().FilterByPredicate(
 			[](const UHutongBuildingComponent* B) { return B->GetEditHeight() > 0.0; });
 	}
@@ -53,7 +52,6 @@ void UHutongHeightsTool::RegisterToolSettings()
 void UHutongHeightsTool::Setup()
 {
 	Super::Setup();
-	// Placement settings mean nothing to a tool that places nothing.
 	for (UInteractiveToolPropertySet* Set : { (UInteractiveToolPropertySet*)MetadataSettings, (UInteractiveToolPropertySet*)Placement,
 			(UInteractiveToolPropertySet*)DetailSettings, (UInteractiveToolPropertySet*)Snap, (UInteractiveToolPropertySet*)Appearance })
 	{
@@ -87,7 +85,7 @@ void UHutongHeightsTool::OpenWindow()
 		.ClientSize(FVector2D(980.0, 460.0))
 		.SupportsMaximize(false)
 		.SupportsMinimize(false)
-		// The viewport keeps focus: the window opens beside the selection, not over the clicking.
+		// The viewport keeps focus; the window opens beside the selection.
 		.FocusWhenFirstShown(false)
 		[
 			HutongHeightsWindow::MakeContent(this)
@@ -111,7 +109,7 @@ void UHutongHeightsTool::OnTick(float DeltaTime)
 
 void UHutongHeightsTool::SyncPanel()
 {
-	// Next tick: never rebuild the details view inside its own edit.
+	// Next tick, outside the details view's own edit.
 	bPanelDirty = true;
 }
 
@@ -124,7 +122,6 @@ void UHutongHeightsTool::RefreshRows(bool bForce)
 		return;
 	}
 
-	// Highest rank first, then tallest: the 正房 heads the list and is the reference.
 	Selected.Sort([](const UHutongBuildingComponent& A, const UHutongBuildingComponent& B)
 	{
 		const double RA = HutongPresets::EaveRatio(A.GetCourtRole()), RB = HutongPresets::EaveRatio(B.GetCourtRole());
@@ -153,8 +150,6 @@ void UHutongHeightsTool::RefreshRows(bool bForce)
 	RefreshSuggestions();
 	++RowsRevision;
 
-	// A court the whole selection shares names it; otherwise a fresh suggestion, unless typed.
-	// The court every selected building is in (a shared wall is in more than one), if there is one.
 	TArray<FString> Shared = Selected.Num() > 0 ? Selected[0]->GetCourts() : TArray<FString>();
 	for (const UHutongBuildingComponent* B : Selected)
 	{
@@ -204,7 +199,6 @@ void UHutongHeightsTool::SetNewEave(int32 Index, double Cm)
 	if (!Rows.IsValidIndex(Index) || !Rows[Index].bEditable) return;
 	const double Old = Rows[Index].NewEave;
 	Rows[Index].NewEave = FMath::Max(Cm, 60.0);
-	// Keep Proportions: the edited row sets the factor, the others follow it.
 	if (GetKeepProportions() && Old > 0.0)
 	{
 		const double Factor = Rows[Index].NewEave / Old;
@@ -232,8 +226,6 @@ void UHutongHeightsTool::RefreshSuggestions()
 		else SuggestionNotes[i] = TEXT("no ratio for this role");
 	}
 
-	// A gate's ridge stands the canon step over the building it is set into: the nearest selected
-	// roofed building that is not a gate or a wall, at that building's New Eave.
 	for (int32 g = 0; g < Rows.Num(); ++g)
 	{
 		const UHutongBuildingComponent* Gate = RowBuildings.IsValidIndex(g) ? RowBuildings[g].Get() : nullptr;
@@ -260,7 +252,6 @@ void UHutongHeightsTool::RefreshSuggestions()
 			continue;
 		}
 		Near.Sort([](const TPair<double, int32>& A, const TPair<double, int32>& B) { return A.Key < B.Key; });
-		// Both neighbours of a gate between two stretches of row; the taller decides.
 		int32 Row = Near[0].Value;
 		for (const TPair<double, int32>& N : Near)
 		{
@@ -361,7 +352,6 @@ void UHutongHeightsTool::Apply()
 			if (B->GetOwner()) B->GetOwner()->Modify();
 			B->Modify();
 			if (Row.Role != B->GetCourtRole()) B->CourtRole = Row.Role;
-			// Locked: its role (metadata) only.
 			if (B->bLocked) continue;
 			bool bChanged = false;
 			// Preset first: it replaces the parameters, the height included.
@@ -371,13 +361,11 @@ void UHutongHeightsTool::Apply()
 				B->ApplyPresetParams(Row.NewPreset);
 				bChanged = true;
 			}
-			// The New column is what the building ends at, whatever the preset brought.
 			if (FMath::Abs(Row.NewEave - B->GetEditHeight()) > 0.5 && B->SetEditHeight(FMath::RoundToDouble(Row.NewEave))) bChanged = true;
 			if (!bChanged) continue;
 			B->Rebuild();
 			B->ApplyPlacementAttachments();
 			++Set;
-			// The doorway floor lifts an eave asked below walking clearance.
 			if (B->GetEditHeight() > Row.NewEave + 0.5)
 			{
 				Held.Add(FString::Printf(TEXT("%s at %.0f cm"), *Row.Label, B->GetEditHeight()));

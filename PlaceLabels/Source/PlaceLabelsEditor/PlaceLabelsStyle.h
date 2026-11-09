@@ -4,7 +4,6 @@
 
 class FSlateStyleSet;
 
-// Icons for the mode's tool palette.
 class FPlaceLabelsStyle
 {
 public:

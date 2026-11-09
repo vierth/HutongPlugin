@@ -3,21 +3,21 @@
 #include "CoreMinimal.h"
 #include "IDetailCustomization.h"
 
-// Collapses a property set's categories and hides the rows the holder does not decide.
 class FHutongCollapsedCategoriesCustomization : public IDetailCustomization
 {
 public:
-	// HiddenParamFields name fields inside the set's Params struct.
+	// HiddenParamFields name fields inside the set's Params struct; HiddenOnFor, when set, limits hiding them to
+	// objects of that class or below (a subclass declaring nothing is never asked for a layout of its own).
 	static TSharedRef<IDetailCustomization> Make(TArray<FName> InCategories,
-		TArray<FName> InHiddenParamFields = {});
+		TArray<FName> InHiddenParamFields = {}, FName InHiddenOnFor = NAME_None);
 	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
 
 private:
 	TArray<FName> Categories;
 	TArray<FName> HiddenParamFields;
+	FName HiddenOnFor;
 };
 
-// The preset picker's buttons: Reload always, Save and Delete only in the advanced view.
 class FHutongPresetCustomization : public IDetailCustomization
 {
 public:
@@ -25,11 +25,7 @@ public:
 	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
 };
 
-// A placed building in the level editor's Details, laid out as its tool: a simple / advanced switch
-// (the mode panel's setting), the simple view's rows only, engine categories out of the simple view,
-// and the tool's order — Metadata, Preset, the type's own settings, then Footprint, Detail,
-// Appearance, Identity. On UHutongBuildingComponent, the class declaring the shared fields, so every
-// type's layout asks it.
+// Registered on UHutongBuildingComponent, the class declaring the shared fields, so every type's layout asks it.
 class FHutongBuildingComponentCustomization : public IDetailCustomization
 {
 public:
@@ -37,8 +33,6 @@ public:
 	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
 };
 
-// The Scene tab: each Selection setting carries an Apply button, lit while applying it would change
-// something; categories in working order.
 class FHutongModeSettingsCustomization : public IDetailCustomization
 {
 public:
@@ -51,6 +45,5 @@ namespace HutongPanelCustomizations
 	void Register();
 	void Unregister();
 
-	// "Plugin last updated <time>": the last commit to change the plugin, in local time.
 	FText PluginUpdatedText();
 }

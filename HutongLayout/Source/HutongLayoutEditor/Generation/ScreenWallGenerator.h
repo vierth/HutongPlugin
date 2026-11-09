@@ -44,8 +44,6 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Panel", meta=(DisplayName="Border Projection", EditCondition="bHasPanel", UIMin="1", UIMax="12", ClampMin="0", Units="cm", ToolTip="How far the panel's border stands proud of the wall face, in cm."))
 	double BorderProjection = 5.0;
 
-	// --- Roof ---
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(UIMin="10", UIMax="90", ClampMin="0", Units="cm", ToolTip="How far the eaves overhang the wall faces, in cm."))
 	double RoofOverhang = 34.0;
 
@@ -55,7 +53,6 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(UIMin="15", UIMax="120", ClampMin="5", Units="cm", ToolTip="Rise of the roof from eave to ridge, in cm."))
 	double RoofRise = 42.0;
 
-	// Eave = body top.
 	double GetEaveHeight() const { return FMath::Max(Height, 40.0); }
 	double GetRoofRise() const { return FMath::Max(RoofRise, 5.0); }
 
@@ -90,7 +87,6 @@ struct FHutongScreenWallParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Roof", meta=(DisplayName="Rafter End Spacing", EditCondition="RafterEndSection > 0", UIMin="8", UIMax="40", ClampMin="4", Units="cm", ToolTip="Spacing between rafter ends along the eave, in cm."))
 	double RafterEndSpacing = 16.0;
 
-	// Set by the tool from the drag rect.
 	double Length = 400.0;
 
 	// Ground depth the drag's collapsed axis must contain; the plinth is widest.

@@ -1,4 +1,5 @@
 #include "Generation/HutongActorSpawn.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Generation/HutongMeshUtils.h"
 #include "Generation/HutongDetail.h"
 #include "Generation/HutongStarterMaterials.h"
@@ -36,6 +37,37 @@ using UE::Geometry::FDynamicMesh3;
 
 namespace
 {
+	const FName BuiltMeshTag(TEXT("HutongBuiltMesh"));
+	const FName MeshInstancesTag(TEXT("HutongMeshInstances"));
+
+	UStaticMeshComponent* TurnedMeshComponent(AStaticMeshActor* Actor, const HutongGen::FMeshTurn& Turn)
+	{
+		UStaticMeshComponent* Root = Actor->GetStaticMeshComponent();
+		UStaticMeshComponent* Child = HutongGen::GetBuiltMeshComponent(Actor);
+		if (!Child || Child == Root)
+		{
+			Child = NewObject<UStaticMeshComponent>(Actor, MakeUniqueObjectName(Actor, UStaticMeshComponent::StaticClass(), TEXT("BuiltMesh")), RF_Transactional);
+			Child->ComponentTags.Add(BuiltMeshTag);
+			Child->SetMobility(EComponentMobility::Static);
+			Child->SetupAttachment(Actor->GetRootComponent());
+			Actor->AddInstanceComponent(Child);
+			Child->RegisterComponent();
+		}
+		const FTransform Placed = Turn.ToTransform();
+		if (!Child->GetRelativeTransform().Equals(Placed, 1.0e-6))
+		{
+			Child->Modify();
+			Child->SetRelativeTransform(Placed);
+		}
+		if (Root && Root != Child && Root->GetStaticMesh())
+		{
+			Root->Modify();
+			Root->SetStaticMesh(nullptr);
+			Root->EmptyOverrideMaterials();
+		}
+		return Child;
+	}
+
 	UMaterialInterface* GetCachedDefaultMaterial()
 	{
 		static TWeakObjectPtr<UMaterialInterface> Cached;
@@ -50,10 +82,8 @@ namespace
 		return Loaded;
 	}
 
-	// BasicShapeMaterial is white and uneditable → tint via an instance. Instances save in the
-	// actor's package, so reuse one by colour rather than leak one per rebuild. Scans everything
-	// outered to the actor, not the material list: a demotion (精 → 塊) drops slots from the list
-	// but leaves their instances in the package.
+	// BasicShapeMaterial is uneditable: tint via an instance, reused per colour from the actor's package.
+	// Scans everything outered to the actor: a demotion (精 → 塊) leaves instances the material list dropped.
 	UMaterialInterface* FindReusableTint(UObject* Outer, const FLinearColor& Color, UMaterialInterface* Base,
 		UTexture* Albedo = nullptr)
 	{
@@ -100,8 +130,6 @@ namespace
 		return Instance;
 	}
 
-	// An instance of Base with its own colour, and its own Albedo where given (a sign's art), reused by
-	// both like the tint.
 	UMaterialInterface* CreateInstanceOf(UObject* Outer, UMaterialInterface* Base, const FLinearColor& Color, UTexture* Albedo)
 	{
 		if (UMaterialInterface* Existing = FindReusableTint(Outer, Color, Base, Albedo)) return Existing;
@@ -114,8 +142,6 @@ namespace
 		return Instance;
 	}
 
-	// Priority: assigned material; a sign's texture on the starter material; the starter material,
-	// tinted where the palette's colour is not the slot's default; the tinted default material.
 	UMaterialInterface* ResolveSlotMaterial(UObject* Outer, const FHutongPalette& Palette, int32 Slot)
 	{
 		if (UMaterialInterface* Assigned = Palette.GetSlotMaterial(Slot)) return Assigned;
@@ -137,7 +163,6 @@ namespace
 		TEXT("hutong.LogBakeTiming"), false,
 		TEXT("Logs how long each stage of a building's bake takes."));
 
-	// Stage timer for the bake: logs on scope exit when hutong.LogBakeTiming is on.
 	struct FBakeTimer
 	{
 		const TCHAR* Stage;
@@ -152,9 +177,7 @@ namespace
 		}
 	};
 
-	// New library meshes wait here until their background build is done, then are saved: saving at once
-	// waited for the build, so every placement (and every building of a bulk Generate, one after another)
-	// stood still for it. Flushed before a level is saved, so the level never references an unsaved mesh.
+	// Saved once their background build is done so placements carry on; flushed before a level save.
 	TArray<TWeakObjectPtr<UStaticMesh>>& PendingLibrarySaves()
 	{
 		static TArray<TWeakObjectPtr<UStaticMesh>> Pending;
@@ -171,7 +194,6 @@ namespace
 		UPackage::SavePackage(Package, Mesh, *File, Args);
 	}
 
-	// Saves the pending meshes whose build is done; with bWait, finishes the rest first.
 	void SavePendingLibraryMeshes(bool bWait)
 	{
 		TArray<TWeakObjectPtr<UStaticMesh>>& Pending = PendingLibrarySaves();
@@ -202,10 +224,7 @@ namespace
 	constexpr uint32 BakeVersion = 1;
 	const TCHAR* LibraryRoot = TEXT("/Game/HutongLayout/Generated");
 
-	// Key off the geometry as built: identical output shares, any change in the generators or the
-	// placement makes a new asset, so a shared mesh never goes stale. Which corners are shared (vertex and
-	// UV element IDs) counts too: the baked normals and tangents smooth across shared ones, so a weld alone
-	// changes the asset.
+	// Shared vertex and UV element IDs count: baked normals smooth across them, so a weld alone changes the asset.
 	FString LibraryKey(const TArray<FDynamicMesh3>& LODs, int32 CollisionLOD)
 	{
 		FXxHash64Builder H;
@@ -250,15 +269,13 @@ namespace
 		return nullptr;
 	}
 
-	// Slots of each mesh this session baked or met, so a re-dress never reads the mesh while it is still
-	// building in the background (reading its materials waits for the build).
+	// Cached because reading a mesh's materials waits for its background build.
 	TMap<TWeakObjectPtr<const UStaticMesh>, TArray<int32>>& SlotCache()
 	{
 		static TMap<TWeakObjectPtr<const UStaticMesh>, TArray<int32>> Cache;
 		return Cache;
 	}
 
-	// Slot list of a baked mesh, read back off its material slot names.
 	TArray<int32> SlotsOf(const UStaticMesh* Mesh)
 	{
 		if (const TArray<int32>* Known = SlotCache().Find(Mesh)) return *Known;
@@ -279,6 +296,11 @@ namespace HutongGen
 {
 	const double SmoothingAngleDeg = 32.0;
 
+	FString LibraryKeyFor(const TArray<FDynamicMesh3>& LODs, int32 CollisionLOD)
+	{
+		return LibraryKey(LODs, CollisionLOD);
+	}
+
 	const FLinearColor DefaultBrickColor = FLinearColor::FromSRGBColor(FColor(133, 136, 134));
 	const FLinearColor DefaultRoofColor = FLinearColor::FromSRGBColor(FColor(94, 97, 96));
 	const FLinearColor DefaultWoodColor = FLinearColor::FromSRGBColor(FColor(116, 56, 42));
@@ -289,15 +311,15 @@ namespace HutongGen
 	const FLinearColor DefaultLatticeColor = FLinearColor::FromSRGBColor(FColor(96, 62, 48));
 	const FLinearColor DefaultPaperColor = FLinearColor::FromSRGBColor(FColor(226, 214, 186));
 	const FLinearColor DefaultPlasterColor = FLinearColor::FromSRGBColor(FColor(232, 228, 216));
-	// Swept loess: a Beijing courtyard floor between its paving.
 	const FLinearColor DefaultEarthColor = FLinearColor::FromSRGBColor(FColor(168, 146, 112));
-	// Waxed pine boarding, not column lacquer.
 	const FLinearColor DefaultPartitionColor = FLinearColor::FromSRGBColor(FColor(158, 130, 96));
 	const FLinearColor DefaultFloorColor = FLinearColor::FromSRGBColor(FColor(146, 149, 146));
 	const FLinearColor DefaultPlaqueColor = FLinearColor::FromSRGBColor(FColor(30, 28, 27));
 	const FLinearColor DefaultSignboardColor = FLinearColor::FromSRGBColor(FColor(226, 220, 204));
 	const FLinearColor DefaultTradeSignColor = FLinearColor::FromSRGBColor(FColor(168, 42, 34));
 	const FLinearColor DefaultCityBrickColor = FLinearColor::FromSRGBColor(FColor(122, 122, 116));
+	const FLinearColor DefaultRedWallColor = FLinearColor::FromSRGBColor(FColor(168, 62, 46));
+	const FLinearColor DefaultGlazedTileColor = FLinearColor::FromSRGBColor(FColor(214, 160, 44));
 
 	AStaticMeshActor* SpawnEmptyActor(
 		UWorld* World,
@@ -341,7 +363,7 @@ namespace HutongGen
 			AStaticMeshActor::StaticClass(), Transform, Params);
 		if (!Actor) return nullptr;
 
-		// Static: level geometry that never moves, and VSM caches its shadow pages.
+		// Static: fixed level geometry, and VSM caches its shadow pages.
 		Actor->SetMobility(EComponentMobility::Static);
 		Actor->SetActorLabel(FString::Printf(TEXT("%s_%s"),
 			*NameBase, *FGuid::NewGuid().ToString().Left(6)));
@@ -356,13 +378,10 @@ namespace HutongGen
 		const FTransform& Transform,
 		const FString& NameBase,
 		const FHutongPalette& Palette,
-		int32 CollisionLOD)
+		int32 CollisionLOD,
+		const FMeshTurn& Turn)
 	{
 		if (LODs.Num() == 0) return nullptr;
-		if (LODs.Num() == 1)
-		{
-			return SpawnStaticMeshActor(World, LODs[0], Transform, NameBase, Palette);
-		}
 
 		// Actor must exist before the mesh (mesh is outered to it).
 		if (!World) return nullptr;
@@ -381,33 +400,43 @@ namespace HutongGen
 		Actor->SetActorLabel(FString::Printf(TEXT("%s_%s"),
 			*NameBase, *FGuid::NewGuid().ToString().Left(6)));
 
-		BuildAndAssignStaticMesh(Actor, LODs, Palette, CollisionLOD);
+		BuildAndAssignStaticMesh(Actor, LODs, Palette, CollisionLOD, false, Turn);
 		return Actor;
 	}
 
-	TArray<UStaticMesh*> FindUnusedLibraryMeshes()
+	UStaticMeshComponent* GetBuiltMeshComponent(const AActor* Actor)
 	{
-		TArray<UStaticMesh*> Out;
+		if (!Actor) return nullptr;
+		TArray<UStaticMeshComponent*> Meshes;
+		Actor->GetComponents(Meshes);
+		for (UStaticMeshComponent* C : Meshes)
+		{
+			if (C->ComponentHasTag(BuiltMeshTag)) return C;
+		}
+		return Cast<UStaticMeshComponent>(Actor->GetRootComponent());
+	}
+
+	TArray<FAssetData> FindUnusedLibraryMeshes()
+	{
+		TArray<FAssetData> Out;
 		IAssetRegistry& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
 		TArray<FAssetData> Assets;
 		Registry.GetAssetsByPath(FName(LibraryRoot), Assets, /*bRecursive*/ true);
 		if (Assets.Num() == 0) return Out;
 
-		// What loaded buildings wear, saved or not.
-		TSet<const UStaticMesh*> Worn;
+		TSet<FName> Worn;
 		for (TObjectIterator<UStaticMeshComponent> It; It; ++It)
 		{
 			if (It->IsTemplate() || !IsValid(*It)) continue;
-			if (const UStaticMesh* M = It->GetStaticMesh()) Worn.Add(M);
+			if (const UStaticMesh* M = It->GetStaticMesh()) Worn.Add(M->GetPackage()->GetFName());
 		}
 		for (const FAssetData& A : Assets)
 		{
+			if (Worn.Contains(A.PackageName) || !A.IsInstanceOf<UStaticMesh>()) continue;
 			TArray<FName> Referencers;
 			Registry.GetReferencers(A.PackageName, Referencers);
 			Referencers.Remove(A.PackageName);
-			if (Referencers.Num() > 0) continue;
-			UStaticMesh* Mesh = Cast<UStaticMesh>(A.GetAsset());
-			if (Mesh && !Worn.Contains(Mesh)) Out.Add(Mesh);
+			if (Referencers.Num() == 0) Out.Add(A);
 		}
 		return Out;
 	}
@@ -446,15 +475,20 @@ namespace HutongGen
 
 	void AssignPaletteMaterials(AStaticMeshActor* Actor, const FHutongPalette& Palette)
 	{
-		UStaticMeshComponent* Comp = Actor ? Actor->GetStaticMeshComponent() : nullptr;
-		const UStaticMesh* Mesh = Comp ? Comp->GetStaticMesh() : nullptr;
-		if (!Mesh) return;
-		Comp->Modify();
-		Comp->EmptyOverrideMaterials();
-		const TArray<int32> Slots = SlotsOf(Mesh);
-		for (int32 i = 0; i < Slots.Num(); ++i)
+		TArray<UStaticMeshComponent*> Wearers;
+		Actor->GetComponents(Wearers);
+		for (UStaticMeshComponent* Comp : Wearers)
 		{
-			if (UMaterialInterface* M = ResolveSlotMaterial(Actor, Palette, Slots[i])) Comp->SetMaterial(i, M);
+			const bool bWorn = Comp == GetBuiltMeshComponent(Actor) || Comp->ComponentHasTag(MeshInstancesTag);
+			const UStaticMesh* Mesh = bWorn ? Comp->GetStaticMesh() : nullptr;
+			if (!Mesh) continue;
+			Comp->Modify();
+			Comp->EmptyOverrideMaterials();
+			const TArray<int32> Slots = SlotsOf(Mesh);
+			for (int32 i = 0; i < Slots.Num(); ++i)
+			{
+				if (UMaterialInterface* M = ResolveSlotMaterial(Actor, Palette, Slots[i])) Comp->SetMaterial(i, M);
+			}
 		}
 	}
 
@@ -463,50 +497,28 @@ namespace HutongGen
 		FDynamicMesh3& Mesh,
 		const FHutongPalette& Palette)
 	{
-		// A lone mesh is a chain of one.
 		TArray<FDynamicMesh3> LODs;
 		LODs.Emplace(MoveTemp(Mesh));
 		BuildAndAssignStaticMesh(Actor, LODs, Palette);
 	}
 
-	void BuildAndAssignStaticMesh(
+	using FAssignBaked = TFunctionRef<void(UStaticMesh*, const TArray<UMaterialInterface*>&)>;
+
+	static void FindOrBakeMesh(
 		AStaticMeshActor* Actor,
 		TArray<FDynamicMesh3>& LODs,
 		const FHutongPalette& Palette,
 		int32 CollisionLOD,
-		bool bBespoke)
+		bool bBespoke,
+		FAssignBaked Assign)
 	{
-		if (!Actor || LODs.Num() == 0) return;
-
-		// Priority: assigned material, then the project's starter material (palette fields are
-		// session-only), then the tinted default. Worn as the component's overrides, so buildings
-		// sharing a mesh keep their own palettes.
+		// Worn as the component's overrides, so buildings sharing a mesh keep their own palettes.
 		auto PaletteMaterials = [&](const TArray<int32>& Slots)
 		{
 			TArray<UMaterialInterface*> Mats;
 			for (const int32 Slot : Slots) Mats.Add(ResolveSlotMaterial(Actor, Palette, Slot));
 			return Mats;
 		};
-		auto Assign = [&](UStaticMesh* StaticMesh, const TArray<UMaterialInterface*>& SlotMats)
-		{
-			UStaticMeshComponent* Comp = Actor->GetStaticMeshComponent();
-			if (!Comp) return;
-			// Modify before reassigning so undo can restore the previous mesh.
-			Comp->Modify();
-			Comp->SetStaticMesh(StaticMesh);
-			// SetStaticMesh keeps stale override entries; a build with fewer slots would serialise
-			// unreachable references to the previous build.
-			Comp->EmptyOverrideMaterials();
-			for (int32 i = 0; i < SlotMats.Num(); ++i)
-			{
-				if (SlotMats[i]) Comp->SetMaterial(i, SlotMats[i]);
-			}
-			Comp->SetCollisionProfileName(TEXT("BlockAll"));
-			// Query only: nothing simulates against a building.
-			Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-		};
-
-		// The library: a building whose geometry is already baked takes that mesh, no build.
 		const bool bShare = CVarShareMeshes.GetValueOnGameThread() && !bBespoke;
 		FString Key;
 		{
@@ -523,12 +535,10 @@ namespace HutongGen
 			}
 		}
 
-		// A library mesh is outside undo: undoing a placement must not revert an asset other buildings
-		// share (an undone creation left one with no source data). The actor's reference is undoable.
+		// A library mesh is outside undo, so undoing a placement leaves an asset other buildings share intact.
 		TOptional<TGuardValue<ITransaction*>> NoUndo;
 		if (bShare) NoUndo.Emplace(GUndo, nullptr);
 
-		// From the collision LOD as built, before bake winding: the fit does not care which way faces point.
 		FKAggregateGeom CollisionGeom;
 		{
 			FBakeTimer T(TEXT("collision fit"));
@@ -536,7 +546,6 @@ namespace HutongGen
 		}
 		TOptional<FBakeTimer> PrepTimer(InPlace, TEXT("normals, UVs, conversion"));
 
-		// Prepare every LOD before touching the asset.
 		TArray<TArray<int32>> LODSlots;
 		TArray<FMeshDescription> LODDescs;
 		LODSlots.Reserve(LODs.Num());
@@ -544,7 +553,6 @@ namespace HutongGen
 		for (FDynamicMesh3& Mesh : LODs)
 		{
 			// Reverse first: normals must come from the final winding.
-			// Hard above the angle, smooth below: 舉架 creases and column facets smooth, boxes crisp.
 			// Kept under 36° (hip panels on a 五舉 eave) so a hip stays hard.
 			Mesh.ReverseOrientation();
 			Mesh.EnableAttributes();
@@ -564,7 +572,6 @@ namespace HutongGen
 			Converter.Convert(&Mesh, Desc);
 		}
 
-		// The asset's one material list: the union of what the chain wears, in enum order (cached below).
 		TArray<int32> UsedSlots;
 		{
 			bool bSeen[MatSlot_Count] = {};
@@ -589,8 +596,6 @@ namespace HutongGen
 			SlotMats = PaletteMaterials(UsedSlots);
 		}
 
-		// Shared: its own package in the library, its slots wearing only what any building may (the
-		// palette rides on each component). Bespoke: outered to the actor, saved in the actor's package.
 		UStaticMesh* StaticMesh = nullptr;
 		UPackage* LibraryPackage = nullptr;
 		if (bShare)
@@ -602,13 +607,10 @@ namespace HutongGen
 		{
 			StaticMesh = NewObject<UStaticMesh>(Actor, NAME_None, RF_Public | RF_Transactional);
 		}
-		// Defaults were on; wrong for a city's worth of meshes.
 		StaticMesh->bAllowCPUAccess = false;
 		StaticMesh->NeverStream = false;
-		// The chain's screen sizes are chosen, not measured off the bounds.
 		StaticMesh->SetAutoComputeLODScreenSize(false);
-		// Nanite renders LOD0 and bins by material; the chain is the non-Nanite fallback and
-		// collision source. Fallback at 100%: LOD0 is a chosen level, not a scan.
+		// Nanite fallback at 100%: LOD0 is a chosen level.
 		{
 			FMeshNaniteSettings Nanite = StaticMesh->GetNaniteSettings();
 			Nanite.bEnabled = true;
@@ -616,11 +618,10 @@ namespace HutongGen
 			Nanite.FallbackPercentTriangles = 1.0f;
 			StaticMesh->SetNaniteSettings(Nanite);
 		}
-		// 遠 is the collision representation: no 勾頭 or 椽頭 in the physics triangles.
+		// 遠 is the collision representation, keeping 勾頭 and 椽頭 out of the physics triangles.
 		StaticMesh->LODForCollision = FMath::Clamp(CollisionLOD, 0, LODDescs.Num() - 1);
 		StaticMesh->InitResources();
 		StaticMesh->SetLightingGuid();
-		// Only the slots the mesh wears, in enum order.
 		for (int32 i = 0; i < UsedSlots.Num(); ++i)
 		{
 			const FName Name = MaterialSlotName(UsedSlots[i]);
@@ -632,13 +633,11 @@ namespace HutongGen
 		for (int32 LOD = 0; LOD < LODDescs.Num(); ++LOD)
 		{
 			FStaticMeshSourceModel& SrcModel = StaticMesh->AddSourceModel();
-			SrcModel.BuildSettings.bRecomputeNormals = false;   // keep the baked normals
+			SrcModel.BuildSettings.bRecomputeNormals = false;
 			SrcModel.BuildSettings.bRecomputeTangents = true;
-			// MikkTSpace needs UVs; the mesh has them.
 			SrcModel.BuildSettings.bUseMikkTSpace = true;
 			SrcModel.BuildSettings.bGenerateLightmapUVs = false;
 			SrcModel.BuildSettings.bBuildReversedIndexBuffer = false;
-			// No reduction: each LOD is its own build.
 			SrcModel.ReductionSettings.PercentTriangles = 1.0f;
 			SrcModel.ScreenSize.Default = Detail::LODScreenSize(LOD);
 
@@ -656,7 +655,6 @@ namespace HutongGen
 		}
 
 		// Collision flags must be set before Build so the cooked collision data matches them.
-		// Simple shapes fitted to the collision LOD's pieces answer every query, complex ones included.
 		StaticMesh->CreateBodySetup();
 		if (UBodySetup* BodySetup = StaticMesh->GetBodySetup())
 		{
@@ -664,8 +662,7 @@ namespace HutongGen
 			BodySetup->CollisionTraceFlag = CollisionGeom.GetElementCount() > 0 ? CTF_UseSimpleAsComplex : CTF_UseComplexAsSimple;
 		}
 
-		// No PostEditChange after Build: it runs a second Build (900 ms vs 7 ms on a 正房 chain).
-		// Everything it would refresh (section info, body setup, materials) is already set.
+		// Build alone: PostEditChange runs a second Build (900 ms vs 7 ms on a 正房 chain).
 		{
 			FBakeTimer T(TEXT("static mesh build (Nanite, LODs, collision cook)"));
 			StaticMesh->Build(false);
@@ -675,13 +672,124 @@ namespace HutongGen
 		{
 			FAssetRegistryModule::AssetCreated(StaticMesh);
 			LibraryPackage->MarkPackageDirty();
-			// On disk at once: a level saved without it would reload with its buildings missing their mesh.
-			// Not under automation, which would litter the host project.
+			// Skipped under automation, which would litter the host project.
 			if (!GIsAutomationTesting) PendingLibrarySaves().AddUnique(StaticMesh);
 		}
 		SlotCache().Add(StaticMesh, UsedSlots);
 		NoUndo.Reset();
 		Assign(StaticMesh, SlotMats);
+	}
+
+	static void WearBakedMesh(UStaticMeshComponent* Comp, UStaticMesh* StaticMesh, const TArray<UMaterialInterface*>& SlotMats)
+	{
+		Comp->SetStaticMesh(StaticMesh);
+		// SetStaticMesh keeps stale override entries past the new slot count.
+		Comp->EmptyOverrideMaterials();
+		for (int32 i = 0; i < SlotMats.Num(); ++i)
+		{
+			if (SlotMats[i]) Comp->SetMaterial(i, SlotMats[i]);
+		}
+		Comp->SetCollisionProfileName(TEXT("BlockAll"));
+		Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	}
+
+	static TArray<UInstancedStaticMeshComponent*> TaggedInstances(const AActor* Actor)
+	{
+		TArray<UInstancedStaticMeshComponent*> Instances;
+		if (Actor) Actor->GetComponents(Instances);
+		Instances.RemoveAll([](const UInstancedStaticMeshComponent* Comp) { return !Comp->ComponentHasTag(MeshInstancesTag); });
+		return Instances;
+	}
+
+	void BuildAndAssignStaticMesh(
+		AStaticMeshActor* Actor,
+		TArray<FDynamicMesh3>& LODs,
+		const FHutongPalette& Palette,
+		int32 CollisionLOD,
+		bool bBespoke,
+		const FMeshTurn& Turn)
+	{
+		if (!Actor || LODs.Num() == 0) return;
+		ClearMeshInstances(Actor);
+		auto Assign = [&](UStaticMesh* StaticMesh, const TArray<UMaterialInterface*>& SlotMats)
+		{
+			UStaticMeshComponent* Comp = TurnedMeshComponent(Actor, Turn);
+			if (!Comp) return;
+			// Modify before reassigning so undo can restore the previous mesh.
+			Comp->Modify();
+			WearBakedMesh(Comp, StaticMesh, SlotMats);
+		};
+		FindOrBakeMesh(Actor, LODs, Palette, CollisionLOD, bBespoke, Assign);
+	}
+
+	void ClearMeshInstances(AStaticMeshActor* Actor)
+	{
+		for (UInstancedStaticMeshComponent* Comp : TaggedInstances(Actor))
+		{
+			Comp->Modify();
+			Actor->RemoveInstanceComponent(Comp);
+			Comp->DestroyComponent();
+		}
+	}
+
+	void AssignMeshInstances(AStaticMeshActor* Actor, TArray<FMeshInstances>& Groups, const FHutongPalette& Palette)
+	{
+		if (!Actor) return;
+		ClearMeshInstances(Actor);
+		if (UStaticMeshComponent* Built = GetBuiltMeshComponent(Actor))
+		{
+			Built->Modify();
+			Built->SetStaticMesh(nullptr);
+		}
+		for (FMeshInstances& Group : Groups)
+		{
+			if (Group.LODs.Num() == 0 || Group.Placed.Num() == 0) continue;
+			FindOrBakeMesh(Actor, Group.LODs, Palette, Group.CollisionLOD, /*bBespoke*/ false,
+				[Actor, &Group](UStaticMesh* Mesh, const TArray<UMaterialInterface*>& SlotMats)
+				{
+					UInstancedStaticMeshComponent* Comp = NewObject<UInstancedStaticMeshComponent>(Actor,
+						MakeUniqueObjectName(Actor, UInstancedStaticMeshComponent::StaticClass()), RF_Transactional);
+					Comp->ComponentTags.Add(MeshInstancesTag);
+					Comp->SetMobility(EComponentMobility::Static);
+					Comp->SetupAttachment(Actor->GetRootComponent());
+					Actor->AddInstanceComponent(Comp);
+					WearBakedMesh(Comp, Mesh, SlotMats);
+					Comp->RegisterComponent();
+					Comp->AddInstances(Group.Placed, /*bShouldReturnIndices*/ false);
+				});
+		}
+	}
+
+	int64 CountBuiltTriangles(const AActor* Actor, bool bWaitForBuild)
+	{
+		int64 Triangles = 0;
+		const UStaticMeshComponent* Built = GetBuiltMeshComponent(Actor);
+		// Reading a mesh still building in the background waits for it ("Waiting for Static Meshes"): say so instead.
+		if (const UStaticMesh* Mesh = Built ? Built->GetStaticMesh() : nullptr)
+		{
+			if (!bWaitForBuild && Mesh->IsCompiling()) return -1;
+			if (Mesh->GetNumLODs() > 0) Triangles += Mesh->GetNumTriangles(0);
+		}
+		for (const UInstancedStaticMeshComponent* Comp : TaggedInstances(Actor))
+		{
+			const UStaticMesh* Mesh = Comp->GetStaticMesh();
+			if (!bWaitForBuild && Mesh && Mesh->IsCompiling()) return -1;
+			if (Mesh && Mesh->GetNumLODs() > 0)
+			{
+				Triangles += int64(Mesh->GetNumTriangles(0)) * Comp->GetInstanceCount();
+			}
+		}
+		return Triangles;
+	}
+
+	void CountMeshInstances(const AActor* Actor, int32& OutPlaced, int32& OutMeshes)
+	{
+		OutPlaced = OutMeshes = 0;
+		for (const UInstancedStaticMeshComponent* Comp : TaggedInstances(Actor))
+		{
+			OutPlaced += Comp->GetInstanceCount();
+			++OutMeshes;
+		}
 	}
 
 	void StartLibrarySaver()
@@ -706,9 +814,8 @@ namespace HutongGen
 
 	bool MakeMeshUnique(AStaticMeshActor* Actor)
 	{
-		UStaticMeshComponent* Comp = Actor ? Actor->GetStaticMeshComponent() : nullptr;
+		UStaticMeshComponent* Comp = GetBuiltMeshComponent(Actor);
 		UStaticMesh* Shared = Comp ? Comp->GetStaticMesh() : nullptr;
-		// Already its own (outered to the actor, as a bespoke bake is).
 		if (!Shared || Shared->GetOuter() == Actor) return false;
 		Actor->Modify();
 		Comp->Modify();
@@ -716,7 +823,6 @@ namespace HutongGen
 		Own->ClearFlags(RF_Standalone);
 		Own->SetFlags(RF_Public | RF_Transactional);
 		Own->Build(false);
-		// The overrides (a student's materials) stay on the component.
 		Comp->SetStaticMesh(Own);
 		SlotCache().Add(Own, SlotsOf(Shared));
 		return true;

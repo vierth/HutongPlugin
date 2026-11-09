@@ -46,11 +46,9 @@ protected:
 
 	virtual void AdjustBracketValue(int32 Delta, bool bFine, bool bCoarse) override;
 	int32 ComputeBayCountForSide() const;
-	// The params at the rect being drawn, facing BaySide: the 大式 hall is sized from it.
 	FHutongHallParams GetSizedParams() const;
 	virtual void GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const override;
-	// Set while the facing is picked: the side is chosen on the rect as dragged, since the held proportion
-	// follows the side and would feed back into the choice.
+	// The held proportion follows the side, so the side is chosen on the rect as dragged.
 	mutable bool bPickingSide = false;
 
 	UPROPERTY()

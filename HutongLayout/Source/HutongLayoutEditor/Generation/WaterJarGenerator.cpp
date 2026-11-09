@@ -19,12 +19,11 @@ namespace HutongGen
 		const double MouthR = 0.5 * Belly * FMath::Clamp(P.MouthFraction, 0.1, 1.0);
 		const double BellyZ = H * FMath::Clamp(P.BellyFraction, 0.05, 0.95);
 
-		// Footprint centred on the drag.
 		const double Span = P.GetFootprint();
 		const double CX = 0.5 * Span;
 		const double CY = 0.5 * Span;
 
-		// 1) 缸座 first; the jar's foot sits on it.
+		// 缸座 first; the jar's foot sits on it.
 		double Z0 = 0.0;
 		if (P.bHasBase && P.BaseHeight > 0.0)
 		{
@@ -38,7 +37,6 @@ namespace HutongGen
 			Z0 = BH;
 		}
 
-		// Jar: a unit circle scaled per station up the axis, as AppendColumn does 收分.
 		const TArray<FVector2d> Circle = MakeCircleProfile(1.0, Sides);
 
 		struct FStation { double Z; double R; };

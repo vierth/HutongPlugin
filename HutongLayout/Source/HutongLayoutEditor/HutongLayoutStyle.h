@@ -4,7 +4,6 @@
 
 class FSlateStyleSet;
 
-// Slate style set holding the toolbar icons for the mode's tools.
 class FHutongLayoutStyle
 {
 public:

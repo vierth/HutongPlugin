@@ -6,8 +6,7 @@
 
 namespace HutongGen
 {
-	// 裝修: the joinery filling a timber facade between its 抱框 (四合院建築及其構造 pp.104–105).
-	// Every member lies across X, shows its street face at the given Y and is Depth deep in +Y; the room is +Y.
+	// 裝修 (四合院建築及其構造 pp.104–105): members lie across X, street face at Y, Depth deep in +Y (the room).
 	namespace Joinery
 	{
 		struct FLattice
@@ -23,15 +22,12 @@ namespace HutongGen
 		void AppendGeshan(UE::Geometry::FDynamicMesh3& Mesh, double X0, double X1, double Z0, double Z1,
 			double SplitZ, double Y0, double Depth, const FLattice& Lattice);
 
-		// 支摘窗 between two 抱框: a 間框 at the middle (PostY0..PostY1 deep), a 支窗 over a 摘窗 each side.
 		void AppendWindow(UE::Geometry::FDynamicMesh3& Mesh, double X0, double X1, double Z0, double Z1,
 			double Y0, double Depth, double PostY0, double PostY1, const FLattice& Lattice);
 
-		// 橫陂: Panes fixed sashes between 短間框, over 中檻 to 上檻.
 		void AppendTransom(UE::Geometry::FDynamicMesh3& Mesh, double X0, double X1, double Z0, double Z1,
 			double Y0, double Depth, double PostY0, double PostY1, int32 Panes, const FLattice& Lattice);
 
-		// The 明間: 下檻, four 隔扇 on it, and before the middle two a 簾架 holding a 風門.
 		struct FDoorBay
 		{
 			double X0 = 0.0, X1 = 360.0;        // clear between the 抱框
@@ -48,7 +44,6 @@ namespace HutongGen
 			double DoorClearHeight = 190.0;      // 吉門: what the 門口 is sized to, the bands over it giving way
 		};
 
-		// The 簾架's members, from its height and the bay; shared by the builder and the tests.
 		struct FCurtain
 		{
 			bool bValid = false;

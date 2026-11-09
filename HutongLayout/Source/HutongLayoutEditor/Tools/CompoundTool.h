@@ -34,7 +34,6 @@ namespace HutongCompound
 		FHutongInnerGateParams InnerGate;
 	};
 
-	// One slot's mesh in the plot's frame.
 	struct FBuiltSlot
 	{
 		FHutongCompoundSlot Slot;
@@ -179,7 +178,6 @@ public:
 
 	UHutongCompoundToolProperties();
 
-	// Seeds 正房, 耳房, 廂房 from the court size; Custom seeds nothing.
 	void ApplyCourtSize();
 
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -197,7 +195,6 @@ public:
 protected:
 	virtual void RegisterToolSettings() override;
 
-	// Pins plot-frame +Y to north so the 正房 faces south.
 	void ApplyNorthOrientation();
 	virtual void OnPlacementStarted(const FVector& HitWorld) override;
 	virtual void OnPlacementHover(const FVector& HitWorld) override;
@@ -207,66 +204,46 @@ protected:
 	virtual double GetPreviewHeight() const override;
 	virtual void AdjustHeight(double DeltaCm) override;
 
-	// Clamps the drag to at least the smallest plot the settings lay out on.
 	virtual void GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const override;
 	virtual void RenderIdlePreview(FPrimitiveDrawInterface* PDI, const FVector& CursorGround) override;
 	virtual FText GetStagePromptText() const override;
 	virtual TArray<FText> GetStageNames() const override;
 
-	// Plot size for a cursor at LocalCursor (plot frame).
 	void PlotSizeForCursor(const FVector2D& LocalCursor, double& OutW, double& OutD) const;
 
-	// Draws the plan from Origin.
 	void DrawPlan(FPrimitiveDrawInterface* PDI, const FVector& Origin, double SizeX, double SizeY) const;
 
-	// Drops a building's 下鹼 so its band tops out level with the wall's.
 	void AlignBaseCourse(FHutongSiheyuanParams& P,
 		EHutongBaySide Facing, double SizeX, double SizeY) const;
 
-	// Builds the layout input from the current settings and the dragged plot.
 	HutongGen::FCompoundInput MakeInput(double SizeX, double SizeY) const;
 
-	// Ordinary plot: the one the 七檁前後廊 hall is laid out on.
 	void GetSuggestedPlot(double& OutW, double& OutD) const;
 
-	// A row slot's frontage and depth on this plot, so derived figures seed from the building
-	// actually built, not the preset's suggestion. False if the plan has no such slot.
 	bool RowSlotSize(EHutongCompoundPiece Piece, double& OutFrontage, double& OutDepth) const;
 
 public:
-	// MakeInput off a settings object; test-reachable.
 	static HutongGen::FCompoundInput MakeInputFrom(const UHutongCompoundToolProperties* S, double SizeX, double SizeY);
 
-	// MakeInputFrom with the 正房 given, not chosen by plot size.
 	static HutongGen::FCompoundInput MakeInputWithHall(const UHutongCompoundToolProperties* S,
 		const FHutongSiheyuanParams& Hall, double SizeX, double SizeY);
 
-	// Clear walk of the court's corridors: the panel's for a ring; for linked verandas the 廂房's
-	// 前廊 (檐柱 to 金柱) carried on (Fig 2-9.1). OutShift: how far past the 廂房 front a link
-	// stands so its posts sit on the 檐柱 line.
+	// Linked verandas: the 廂房's 前廊 (檐柱 to 金柱) carried on (Fig 2-9.1); OutShift puts a link's posts on the 檐柱 line.
 	static double CourtWalkWidth(const UHutongCompoundToolProperties* S, double* OutShift = nullptr);
 
-	// Stamped size's plot: its own width, and the depth its plan wants with that size's own hall
-	// (the 前後廊 hall on a 前廊 court gave the 內院 the difference).
 	static void GetStampedPlot(const UHutongCompoundToolProperties* S, double& OutW, double& OutD);
 
-	// 七檁前後廊 on a plot that fits it, 前廊後無廊 on one that does not.
 	static const FHutongSiheyuanParams& MainHallFor(const UHutongCompoundToolProperties* S, double SizeX, double SizeY);
 
-	// 正房 of the plot being spawned, chosen once before any slot.
 	mutable const FHutongSiheyuanParams* PlacedMainHall = nullptr;
 
-	// A slot's params and its mesh from them; shared by SpawnSlot and tests.
 	HutongCompound::FSlotParams MakeSlotParams(const FHutongCompoundSlot& Slot) const;
 	void BuildSlotMesh(const FHutongCompoundSlot& Slot, const HutongCompound::FSlotParams& P,
 		UE::Geometry::FDynamicMesh3& Mesh, EHutongDetail Level) const;
 
-	// Whole compound, each slot's mesh placed in the plot frame, resolved as SpawnFinalActor does.
-	// Needs only Settings.
 	void BuildCompound(double SizeX, double SizeY, EHutongDetail Level,
 		TArray<HutongCompound::FBuiltSlot>& Out) const;
 
-	// Spawns one slot as its own actor. Returns it, or null if nothing was built.
 	AStaticMeshActor* SpawnSlot(UWorld* World, const FHutongCompoundSlot& Slot,
 		double MinX, double MinY) const;
 
@@ -276,10 +253,8 @@ public:
 	// Fills StreetRowRidgeZ; call before spawning any slot.
 	void ResolveStreetRowRidge(const TArray<FHutongCompoundSlot>& Slots) const;
 
-	// 正房 eave as built; every subordinate building stays under it.
 	mutable double HallEaveZ = 0.0;
 
-	// 正房 floor: one level for the whole covered walk, 垂花門 to hall. Zero with no walk.
 	mutable double WalkFloorZ = 0.0;
 	void ResolveHallEave(const TArray<FHutongCompoundSlot>& Slots, double SizeX, double SizeY) const;
 
@@ -301,23 +276,18 @@ public:
 
 namespace HutongCompound
 {
-	// 廂房 as built: the panel preset plus what the court walk asks.
 	FHutongSiheyuanParams CourtWing(const FHutongSiheyuanParams& Base, EHutongCourtWalk Walk);
 
-	// A building whose 前廊 is part of the court's covered walk opens its gables across it.
 	FHutongSiheyuanParams OnCourtWalk(const FHutongSiheyuanParams& Base, EHutongCourtWalk Walk);
 
-	// The 耳房 that carries the compound's 過道 through it.
 	FHutongEarPassageParams CourtEarPassage(const FHutongSiheyuanParams& Room,
 		const FHutongPassageParams& Roof, double PassageWidth, bool bAtFarEnd);
 
 	// Holds a building under the hall's eave; fill its footprint first.
 	FHutongSiheyuanParams Subordinate(const FHutongSiheyuanParams& Base, double MaxEave);
 
-	// Both hall 耳房 at one eave whatever their bays; derived, one- and two-bay ears differed.
 	FHutongSiheyuanParams HeldAt(const FHutongSiheyuanParams& Base, double Eave);
 
-	// Hall row's 後檐, per plan.
 	FHutongSiheyuanParams CourtRow(const FHutongSiheyuanParams& Base, EHutongCompoundPlan Plan,
 		EHutongBaySide Facing);
 }

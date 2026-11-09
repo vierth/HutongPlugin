@@ -24,7 +24,6 @@ public:
 	double RowRidgeClearance = HutongCanon::Gate::RidgeAboveRowCm;
 
 #if WITH_EDITOR
-	// Clamps the eave into the style's band when style or height changes.
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 };
@@ -50,28 +49,20 @@ protected:
 	virtual FString GetActorNameBase() const override { return TEXT("Hutong_Gate"); }
 	virtual FString GetPlacementDetail() const override;
 
-	// Holds the drag in the style's size band, or to the matched row.
 	virtual void GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const override;
 
-	// Matched row's depth along this gate's depth axis; zero if the anchor joined no row.
 	double MatchedRowDepth() const;
-	// Matched row's eave; zero likewise.
 	double MatchedRowEave() const;
-	// Eave for the match: tool params with the ridge lifted clear of the row's.
 	double MatchedGateEave() const;
-	// Aligns the placement to the row's run and facing, anchor on the row's nearer front corner so fronts line up.
 	void TakeRowBearing();
 
-	// Body direction from the anchor on the depth axis (gate frame), pinned at the click: +/-1, zero if
-	// unmatched. Not re-derived from BaySide, which commit may flip to the camera side.
+	// Pinned at the click: commit may flip BaySide to the camera side.
 	FVector2D RowInwardLocal = FVector2D::ZeroVector;
 
-	// Extra stage, as in the siheyuan.
 	virtual void OnPlacementStarted(const FVector& HitWorld) override;
 	virtual bool OnRectCommitted(const FVector& HitWorld) override;
 	virtual void OnPlacementHover(const FVector& HitWorld) override;
 
-	// Side on that axis the camera is on.
 	HutongGen::EBaySide ComputeCameraFacingOnAxis() const;
 	HutongGen::EBaySide ComputeClosestSide(double Hx, double Hy) const;
 

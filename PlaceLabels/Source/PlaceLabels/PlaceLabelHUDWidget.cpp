@@ -65,7 +65,6 @@ void UPlaceLabelDefaultHUDWidget::RebuildLines()
 
 	for (const FPlaceLabelEntry& Entry : Chain)
 	{
-		// Innermost region large and opaque; each step outward smaller and fainter.
 		const bool bLeaf = Entry.Depth == 0;
 
 		FLinearColor Color = Entry.Type ? Entry.Type->AccentColor : FLinearColor::White;
@@ -77,11 +76,9 @@ void UPlaceLabelDefaultHUDWidget::RebuildLines()
 		const int32 PinyinSize = bLeaf ? 20 : FMath::Max(12, 16 - 2 * Entry.Depth);
 		const int32 EnglishSize = bLeaf ? 18 : FMath::Max(11, 14 - 2 * Entry.Depth);
 
-		// One row per region: 大柵欄 Dashilan Great Fence, side by side.
 		TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox);
 		bool bRowHasContent = false;
 
-		// Fields shown as typed.
 		auto AddPart = [&](const FText& Text, int32 FontSize, const FLinearColor& PartColor)
 		{
 			if (Text.IsEmpty())
@@ -92,7 +89,7 @@ void UPlaceLabelDefaultHUDWidget::RebuildLines()
 			// The default Slate font is a composite whose fallback face covers CJK.
 			Row->AddSlot()
 				.AutoWidth()
-				// Bottom, not centre: mixed sizes need a common baseline.
+				// Bottom: mixed sizes need a common baseline.
 				.VAlign(VAlign_Bottom)
 				.Padding(bRowHasContent ? 10.0f : 0.0f, 0.0f, 0.0f, 0.0f)
 				[

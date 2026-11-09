@@ -238,7 +238,6 @@ namespace
 				SNew(SBorder).BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder")).Padding(10.0f)
 				[
 					SNew(SVerticalBox)
-					// Any court in the level, whole: its buildings become the selection and the table.
 					+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 6.0f)
 					[
 						SNew(SHorizontalBox)
@@ -271,7 +270,6 @@ namespace
 							]
 						]
 					]
-					// Court.
 					+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 8.0f)
 					[
 						SNew(SHorizontalBox)
@@ -305,7 +303,6 @@ namespace
 							.OnClicked_Lambda([this]() { if (Tool.IsValid()) Tool->SelectCourt(); return FReply::Handled(); })
 						]
 					]
-					// The table.
 					+ SVerticalBox::Slot().FillHeight(1.0f)
 					[
 						SNew(SOverlay)
@@ -347,7 +344,6 @@ namespace
 					[
 						SNew(SSeparator)
 					]
-					// Actions.
 					+ SVerticalBox::Slot().AutoHeight()
 					[
 						SNew(SHorizontalBox)
@@ -394,7 +390,7 @@ namespace
 			SeenRevision = Tool->GetRowsRevision();
 			Items.Reset();
 			for (int32 i = 0; i < Tool->GetRows().Num(); ++i) Items.Add(MakeShared<int32>(i));
-			// Rows are built once per set: rebuild them, not only refresh.
+			// Rows are built once per set, so the list is rebuilt.
 			List->RebuildList();
 		}
 

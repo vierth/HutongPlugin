@@ -22,100 +22,81 @@ namespace HutongGen
 		inline constexpr double CourseHeight = 13.0;
 	}
 
-	// 青磚: cool medium grey.
 	extern const FLinearColor DefaultBrickColor;
 
-	// Grey tile, a shade below the brick.
 	extern const FLinearColor DefaultRoofColor;
 
-	// Dark oxblood woodwork.
 	extern const FLinearColor DefaultWoodColor;
 
-	// 青白石: cool grey limestone.
 	extern const FLinearColor DefaultStoneColor;
 
-	// 彩畫: 旋子 / 蘇式 blue-green.
 	extern const FLinearColor DefaultPaintColor;
 
-	// 下鹼: a shade darker and cooler than the wall.
 	extern const FLinearColor DefaultBaseCourseColor;
 
-	// 黑漆 door lacquer.
 	extern const FLinearColor DefaultDoorPaintColor;
 
-	// 窗欞: a shade off the doors.
 	extern const FLinearColor DefaultLatticeColor;
 
-	// 高麗紙: warm off-white.
 	extern const FLinearColor DefaultPaperColor;
 
-	// 白灰: interior lime plaster.
 	extern const FLinearColor DefaultPlasterColor;
 	extern const FLinearColor DefaultEarthColor;
 	extern const FLinearColor DefaultPartitionColor;
-	// 方磚: floor paving, a shade lighter than the wall's brick.
 	extern const FLinearColor DefaultFloorColor;
-	// Sign faces: a 黑底 plaque, the 萬壽圖's white 招牌, a red cloth 幌子. A texture set on the palette replaces them.
 	extern const FLinearColor DefaultPlaqueColor;
 	extern const FLinearColor DefaultSignboardColor;
 	extern const FLinearColor DefaultTradeSignColor;
-	// 城磚: weathered grey, a touch warmer and darker than the houses' 青磚.
 	extern const FLinearColor DefaultCityBrickColor;
+	extern const FLinearColor DefaultRedWallColor;
+	extern const FLinearColor DefaultGlazedTileColor;
 	// 尺二方磚: the Floor pattern's brick, which a generator authoring floor UVs lays out in.
 	inline constexpr double FloorPaverCm = 38.4;
 
-	// Material slots on the spawned mesh.
 	enum EMaterialSlot : int32
 	{
 		MatSlot_Body = 0,
 		MatSlot_Roof = 1,
 		MatSlot_Wood = 2,
-		MatSlot_Stone = 3,   // paifang plinths, 抱鼓石, 階條石
-		MatSlot_Paint = 4,   // 彩畫 on 額枋 and 走馬板
+		MatSlot_Stone = 3,
+		MatSlot_Paint = 4,
 
-		// 下鹼: finer brick, a shade darker than the wall.
 		MatSlot_BaseCourse = 5,
 
-		// 板門 and 隔扇 leaves.
 		MatSlot_DoorPaint = 6,
 
 		// 窗欞: separate from door paint so it can sit a shade off.
 		MatSlot_Lattice = 7,
 
-		// 窗紙 over the lattice.
 		MatSlot_Paper = 8,
 
-		// 白灰: room interiors.
 		MatSlot_Plaster = 9,
 
-		// 花池 soil and courtyard ground.
 		MatSlot_Earth = 10,
 
-		// 板壁: plain unpainted boarding.
 		MatSlot_Partition = 11,
 
-		// 正脊: stacked 瓦條 and brick, coursed rather than in 壟.
 		MatSlot_Ridge = 12,
 
-		// 花甎寶頂: moulded brick finials, whole pieces rather than courses.
 		MatSlot_Finial = 13,
 
-		// 尺二方磚墁地: the square floor paving of a 臺明.
 		MatSlot_Floor = 14,
 
-		// Sign faces, each with 0–1 UVs across its face so one texture fits it: 匾額, the upright 招牌
-		// (a pair shares one texture, left half and right half), the hanging 幌子 (both faces).
+		// 0–1 UVs across each face; an upright 招牌 pair shares one texture, left and right halves.
 		MatSlot_Plaque = 15,
 		MatSlot_Signboard = 16,
 		MatSlot_TradeSign = 17,
 
-		// 城磚: the city wall's larger brick, coursed at its own size.
 		MatSlot_CityBrick = 18,
+
+		// 紅牆: red-plastered palace and imperial-city walls.
+		MatSlot_RedWall = 19,
+		// 琉璃瓦: glazed tile, cover and ridge alike.
+		MatSlot_GlazedTile = 20,
 
 		MatSlot_Count        // must stay last
 	};
 
-	// Slot name on the baked mesh.
 	inline FName MaterialSlotName(int32 Slot)
 	{
 		switch (Slot)
@@ -139,6 +120,8 @@ namespace HutongGen
 		case MatSlot_Signboard:  return TEXT("Signboards (招牌)");
 		case MatSlot_TradeSign:  return TEXT("Trade Sign (幌子)");
 		case MatSlot_CityBrick:  return TEXT("City Wall Brick (城磚)");
+		case MatSlot_RedWall:    return TEXT("Red Wall (紅牆)");
+		case MatSlot_GlazedTile: return TEXT("Glazed Tile (琉璃瓦)");
 		default:                 return TEXT("Unnamed");
 		}
 	}
@@ -217,6 +200,14 @@ struct FHutongPalette
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance",
 		meta = (DisplayName = "City Wall Brick (城磚)", HideAlphaChannel, ToolTip="Colour of the city wall's brick."))
 	FLinearColor CityBrick = HutongGen::DefaultCityBrickColor;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance",
+		meta = (DisplayName = "Red Wall (紅牆)", HideAlphaChannel, ToolTip="Colour of the red plaster on palace and imperial city walls."))
+	FLinearColor RedWall = HutongGen::DefaultRedWallColor;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance",
+		meta = (DisplayName = "Glazed Tile (琉璃瓦)", HideAlphaChannel, ToolTip="Colour of glazed roof tiles, such as the imperial city wall's yellow cap."))
+	FLinearColor GlazedTile = HutongGen::DefaultGlazedTileColor;
 
 	// The sign art: laid once across each face (0–1 UVs). Needs the starter materials (Scene tab).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Signs",
@@ -312,6 +303,14 @@ struct FHutongPalette
 		meta = (DisplayName = "City Wall Brick Material (城磚)", ToolTip="Material for the city wall's brick; replaces its colour when set."))
 	TObjectPtr<UMaterialInterface> CityBrickMaterial = nullptr;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Materials",
+		meta = (DisplayName = "Red Wall Material (紅牆)", ToolTip="Material for red-plastered walls; replaces their colour when set."))
+	TObjectPtr<UMaterialInterface> RedWallMaterial = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Appearance|Materials",
+		meta = (DisplayName = "Glazed Tile Material (琉璃瓦)", ToolTip="Material for glazed roof tiles; replaces their colour when set."))
+	TObjectPtr<UMaterialInterface> GlazedTileMaterial = nullptr;
+
 	// Body scaled in linear space, alpha kept.
 	FLinearColor GetRoofColor() const
 	{
@@ -319,7 +318,6 @@ struct FHutongPalette
 		return FLinearColor(Body.R * Scale, Body.G * Scale, Body.B * Scale, Body.A);
 	}
 
-	// Sole slot → colour map.
 	FLinearColor GetSlotColor(int32 Slot) const
 	{
 		switch (Slot)
@@ -342,11 +340,13 @@ struct FHutongPalette
 		case HutongGen::MatSlot_Signboard:  return Signboard;
 		case HutongGen::MatSlot_TradeSign:  return TradeSign;
 		case HutongGen::MatSlot_CityBrick:  return CityBrick;
+		case HutongGen::MatSlot_RedWall:    return RedWall;
+		case HutongGen::MatSlot_GlazedTile: return GlazedTile;
 		default:                       return Body;
 		}
 	}
 
-	// Sole slot → material map. Null = tint the default.
+	// Null = tint the default.
 	UMaterialInterface* GetSlotMaterial(int32 Slot) const
 	{
 		switch (Slot)
@@ -369,11 +369,12 @@ struct FHutongPalette
 		case HutongGen::MatSlot_Signboard:  return SignboardMaterial;
 		case HutongGen::MatSlot_TradeSign:  return TradeSignMaterial;
 		case HutongGen::MatSlot_CityBrick:  return CityBrickMaterial;
+		case HutongGen::MatSlot_RedWall:    return RedWallMaterial;
+		case HutongGen::MatSlot_GlazedTile: return GlazedTileMaterial;
 		default:                       return BodyMaterial;
 		}
 	}
 
-	// The sign slots' art; null elsewhere.
 	UTexture* GetSlotTexture(int32 Slot) const
 	{
 		switch (Slot)

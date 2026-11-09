@@ -35,7 +35,6 @@ protected:
 	virtual FString GetPlacementDetail() const override;
 	virtual void GetEffectiveRectBounds(double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY) const override;
 
-	// Belly diameter the drag asks for, clamped to the params' band.
 	double DraggedBellyDiameter() const;
 
 	UPROPERTY()

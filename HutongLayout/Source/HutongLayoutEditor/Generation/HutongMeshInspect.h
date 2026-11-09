@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "DynamicMesh/DynamicMesh3.h"
 
-// Solidity and z-fight checks for generated meshes.
 namespace HutongMeshInspect
 {
 	struct FShellReport
@@ -13,11 +12,9 @@ namespace HutongMeshInspect
 		int32 Duplicated = 0;     // same directed edge twice: a winding flip
 		double Volume = 0.0;
 
-		// Closed, two-manifold, consistently wound, positive volume.
 		bool IsSolid() const { return Unmatched == 0 && Duplicated == 0 && Volume > 0.0; }
 	};
 
-	// Edges are matched by position, not index.
 	inline FShellReport InspectShell(const UE::Geometry::FDynamicMesh3& Mesh)
 	{
 		FShellReport R;
@@ -62,8 +59,6 @@ namespace HutongMeshInspect
 		return R;
 	}
 
-	// Same-plane, same-facing triangle pairs overlapping beyond a sliver: z-fights. Opposite-facing
-	// pairs are fine. Only faces wholly above MinZ count.
 	inline int32 CountSameFacingOverlaps(const UE::Geometry::FDynamicMesh3& Mesh, double MinZ = -BIG_NUMBER, TArray<FString>* OutWhere = nullptr)
 	{
 		TMap<FIntVector4, TArray<int32>> Planes;
@@ -79,7 +74,6 @@ namespace HutongMeshInspect
 				FMath::RoundToInt32(U.Z * 1000.0), FMath::RoundToInt32(U.Dot(A) * 10.0))).Add(tid);
 		}
 
-		// In-plane separating axes; overlap only if every axis overlaps by more than Eps.
 		constexpr double Eps = 0.05;
 		auto Overlap = [&Mesh](int32 T0, int32 T1)
 		{

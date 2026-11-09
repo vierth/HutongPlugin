@@ -127,8 +127,7 @@ namespace HutongMeshUtils
 			return false;
 		}
 
-		// UVs in the building's own frame, carried by the warp (and interpolated by the seam splits): brick
-		// runs along a skewed wall instead of being projected across it afterwards.
+		// UVs set before the warp, so brick runs along a skewed wall.
 		FillUnsetUVsBoxProjected(Mesh);
 
 		if (Skew.Mode == EHutongSkewMode::Ends)
@@ -178,7 +177,6 @@ namespace HutongMeshUtils
 			const FVector3d P[3] = { Mesh.GetVertex(T.A), Mesh.GetVertex(T.B), Mesh.GetVertex(T.C) };
 			const FVector3d N = (P[1] - P[0]).Cross(P[2] - P[0]);
 
-			// Project along the dominant normal axis.
 			const double AX = FMath::Abs(N.X), AY = FMath::Abs(N.Y), AZ = FMath::Abs(N.Z);
 			int32 Elems[3];
 			for (int32 i = 0; i < 3; ++i)
@@ -226,7 +224,7 @@ namespace HutongMeshUtils
 		if (bCurrent) Flush();
 		bOpen = false;
 		GOpenSlotScopes.RemoveSingle(this);
-		// The scope beneath takes up from here; what was appended meanwhile was this one's.
+		// The scope beneath resumes here; triangles appended meanwhile belong to this one.
 		if (bCurrent)
 		{
 			if (FSlotScope* Outer = Current(Mesh)) Outer->Flushed = Mesh.MaxTriangleID();
@@ -287,12 +285,12 @@ namespace HutongMeshUtils
 		for (int32 i = 0; i < 8; ++i) B[i] = Mesh.AppendVertex(V[i]);
 
 		auto T = [&](int32 a, int32 b, int32 c) { Mesh.AppendTriangle(B[a], B[b], B[c]); };
-		T(0, 2, 1); T(0, 3, 2);        // -Z
-		T(4, 5, 6); T(4, 6, 7);        // +Z
-		T(0, 1, 5); T(0, 5, 4);        // -Y
-		T(3, 7, 6); T(3, 6, 2);        // +Y
-		T(0, 4, 7); T(0, 7, 3);        // -X
-		T(1, 2, 6); T(1, 6, 5);        // +X
+		T(0, 2, 1); T(0, 3, 2);
+		T(4, 5, 6); T(4, 6, 7);
+		T(0, 1, 5); T(0, 5, 4);
+		T(3, 7, 6); T(3, 6, 2);
+		T(0, 4, 7); T(0, 7, 3);
+		T(1, 2, 6); T(1, 6, 5);
 	}
 
 	void AppendHexahedron(FDynamicMesh3& Mesh, const FVector3d Corners[8])
@@ -371,34 +369,25 @@ namespace HutongMeshUtils
 		const int32 a0 = Mesh.AppendVertex(A0);
 		const int32 a1 = Mesh.AppendVertex(A1);
 
-		// Base (-Z)
 		Mesh.AppendTriangle(i0, i2, i1);
 		Mesh.AppendTriangle(i0, i3, i2);
 
 		if (AlongAxis == EAxis2D::X)
 		{
-			// -Y slope
 			Mesh.AppendTriangle(i0, i1, a1);
 			Mesh.AppendTriangle(i0, a1, a0);
-			// +Y slope
 			Mesh.AppendTriangle(i3, a0, a1);
 			Mesh.AppendTriangle(i3, a1, i2);
-			// -X end cap
 			Mesh.AppendTriangle(i0, a0, i3);
-			// +X end cap
 			Mesh.AppendTriangle(i1, i2, a1);
 		}
 		else
 		{
-			// -X slope
 			Mesh.AppendTriangle(i0, a1, i3);
 			Mesh.AppendTriangle(i0, a0, a1);
-			// +X slope
 			Mesh.AppendTriangle(i1, i2, a1);
 			Mesh.AppendTriangle(i1, a1, a0);
-			// -Y end cap
 			Mesh.AppendTriangle(i0, i1, a0);
-			// +Y end cap
 			Mesh.AppendTriangle(i3, a1, i2);
 		}
 	}
@@ -421,7 +410,6 @@ namespace HutongMeshUtils
 
 		const int32 N = FMath::Max(SlopeSegments, 1);
 		const double Ridge = 0.5 * Width;
-		// Never reaches the ridge.
 		const double Trim = FMath::Clamp(FarEaveTrim, 0.0, 0.9 * Ridge);
 
 		TArray<double> Cross;
@@ -429,7 +417,6 @@ namespace HutongMeshUtils
 			const double Span = FMath::Max(Section.HalfSpan(), UE_DOUBLE_KINDA_SMALL_NUMBER);
 			const double Scale = Ridge / Span;
 
-			// Crease distances from the ridge.
 			TArray<double> Breaks;
 			{
 				double d = 0.0;
@@ -464,18 +451,15 @@ namespace HutongMeshUtils
 				return Out;
 			};
 
-			// Near slope, ridge-ward: distances descend to zero at the ridge.
 			const TArray<double> NearD = SideDistances(Ridge);
 			for (int32 k = NearD.Num() - 1; k >= 0; --k) Cross.Add(Ridge - NearD[k]);
-			// Far slope, out to its cut.
 			const TArray<double> FarD = SideDistances(Ridge - Trim);
 			for (int32 k = 1; k < FarD.Num(); ++k) Cross.Add(Ridge + FarD[k]);
 		}
 
-
 		for (double C : Cross)
 		{
-			const double D = FMath::Abs(2.0 * C / Width - 1.0);   // 1 at either eave, 0 at ridge
+			const double D = FMath::Abs(2.0 * C / Width - 1.0);
 			Out.Add(FVector2d(C, ApexHeight * Section.HeightFraction(D)));
 		}
 		return Out;
@@ -518,9 +502,6 @@ namespace HutongMeshUtils
 		};
 		const double CLast = Cross.Last();
 
-		// The underside in (cross, z), eave to far edge: at the eave line inside the eave course, a step
-		// down its back face, the soffit rising to the column line, flat between the column lines, and
-		// the same again at the rear when there is a rear eave course.
 		TArray<FVector2d> Bottom = { FVector2d(0.0, Z0) };
 		{
 			const double Drop = FMath::Max(Under.Drop, 0.0);
@@ -530,9 +511,8 @@ namespace HutongMeshUtils
 			const double Lap = FMath::Clamp(Under.FrontLap, 0.0, InStart);
 			const double RearLap = FMath::Clamp(Under.RearLap, 0.0, CLast - InEnd);
 			const double Cover = FMath::Max(Under.ShellCover, 0.0);
-			// Never above the roof's top, or the end face's outline crosses itself and nothing is built.
+			// Held below the roof's top: above it the end face's outline crosses itself and nothing is built.
 			auto LevelAt = [&](double C) { return FMath::Min(Z0 + Rise, ProfileZ(C) - 1.0); };
-			// Over a 前廊 the underside keeps the level ceiling's depth below the slope at the column line.
 			const double VerEnd = (Cover <= 0.0 && Under.VerandaEnd > InStart + 1.0) ? FMath::Min(Under.VerandaEnd, InEnd) : -1.0;
 			const double VerCover = (VerEnd > 0.0) ? ProfileZ(InStart) - LevelAt(InStart) : 0.0;
 			auto CeilingAt = [&](double C)
@@ -547,8 +527,6 @@ namespace HutongMeshUtils
 				Bottom.Add(FVector2d(Lap, Z0 - Drop));
 				Bottom.Add(FVector2d(InStart, CeilingAt(InStart)));
 			}
-			// Over the 廊 the underside follows the slope's creases to the wall on the 金柱 line, then steps down
-			// its face to the rooms' level ceiling.
 			if (VerEnd > 0.0)
 			{
 				if (Bottom.Last().X < InStart - 1e-6) Bottom.Add(FVector2d(InStart, CeilingAt(InStart)));
@@ -559,7 +537,6 @@ namespace HutongMeshUtils
 				Bottom.Add(FVector2d(VerEnd, CeilingAt(VerEnd)));
 				Bottom.Add(FVector2d(VerEnd, LevelAt(VerEnd)));
 			}
-			// A shell follows the slope's creases between the column lines.
 			if (Cover > 0.0)
 			{
 				if (Bottom.Last().X < InStart - 1e-6) Bottom.Add(FVector2d(InStart, CeilingAt(InStart)));
@@ -576,7 +553,6 @@ namespace HutongMeshUtils
 			}
 			else if ((Cover > 0.0 || FMath::Abs(Rise) > 0.0 || VerEnd > 0.0) && InEnd < CLast - 1.0)
 			{
-				// The ceiling stays level (or on the slope) to the rear column line, then meets the rear edge.
 				Bottom.Add(FVector2d(InEnd, CeilingAt(InEnd)));
 			}
 			Bottom.Add(FVector2d(CLast, Z0));
@@ -591,14 +567,12 @@ namespace HutongMeshUtils
 		}
 		for (int32 k = 0; k < Bottom.Num(); ++k)
 		{
-			// Corners on the slope's own edge share its vertices.
 			const int32 Top = (k == 0) ? 0 : (k == Bottom.Num() - 1) ? Cross.Num() - 1 : -1;
 			const bool bShared = Top >= 0 && FMath::Abs(ProfileZ(Cross[Top]) - Bottom[k].Y) <= UE_DOUBLE_KINDA_SMALL_NUMBER;
 			BotA.Add(bShared ? TopA[Top] : Mesh.AppendVertex(MakeVertex(0.0, Bottom[k].X, Bottom[k].Y)));
 			BotB.Add(bShared ? TopB[Top] : Mesh.AppendVertex(MakeVertex(Length, Bottom[k].X, Bottom[k].Y)));
 		}
 
-		// Underside as a strip: from below a roof is rafters and 望板.
 		{
 			FSlotScope UnderTag(Mesh, HutongGen::MatSlot_Wood);
 			for (int32 k = 0; k < Bottom.Num() - 1; ++k)
@@ -609,7 +583,6 @@ namespace HutongMeshUtils
 			}
 		}
 
-		// Slope strips.
 		EnsureUVLayer(Mesh);
 		UE::Geometry::FDynamicMeshUVOverlay* UV = Mesh.Attributes()->PrimaryUV();
 		const double UVScale = 1.0 / FMath::Max(UVTileSize, 0.01);
@@ -653,7 +626,6 @@ namespace HutongMeshUtils
 			if (UV && t1 >= 0) UV->SetTriangle(t1, UE::Geometry::FIndex3i(UvA[k], UvB[k + 1], UvA[k + 1]));
 		}
 
-		// Gable ends: the section's outline, slope over the top and underside back, ear-clipped.
 		const int32 GableFirst = Mesh.MaxTriangleID();
 		{
 			TArray<FVector2d> Outline;
@@ -690,7 +662,6 @@ namespace HutongMeshUtils
 		}
 		if (OutGableFaceRange) *OutGableFaceRange = UE::Geometry::FIndex2i(GableFirst, Mesh.MaxTriangleID());
 
-		// The cut face closing a trimmed far slope.
 		const int32 L = Cross.Num() - 1;
 		const int32 BL = Bottom.Num() - 1;
 		if (FMath::Abs(ProfileZ(CLast) - Bottom[BL].Y) > UE_DOUBLE_KINDA_SMALL_NUMBER)
@@ -769,7 +740,6 @@ namespace HutongMeshUtils
 			return (B.X - A.X) * (C.Y - A.Y) - (B.Y - A.Y) * (C.X - A.X);
 		}
 
-		// Ear clipping over a CCW simple polygon.
 		bool EarClipCCW(const TArray<FVector2d>& P, TArray<int32>& OutTris)
 		{
 			const int32 N = P.Num();
@@ -787,13 +757,13 @@ namespace HutongMeshUtils
 					const int32 ia = Idx[(k + N2 - 1) % N2];
 					const int32 ib = Idx[k];
 					const int32 ic = Idx[(k + 1) % N2];
-					if (Cross2(P[ia], P[ib], P[ic]) <= 0.0) continue;   // reflex or collinear
+					if (Cross2(P[ia], P[ib], P[ic]) <= 0.0) continue;
 
 					bool bEar = true;
 					for (int32 m : Idx)
 					{
 						if (m == ia || m == ib || m == ic) continue;
-						// A vertex on either polygon edge of the ear is a collinear run, not a blocker.
+						// A vertex on either polygon edge of the ear is a collinear run; it lets the ear stand.
 						if (Cross2(P[ia], P[ib], P[m]) > 0.0 && Cross2(P[ib], P[ic], P[m]) > 0.0
 							&& Cross2(P[ic], P[ia], P[m]) >= 0.0) { bEar = false; break; }
 					}
@@ -813,8 +783,7 @@ namespace HutongMeshUtils
 				OutTris.Add(Idx[0]); OutTris.Add(Idx[1]); OutTris.Add(Idx[2]);
 				return true;
 			}
-			// The last three are a collinear run: split the triangle across its outer two at the middle one,
-			// so the run's vertex stays in the fan and no edge is left open.
+			// Collinear last three: split at the middle vertex so no edge is left open.
 			for (int32 k = 0; k < 3; ++k)
 			{
 				const int32 X = Idx[(k + 2) % 3], M = Idx[k], Z = Idx[(k + 1) % 3];
@@ -835,6 +804,68 @@ namespace HutongMeshUtils
 		}
 	}
 
+	void AppendLoft(FDynamicMesh3& Mesh, const TArray<FVector3d>& Bottom, const TArray<FVector3d>& Top)
+	{
+		const int32 N = Bottom.Num();
+		if (N < 3 || Top.Num() != N) return;
+
+		struct FRing { TArray<int32> Ids; TArray<FVector2d> Cap; TArray<int32> CapIds; };
+		auto MakeRing = [&](const TArray<FVector3d>& R, FRing& Out) -> bool
+		{
+			// Start where the point differs from the one before, so a repeat run never wraps past the start.
+			int32 Start = 0;
+			while (Start < N && R[Start].Equals(R[(Start + N - 1) % N], 1e-6)) ++Start;
+			if (Start == N) return false;
+			Out.Ids.Init(-1, N);
+			for (int32 k = 0; k < N; ++k)
+			{
+				const int32 i = (Start + k) % N, Prev = (i + N - 1) % N;
+				if (k > 0 && R[i].Equals(R[Prev], 1e-6)) { Out.Ids[i] = Out.Ids[Prev]; continue; }
+				Out.Ids[i] = Mesh.AppendVertex(R[i]);
+				Out.Cap.Add(FVector2d(R[i].X, R[i].Y));
+				Out.CapIds.Add(Out.Ids[i]);
+			}
+			return Out.Cap.Num() >= 3;
+		};
+
+		const int32 FirstTri = Mesh.MaxTriangleID();
+		FRing B, T;
+		if (!MakeRing(Bottom, B) || !MakeRing(Top, T)) return;
+		TArray<int32> BottomTris, TopTris;
+		if (!EarClipCCW(B.Cap, BottomTris) || !EarClipCCW(T.Cap, TopTris)) return;
+
+		for (int32 i = 0; i < N; ++i)
+		{
+			const int32 j = (i + 1) % N;
+			if (B.Ids[i] != B.Ids[j]) Mesh.AppendTriangle(B.Ids[i], B.Ids[j], T.Ids[j]);
+			if (T.Ids[i] != T.Ids[j]) Mesh.AppendTriangle(B.Ids[i], T.Ids[j], T.Ids[i]);
+		}
+		for (int32 t = 0; t + 2 < BottomTris.Num(); t += 3)
+		{
+			Mesh.AppendTriangle(B.CapIds[BottomTris[t + 2]], B.CapIds[BottomTris[t + 1]], B.CapIds[BottomTris[t]]);
+		}
+		for (int32 t = 0; t + 2 < TopTris.Num(); t += 3)
+		{
+			Mesh.AppendTriangle(T.CapIds[TopTris[t]], T.CapIds[TopTris[t + 1]], T.CapIds[TopTris[t + 2]]);
+		}
+
+		// Same sense as AppendSweptProfile's sides and caps; reversed if the rings came the other way round.
+		double Volume = 0.0;
+		for (int32 tid = FirstTri; tid < Mesh.MaxTriangleID(); ++tid)
+		{
+			if (!Mesh.IsTriangle(tid)) continue;
+			const UE::Geometry::FIndex3i Tri = Mesh.GetTriangle(tid);
+			Volume += Mesh.GetVertex(Tri.A).Dot(Mesh.GetVertex(Tri.B).Cross(Mesh.GetVertex(Tri.C)));
+		}
+		if (Volume < 0.0)
+		{
+			for (int32 tid = FirstTri; tid < Mesh.MaxTriangleID(); ++tid)
+			{
+				if (Mesh.IsTriangle(tid)) Mesh.ReverseTriOrientation(tid);
+			}
+		}
+	}
+
 	void AppendSweptProfile(
 		FDynamicMesh3& Mesh,
 		const TArray<FVector2d>& Profile,
@@ -845,7 +876,6 @@ namespace HutongMeshUtils
 			return;
 		}
 
-		// Normalised here, not by the caller.
 		TArray<FVector2d> P = Profile;
 		if (SignedArea2(P) < 0.0)
 		{
@@ -917,7 +947,6 @@ namespace HutongMeshUtils
 
 	namespace
 	{
-		// 勾頭 along a hipped-family eave, which turns and lifts at the corners.
 		void AppendEaveCapRow(
 			FDynamicMesh3& Mesh,
 			const TArray<FVector3d>& Ring,
@@ -961,7 +990,6 @@ namespace HutongMeshUtils
 				if (Tan.SquaredLength() < 1e-12) continue;
 				Tan.Normalize();
 
-				// Outward plan perpendicular.
 				FVector2d Out(Tan.Y, -Tan.X);
 				if (Out.Dot(FVector2d(P.X, P.Y) - CentreXY) < 0.0) Out = -Out;
 
@@ -969,7 +997,6 @@ namespace HutongMeshUtils
 				const FQuat Lay = FQuat::FindBetweenNormals(
 					FVector::UpVector, FVector(Outward.X, Outward.Y, 0.0));
 
-				// Sunk into the fascia by part of its radius.
 				const FVector3d At = P - Outward * (0.4 * CapR) - FVector3d(0.0, 0.0, 0.5 * FasciaDrop);
 				const int32 Mark = Mesh.MaxVertexID();
 				AppendCylinder(Mesh, FVector3d::Zero(), CapR, CapLen, HutongGen::RoofTile::EaveCapSides);
@@ -978,9 +1005,6 @@ namespace HutongMeshUtils
 			}
 		}
 
-		// Eave course face down to its base, then the soffit from that base up to the column-line
-		// rectangle (Overhang in from the unflared eave) at eave height, closed flat inside it. Without
-		// an overhang the soffit is flat at the base. The soffit tags itself wood.
 		void AppendEaveUnderside(
 			FDynamicMesh3& Mesh,
 			const FVector3d& EaveMin, double W, double D, int32 Nu,
@@ -1009,10 +1033,8 @@ namespace HutongMeshUtils
 					const double U = (double)iu / Nu;
 					const FVector3d P = EaveAt(p, U);
 					EaveRing.Add(Mesh.AppendVertex(P));
-					// The eave course keeps its depth into a 翼角.
 					BaseRing.Add(Mesh.AppendVertex(FVector3d(P.X, P.Y, P.Z - FasciaDrop)));
 					const FVector2d Flat = FVector2d(EaveMin.X, EaveMin.Y) + Corner[p] + (Corner[(p + 1) % 4] - Corner[p]) * U;
-					// Under a 徹上明造 shell the soffit meets the shell's own row at the column line.
 					InnerRing.Add(Mesh.AppendVertex(ShellAt ? ShellAt(p, U) : FVector3d(Flat.X, Flat.Y, InnerZ)));
 					InnerXY.Add(Flat);
 				}
@@ -1025,7 +1047,6 @@ namespace HutongMeshUtils
 				AppendTri(BaseRing[i], BaseRing[j], EaveRing[i]);
 				AppendTri(BaseRing[j], EaveRing[j], EaveRing[i]);
 			}
-			// The soffit, timber from below.
 			FSlotScope SoffitTag(Mesh, HutongGen::MatSlot_Wood);
 			for (int32 i = 0; i < Ring; ++i)
 			{
@@ -1047,8 +1068,6 @@ namespace HutongMeshUtils
 
 	namespace
 	{
-		// 徹上明造: the underside of one slope panel, the panel itself Cover lower (plumb), over the rows Vs
-		// (column line up), facing down. Tags itself wood.
 		void AppendShellPanel(FDynamicMesh3& Mesh, TFunctionRef<FVector3d(double U, double V)> Sample,
 			int32 Nu, const TArray<double>& Vs, double Cover)
 		{
@@ -1115,7 +1134,6 @@ namespace HutongMeshUtils
 		const FVector2d Diag[4] = {
 			FVector2d(-Rt2, -Rt2), FVector2d(Rt2, -Rt2), FVector2d(Rt2, Rt2), FVector2d(-Rt2, Rt2) };
 
-		// Panels follow the corner order, each rising to its own ridge stretch.
 		const int32 EaveA[4] = { 0, 1, 2, 3 };
 		const int32 EaveB[4] = { 1, 2, 3, 0 };
 		const FVector2d RidgeA[4] = {
@@ -1141,7 +1159,7 @@ namespace HutongMeshUtils
 				const int32 C = (Sa <= Sb) ? EaveA[p] : EaveB[p];
 				double Wt = FMath::Clamp(1.0 - FMath::Min(Sa, Sb) / FlareLen, 0.0, 1.0);
 				Wt = Wt * Wt * (3.0 - 2.0 * Wt);            // smoothstep, so the eave leaves flat
-				const double G = (1.0 - v) * (1.0 - v);     // and the ridge is left alone
+				const double G = (1.0 - v) * (1.0 - v);
 				XY += Diag[C] * (Wt * G * FlareRun);
 				Z += Wt * G * FlareRise;
 			}
@@ -1182,7 +1200,6 @@ namespace HutongMeshUtils
 			return Mesh.AppendTriangle(a, b, c);
 		};
 
-		// Slopes.
 		EnsureUVLayer(Mesh);
 		UE::Geometry::FDynamicMeshUVOverlay* UV = Mesh.Attributes()->PrimaryUV();
 		const double UVScale = 1.0 / FMath::Max(Spec.TileRowSpacing, 0.01);
@@ -1239,7 +1256,6 @@ namespace HutongMeshUtils
 			}
 		}
 
-		// 徹上明造: the soffit meets the shell's column-line row, and each panel's underside runs on up.
 		const double Cover = (Spec.EaveOverhang > 0.0) ? FMath::Max(Spec.ShellCover, 0.0) : 0.0;
 		auto ShellV = [&](int32 p) { return FMath::Clamp(Spec.EaveOverhang / FMath::Max((p == 0 || p == 2) ? Cy : Rx0, 1.0), 0.0, 0.9); };
 		TFunction<FVector3d(int32, double)> ShellAt;
@@ -1256,7 +1272,6 @@ namespace HutongMeshUtils
 			}
 		}
 
-		// 勾頭 round the eave, on a polyline sampled finely enough for the spacing.
 		if (Spec.bEaveCaps && Spec.FasciaDrop > 0.0 && Spec.TileRowSpacing > 0.0)
 		{
 			TArray<FVector3d> CapRing;
@@ -1279,7 +1294,6 @@ namespace HutongMeshUtils
 
 	namespace
 	{
-		// Small solid strip along roof-surface points: 正脊, 垂脊, 戧脊, 博風板.
 		void SweepStripAlongPath(
 			FDynamicMesh3& Mesh,
 			const TArray<FVector3d>& Path,
@@ -1306,8 +1320,7 @@ namespace HutongMeshUtils
 				FVector3d Across = AcrossHint - T * AcrossHint.Dot(T);
 				if (Across.SquaredLength() < UE_DOUBLE_KINDA_SMALL_NUMBER) continue;
 				Across.Normalize();
-				// Profile Y = T × Across must point up, or a path run the other way (a back slope) builds its
-				// strip upside down: the 博風板 under the rake, the 垂脊 sunk into the roof.
+				// Profile Y = T × Across must point up, or a reversed path (a back slope) builds its strip upside down.
 				if (T.Cross(Across).Z < 0.0) Across = -Across;
 
 				// MakeFromZX keeps the determinant positive.
@@ -1337,12 +1350,10 @@ namespace HutongMeshUtils
 		const int32 Nu = FMath::Clamp(Spec.EaveSegments, 2, 64);
 		const int32 Nv = FMath::Clamp(Spec.SlopeSegments, 2, 16);
 
-		// 收山 as a fraction of the plan run to the ridge.
 		const double Ts = FMath::Clamp(
 			FMath::Min(Spec.ShouInset, 0.2 * W) / Hy, 0.05, 0.75);
 		const double S = Ts * Hy;
 
-		// Force a row onto the 收山 line.
 		const int32 NvLow = FMath::Clamp(FMath::RoundToInt32(Nv * Ts), 1, Nv - 1);
 		const int32 NvUp = Nv - NvLow;
 
@@ -1371,17 +1382,22 @@ namespace HutongMeshUtils
 			return EaveMin.Z + Rise * Spec.Section.HeightFraction(1.0 - v);
 		};
 
-		// One formula for all four panels.
+		// Corners 0 and 3 are the start end (X = 0); a hipped end's inset keeps growing to the ridge.
+		const bool bHipStart = Spec.bHipStart, bHipEnd = Spec.bHipEnd;
+		auto Hipped = [=](int32 C) { return (C == 0 || C == 3) ? bHipStart : bHipEnd; };
+		auto InsetAt = [=](int32 C, double v) { return (Hipped(C) ? v : FMath::Min(v, Ts)) * Hy; };
+		auto EndHipped = [=](int32 p) { return (p == 1 || p == 3) && Hipped(EaveA[p]); };
+
 		auto Sample = [=](int32 p, double u, double v)
 		{
-			const double In = FMath::Min(v, Ts) * Hy;
+			const double InA = InsetAt(EaveA[p], v), InB = InsetAt(EaveB[p], v);
 			const FVector2d Ea = Corner[EaveA[p]];
 			const FVector2d Eb = Corner[EaveB[p]];
 			const double EaveLen = (Eb - Ea).Length();
 			const FVector2d Dir = (Eb - Ea) / FMath::Max(EaveLen, UE_DOUBLE_KINDA_SMALL_NUMBER);
 			const FVector2d Nrm(-Dir.Y, Dir.X);   // inward: the eave runs CCW in plan
 
-			const double Along = FMath::Min(In + u * FMath::Max(EaveLen - 2.0 * In, 0.0), EaveLen);
+			const double Along = FMath::Min(InA + u * FMath::Max(EaveLen - InA - InB, 0.0), EaveLen);
 			FVector2d XY = Ea + Dir * Along + Nrm * (v * Hy);
 			double Z = SlopeZ(v);
 
@@ -1392,7 +1408,7 @@ namespace HutongMeshUtils
 				const int32 C = (Sa <= Sb) ? EaveA[p] : EaveB[p];
 				double Wt = FMath::Clamp(1.0 - FMath::Min(Sa, Sb) / FlareLen, 0.0, 1.0);
 				Wt = Wt * Wt * (3.0 - 2.0 * Wt);            // smoothstep, so the eave leaves flat
-				// Zero at the 收山 line, not the ridge: above it the 山花 is a plane, and flare would bow it.
+				// Zero at the 收山 line: above it the 山花 is a plane, which flare would bow.
 				const double G = 1.0 - FMath::Min(v / Ts, 1.0);
 				XY += Diag[C] * (Wt * G * G * FlareRun);
 				Z += Wt * G * G * FlareRise;
@@ -1413,19 +1429,18 @@ namespace HutongMeshUtils
 				Pn.DiagA = Diag[EaveA[p]];
 				Pn.DiagB = Diag[EaveB[p]];
 				Pn.FlareLength = bFlare ? FlareLen : 0.0;
-				// End panels stop at the 收山 line, under the 山花.
-				Pn.VMax = (p == 0 || p == 2) ? 1.0 : Ts;
+				Pn.VMax = (p == 0 || p == 2 || EndHipped(p)) ? 1.0 : Ts;
 				Pn.Sample = [Sample, p](double U, double V) { return Sample(p, U, V); };
-				Pn.SolveU = [EL, Ts, Hy](double A, double V)
+				const int32 Ca = EaveA[p], Cb = EaveB[p];
+				Pn.SolveU = [EL, InsetAt, Ca, Cb](double A, double V)
 				{
-					const double In = FMath::Min(V, Ts) * Hy;
-					const double Span = EL - 2.0 * In;
-					return (Span < 1e-6) ? -1.0 : (A - In) / Span;
+					const double InA = InsetAt(Ca, V), InB = InsetAt(Cb, V);
+					const double Span = EL - InA - InB;
+					return (Span < 1e-6) ? -1.0 : (A - InA) / Span;
 				};
 			}
 		}
 
-		// Returns the new triangle, or -1 if degenerate.
 		auto AppendTri = [&](int32 a, int32 b, int32 c) -> int32
 		{
 			if (a == b || b == c || a == c) return -1;
@@ -1434,7 +1449,6 @@ namespace HutongMeshUtils
 			return Mesh.AppendTriangle(a, b, c);
 		};
 
-		// Slopes.
 		EnsureUVLayer(Mesh);
 		UE::Geometry::FDynamicMeshUVOverlay* UV = Mesh.Attributes()->PrimaryUV();
 		const double UVScale = 1.0 / FMath::Max(Spec.TileRowSpacing, 0.01);
@@ -1442,7 +1456,7 @@ namespace HutongMeshUtils
 		for (int32 p = 0; p < 4; ++p)
 		{
 			const bool bLong = (p == 0 || p == 2);
-			const int32 Rows = bLong ? Nv : NvLow;
+			const int32 Rows = (bLong || EndHipped(p)) ? Nv : NvLow;
 			const FVector2d Ea = Corner[EaveA[p]];
 			const FVector2d EDir = (Corner[EaveB[p]] - Ea).GetSafeNormal();
 
@@ -1492,9 +1506,7 @@ namespace HutongMeshUtils
 			}
 		}
 
-		// 山花 at each end: vertical face between the rakes, on the end panel's top edge.
-		// Outward = the way the face looks. Down and Inset shift it (plumb, and along Outward) for the 山花's
-		// inner face under a shell.
+		// Down and Inset shift it (plumb, along Outward) for the 山花's inner face under a shell.
 		auto AppendGableFace = [&](int32 FrontPanel, double FrontU, int32 BackPanel, double BackU,
 								   int32 SillPanel, bool bSillReversed, const FVector3d& Outward,
 								   double Down = 0.0, double Inset = 0.0)
@@ -1504,7 +1516,6 @@ namespace HutongMeshUtils
 			Loop.Reserve(2 * NvUp + Nu + 2);
 			for (int32 iv = NvLow; iv <= Nv; ++iv) Loop.Add(Sample(FrontPanel, FrontU, Vs[iv]) + Shift);
 			for (int32 iv = Nv - 1; iv >= NvLow; --iv) Loop.Add(Sample(BackPanel, BackU, Vs[iv]) + Shift);
-			// Interior sill points only; the feet are already in the loop.
 			for (int32 iu = 1; iu < Nu; ++iu)
 			{
 				const double u = bSillReversed ? 1.0 - (double)iu / Nu : (double)iu / Nu;
@@ -1512,7 +1523,6 @@ namespace HutongMeshUtils
 			}
 			if (Loop.Num() < 3) return;
 
-			// Face is at constant X, so (Y, Z) projects faithfully.
 			TArray<FVector2d> Flat;
 			Flat.Reserve(Loop.Num());
 			for (const FVector3d& P : Loop) Flat.Add(FVector2d(P.Y, P.Z));
@@ -1533,7 +1543,6 @@ namespace HutongMeshUtils
 			Verts.Reserve(Loop.Num());
 			for (const FVector3d& P : Loop) Verts.Add(Mesh.AppendVertex(P));
 
-			// Orient the whole face once, not per triangle.
 			FVector3d FaceN = FVector3d::Zero();
 			for (int32 i = 0; i < Order.Num(); ++i)
 			{
@@ -1556,20 +1565,17 @@ namespace HutongMeshUtils
 			}
 		};
 
-		// Left face: front panel u = 0 and back panel u = 1, both at x = 收山 above the sill. 山花板: timber.
 		const int32 GableFirst = Mesh.MaxTriangleID();
-		AppendGableFace(0, 0.0, 2, 1.0, 3, false, FVector3d(-1.0, 0.0, 0.0));
-		AppendGableFace(0, 1.0, 2, 0.0, 1, true,  FVector3d(1.0, 0.0, 0.0));
-		// Under a shell the 山花 is seen from inside too: its inner face, down with the shell, 1.5 cm in.
+		if (!bHipStart) AppendGableFace(0, 0.0, 2, 1.0, 3, false, FVector3d(-1.0, 0.0, 0.0));
+		if (!bHipEnd) AppendGableFace(0, 1.0, 2, 0.0, 1, true,  FVector3d(1.0, 0.0, 0.0));
 		const double Cover = (Spec.EaveOverhang > 0.0) ? FMath::Max(Spec.ShellCover, 0.0) : 0.0;
 		if (Cover > 0.0)
 		{
-			AppendGableFace(0, 0.0, 2, 1.0, 3, false, FVector3d(1.0, 0.0, 0.0), Cover, 1.5);
-			AppendGableFace(0, 1.0, 2, 0.0, 1, true,  FVector3d(-1.0, 0.0, 0.0), Cover, 1.5);
+			if (!bHipStart) AppendGableFace(0, 0.0, 2, 1.0, 3, false, FVector3d(1.0, 0.0, 0.0), Cover, 1.5);
+			if (!bHipEnd) AppendGableFace(0, 1.0, 2, 0.0, 1, true,  FVector3d(-1.0, 0.0, 0.0), Cover, 1.5);
 		}
 		if (OutTimber) OutTimber->Emplace(GableFirst, Mesh.MaxTriangleID());
 
-		// 徹上明造: the soffit meets the shell's column-line row, and each panel's underside runs on up.
 		const double ShellV = FMath::Clamp(Spec.EaveOverhang / FMath::Max(Hy, 1.0), 0.0, 0.9 * Ts);
 		TFunction<FVector3d(int32, double)> ShellAt;
 		if (Cover > 0.0) ShellAt = [&](int32 p, double U) { return Sample(p, U, ShellV) - FVector3d(0.0, 0.0, Cover); };
@@ -1579,14 +1585,13 @@ namespace HutongMeshUtils
 		{
 			for (int32 p = 0; p < 4; ++p)
 			{
-				const double Top = (p == 0 || p == 2) ? 1.0 : Ts;
+				const double Top = (p == 0 || p == 2 || EndHipped(p)) ? 1.0 : Ts;
 				TArray<double> Rows = { ShellV };
 				for (const double V : Vs) if (V > ShellV + 1e-4 && V <= Top + 1e-6) Rows.Add(V);
 				AppendShellPanel(Mesh, [&](double U, double V) { return Sample(p, U, V); }, Nu, Rows, Cover);
 			}
 		}
 
-		// 勾頭 round the eave, on a polyline sampled finely enough for the spacing.
 		if (Spec.bEaveCaps && Spec.FasciaDrop > 0.0 && Spec.TileRowSpacing > 0.0)
 		{
 			TArray<FVector3d> CapRing;
@@ -1605,15 +1610,12 @@ namespace HutongMeshUtils
 				Spec.TileRowSpacing, Spec.FasciaDrop);
 		}
 
-
-		// 正脊 along the top, 垂脊 down each rake, 戧脊 out along each corner hip.
 		if (Spec.RidgeWidth > 0.0 && Spec.RidgeHeight > 0.0)
 		{
 			const double HalfW = 0.5 * Spec.RidgeWidth;
 			const double Below = 0.35 * Spec.RidgeHeight;
 			const double Above = 0.65 * Spec.RidgeHeight;
 
-			// No 正脊 on a 捲棚; the crown replaces it.
 			if (Spec.Section.ApexRoll <= 0.0)
 			{
 				TArray<FVector3d> RidgeLine = {
@@ -1622,7 +1624,6 @@ namespace HutongMeshUtils
 				SweepStripAlongPath(Mesh, RidgeLine, FVector3d(0.0, 1.0, 0.0), HalfW, Below, Above);
 			}
 
-			// One rake and one hip per corner.
 			auto Line = [&](int32 p, double u, int32 iv0, int32 iv1)
 			{
 				TArray<FVector3d> Path;
@@ -1638,21 +1639,19 @@ namespace HutongMeshUtils
 				for (int32 e = 0; e <= 1; ++e)
 				{
 					const double u = (double)e;
-					// 戧脊: corner hip, from a ridge height in from the eave corner to the 收山 corner. Two per panel.
 					const double V0 = HipStartV([&](double V) { return Sample(p, u, V); }, 1.5 * Spec.RidgeHeight, Ts);
 					TArray<FVector3d> Hip = { Sample(p, u, V0) };
 					for (int32 iv = 1; iv <= NvLow; ++iv) if (Vs[iv] > V0 + 1e-4) Hip.Add(Sample(p, u, Vs[iv]));
 					SweepStripAlongPath(Mesh, Hip,
 						bLong ? FVector3d(0.0, 1.0, 0.0) : FVector3d(1.0, 0.0, 0.0),
 						HalfW, Below, Above);
-					// 垂脊: rake, 收山 corner to ridge. Long panels only.
 					if (bLong)
 					{
 						SweepStripAlongPath(Mesh, Line(p, u, NvLow, Nv), Across, HalfW, Below, Above);
 					}
 				}
 				// 博脊: across the 山花's foot, where the skirt's courses end against it (圖6 山面立面).
-				if (!bLong)
+				if (!bLong && !EndHipped(p))
 				{
 					TArray<FVector3d> Foot;
 					for (int32 iu = 0; iu <= Nu; ++iu) Foot.Add(Sample(p, (double)iu / Nu, Ts));
@@ -1661,7 +1660,6 @@ namespace HutongMeshUtils
 			}
 		}
 
-		// 博風板 down each rake, proud of the gable face. Timber, like the 山花.
 		if (Spec.BargeThickness > 0.0 && Spec.BargeDepth > 0.0)
 		{
 			const int32 BargeFirst = Mesh.MaxTriangleID();
@@ -1670,12 +1668,11 @@ namespace HutongMeshUtils
 			{
 				TArray<FVector3d> Path;
 				for (int32 iv = NvLow; iv <= Nv; ++iv) Path.Add(Sample(p, u, Vs[iv]));
-				// Across = gable face normal.
 				SweepStripAlongPath(Mesh, Path, FVector3d(1.0, 0.0, 0.0),
 					0.5 * Spec.BargeThickness, 0.8 * Spec.BargeDepth, 0.2 * Spec.BargeDepth);
 			};
-			Barge(0, 0.0); Barge(2, 1.0);
-			Barge(0, 1.0); Barge(2, 0.0);
+			if (!bHipStart) { Barge(0, 0.0); Barge(2, 1.0); }
+			if (!bHipEnd) { Barge(0, 1.0); Barge(2, 0.0); }
 		}
 	}
 
@@ -1711,7 +1708,6 @@ namespace HutongMeshUtils
 		const int32 erb = Mesh.AppendVertex(ERB);
 		const int32 elb = Mesh.AppendVertex(ELB);
 
-		// Base (-Z) closes the overhang underside.
 		Mesh.AppendTriangle(elf, erb, erf);
 		Mesh.AppendTriangle(elf, elb, erb);
 
@@ -1726,15 +1722,11 @@ namespace HutongMeshUtils
 			const int32 rm = Mesh.AppendVertex(RmX);
 			const int32 rp = Mesh.AppendVertex(RpX);
 
-			// Front (-Y) trapezoid
 			Mesh.AppendTriangle(elf, erf, rp);
 			Mesh.AppendTriangle(elf, rp, rm);
-			// Back (+Y) trapezoid
 			Mesh.AppendTriangle(erb, elb, rm);
 			Mesh.AppendTriangle(erb, rm, rp);
-			// Left (-X) triangle
 			Mesh.AppendTriangle(elb, elf, rm);
-			// Right (+X) triangle
 			Mesh.AppendTriangle(erf, erb, rp);
 		}
 		else
@@ -1748,14 +1740,10 @@ namespace HutongMeshUtils
 			const int32 rm = Mesh.AppendVertex(RmY);
 			const int32 rp = Mesh.AppendVertex(RpY);
 
-			// Front (-Y) triangle
 			Mesh.AppendTriangle(elf, erf, rm);
-			// Back (+Y) triangle
 			Mesh.AppendTriangle(erb, elb, rp);
-			// Left (-X) trapezoid
 			Mesh.AppendTriangle(elf, rm, rp);
 			Mesh.AppendTriangle(elf, rp, elb);
-			// Right (+X) trapezoid
 			Mesh.AppendTriangle(erf, erb, rp);
 			Mesh.AppendTriangle(erf, rp, rm);
 		}
@@ -1777,7 +1765,6 @@ namespace HutongMeshUtils
 		if (N < 2) return;
 		const int32 FirstTri = Mesh.MaxTriangleID();
 
-		// A ring per point, or one pole on the axis.
 		TArray<TArray<int32>> Rings;
 		for (const FVector2d& P : RZ)
 		{
@@ -1816,7 +1803,6 @@ namespace HutongMeshUtils
 		}
 		if (OutEdgeFirstTri) OutEdgeFirstTri->Add(Mesh.MaxTriangleID());
 
-		// Whichever way the chain ran, outward.
 		double Volume = 0.0;
 		for (int32 tid = FirstTri; tid < Mesh.MaxTriangleID(); ++tid)
 		{
@@ -1846,7 +1832,7 @@ namespace HutongMeshUtils
 		{
 			const double A = FMath::DegreesToRadians(FMath::Lerp(A0, A1, double(s) / N));
 			const FVector Radial(FMath::Cos(A), FMath::Sin(A), 0.0);
-			// Up × outward = the CCW tangent: a rotation, never a mirror.
+			// Up × outward = the CCW tangent: a rotation.
 			const FMatrix M(FVector::UpVector, Radial, FVector(-FMath::Sin(A), FMath::Cos(A), 0.0),
 				FVector(Centre.X + Radius * Radial.X, Centre.Y + Radius * Radial.Y, Z));
 			Stations.Add(FTransform(M));
@@ -1895,8 +1881,6 @@ namespace HutongMeshUtils
 		const double Cover = O > 0.0 ? FMath::Max(Spec.ShellCover, 0.0) : 0.0;
 		const double CeilZ = O > 0.0 ? Z0 + Spec.UndersideRise : Z0 - Fascia;
 
-		// Apex out down the slope, the eave course, the soffit in to the column line, the underside back to
-		// the axis.
 		TArray<FVector2d> Chain;
 		for (const double R : Rs) Chain.Add(FVector2d(R, SurfaceZ(R)));
 		const int32 SlopeEdges = Chain.Num() - 1;
@@ -1919,7 +1903,6 @@ namespace HutongMeshUtils
 		if (EdgeTri.Num() < SlopeEdges + 1) return;
 		if (OutUnderside) *OutUnderside = UE::Geometry::FIndex2i(EdgeTri[SlopeEdges + (Fascia > 0.0 ? 1 : 0)], EdgeTri.Last());
 
-		// Slope UVs: u = courses round the eave, the courses' own lines at half-units; v = arc up the slope.
 		EnsureUVLayer(Mesh);
 		UE::Geometry::FDynamicMeshUVOverlay* UV = Mesh.Attributes()->PrimaryUV();
 		if (!UV) return;
@@ -2024,7 +2007,7 @@ namespace HutongMeshUtils
 
 	void AppendYZPrism(FDynamicMesh3& Mesh, const TArray<FVector2d>& ProfileYZ, double X0, double X1)
 	{
-		// Profile X → world Y, profile Y → Z, sweep → X: a rotation, never a mirror.
+		// Profile X → world Y, profile Y → Z, sweep → X: a rotation.
 		const FMatrix Basis(FVector(0, 1, 0), FVector(0, 0, 1), FVector(1, 0, 0), FVector::ZeroVector);
 		FTransform A(Basis), B(Basis);
 		A.SetTranslation(FVector(X0, 0, 0));

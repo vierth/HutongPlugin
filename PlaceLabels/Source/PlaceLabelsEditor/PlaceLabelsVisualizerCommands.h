@@ -4,7 +4,6 @@
 #include "Framework/Commands/Commands.h"
 #include "Styling/AppStyle.h"
 
-// Keys handled while editing a region's vertices.
 class FPlaceLabelsVisualizerCommands : public TCommands<FPlaceLabelsVisualizerCommands>
 {
 public:

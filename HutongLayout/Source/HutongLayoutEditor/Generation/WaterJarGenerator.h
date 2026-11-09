@@ -37,7 +37,6 @@ struct FHutongWaterJarParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Base", meta=(DisplayName="Base Margin", EditCondition="bHasBase", UIMin="0", UIMax="30", ClampMin="0", Units="cm", ToolTip="How far the base extends past the jar's foot on each side, in cm."))
 	double BaseMargin = 7.0;
 
-	// Footprint the drag is held square at.
 	double GetFootprint() const
 	{
 		const double Belly = FMath::Max(BellyDiameter, 1.0);

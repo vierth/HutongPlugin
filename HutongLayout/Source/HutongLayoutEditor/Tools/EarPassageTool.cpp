@@ -18,7 +18,6 @@ UInteractiveTool* UHutongEarPassageToolBuilder::BuildTool(const FToolBuilderStat
 void UHutongEarPassageToolProperties::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
-	// Same clamps as the house tool, on the inner room.
 	Params.Room.ClampAfterEdit(PropertyChangedEvent.GetPropertyName());
 }
 
@@ -30,7 +29,6 @@ void UHutongEarPassageTool::GetEffectiveRectBounds(
 	const FHutongEarPassageParams& P = Settings->Params;
 	if (!P.Room.bSnapToSuggested) return;
 
-	// Suggested frontage = room + passage strip (or the passage alone); depth = room's.
 	const double Extra = P.HasRoom() ? P.GetStripWidth() : P.GetSuggestedWidth() - P.Room.SuggestedFrontage;
 	auto SnapSide = [&](double& Lo, double& Hi)
 	{
@@ -46,8 +44,7 @@ void UHutongEarPassageTool::RegisterToolSettings()
 {
 	Settings = NewObject<UHutongEarPassageToolProperties>(this);
 
-	// Registration order is panel order; presets before params, as on the house tool (the three kinds
-	// of ear room are a preset pick).
+	// Registration order is panel order: presets before params, as on the house tool.
 	Presets = NewObject<UHutongPresetProperties>(this);
 	Presets->Initialize(TEXT("EarPassage"), Settings,
 		GET_MEMBER_NAME_CHECKED(UHutongEarPassageToolProperties, Params));
@@ -110,14 +107,13 @@ TArray<FText> UHutongEarPassageTool::GetToolHelpLines() const
 {
 	TArray<FText> Lines = Super::GetToolHelpLines();
 	Lines.Insert(NSLOCTEXT("EarPassageTool", "HelpFacade",
-		"Move toward the facade side, then click to place. [ and ] set one or two bays; Shift+[ and ] swap the passage end."), 1);
+		"Move toward the facade side, then click to place. [ and ] set one to three bays; Shift+[ and ] swap the passage end."), 1);
 	return Lines;
 }
 
 void UHutongEarPassageTool::AdjustBracketValue(int32 Delta, bool bShift, bool)
 {
 	if (!Settings) return;
-	// Shift: the passage's end. Plain: the room's bays, stepping off what the drag derives.
 	if (bShift)
 	{
 		if (Settings->Params.HasPassage()) Settings->Params.bPassageAtFarEnd = !Settings->Params.bPassageAtFarEnd;
@@ -215,26 +211,22 @@ void UHutongEarPassageTool::Render(IToolsContextRenderAPI* RenderAPI)
 	const double DepthMin = Edge.bAlongX ? MinY : MinX;
 	const double DepthMax = Edge.bAlongX ? MaxY : MaxX;
 
-	// Point at T along the frontage, U across, drag frame.
 	auto At = [&](double T, double U) { return Edge.bAlongX ? LocalRectToWorld(SpanMin + T, U) : LocalRectToWorld(U, SpanMin + T); };
 	auto OnEdge = [&](double T) { return At(T, Edge.FixedCoord); };
 
-	// Computed in build frame (facade on -Y), then turned by the same RotateVertex as the mesh, so strip
-	// end and doorway land where built on +Y and -X, which reverse the frontage.
+	// Build frame, then turned by the mesh's RotateVertex: +Y and -X facades reverse the frontage.
 	auto Facade = [&](double X)
 	{
 		const FVector3d V = HutongGen::BaySide::RotateVertex(BaySide, FVector3d(X, 0.0, 0.0), SizeX, SizeY);
 		return Edge.bAlongX ? V.X : V.Y;
 	};
 
-	// Room bay ticks along the facade edge, strip line included.
 	FHutongPlanBays Bays = UHutongEarPassageBuildingComponent::PlanBaysInBuildFrame(P);
 	HutongGen::PlanBays::OntoFacade(Bays, BaySide, SizeX, SizeY);
 	DrawRectBaysAndFacing(PDI, BaySide, MinX, MinY, MaxX, MaxY, Bays.Boundaries, Bays.DoorBay);
 
 	if (!P.HasPassage()) return;
 
-	// Passage strip and clear way, dashed across the depth.
 	const double ClearA = Facade(P.GetClearX0());
 	const double ClearB = Facade(P.GetClearX0() + P.GetClearWidth());
 	const double StripA = Facade(P.GetStripX0());
@@ -243,7 +235,6 @@ void UHutongEarPassageTool::Render(IToolsContextRenderAPI* RenderAPI)
 	{
 		DrawDashedPreviewLine(PDI, At(T, DepthMin), At(T, DepthMax), StripColor, 2.5f, 28.0);
 	}
-	// Closing-wall doorway on the facade edge, as the wall cuts it.
 	if (P.HasClosingDoorway())
 	{
 		const FHutongWallParams C = P.ClosingWallParams();
